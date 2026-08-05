@@ -13,6 +13,8 @@ import { Ticket, upsertTicket } from './ticketService.js';
 export interface ImportResult {
   imported: Ticket[];
   addedToRound: number;
+  /** Echoed back so an import that matches nothing can say what it searched. */
+  jql: string;
 }
 
 /** Read the Business Scoring queue and bring it into the app (§12.1). */
@@ -22,6 +24,7 @@ export async function importQueue(
   options: { roundId?: string; jql?: string; maxResults?: number } = {},
 ): Promise<ImportResult> {
   const config = await getAppConfig(db);
+  const jql = options.jql?.trim() || config.jira.queueJql;
   const inputs = await jira.searchQueue(
     config.jira,
     { backendFieldId: config.scoring.effort.backendFieldId, frontendFieldId: config.scoring.effort.frontendFieldId },
@@ -42,7 +45,7 @@ export async function importQueue(
     count: imported.length,
   });
 
-  return { imported, addedToRound: options.roundId ? imported.length : 0 };
+  return { imported, addedToRound: options.roundId ? imported.length : 0, jql };
 }
 
 /** Refresh RA poker effort (and status) for tickets already in the app (§10.4). */

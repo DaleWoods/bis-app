@@ -301,7 +301,7 @@ export const api = {
       body: JSON.stringify({ csv, roundId }),
     }),
   importJira: (jql: string | undefined, roundId?: string) =>
-    request<{ imported: Ticket[]; addedToRound: number }>('/api/tickets/import/jira', {
+    request<{ imported: Ticket[]; addedToRound: number; jql: string }>('/api/tickets/import/jira', {
       method: 'POST',
       body: JSON.stringify({ jql, roundId }),
     }),

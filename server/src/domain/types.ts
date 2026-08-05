@@ -167,7 +167,9 @@ export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
 };
 
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {
-  queueJql: 'status = "WOSG: Business Scoring" ORDER BY created ASC',
+  // The requirements quoted the status as "WOSG: Business Scoring"; on the live
+  // site it is just "Business Scoring". Editable in Settings either way.
+  queueJql: 'status = "Business Scoring" ORDER BY created ASC',
   businessScoreFieldId: '',
   siteAffectedFieldId: '',
   originalTestingEnvironmentFieldId: '',

@@ -352,8 +352,11 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             disabled={Boolean(busy)}
             onClick={() =>
               run('jira', async () => {
-                const { imported } = await api.importJira(jql || undefined, round.id);
-                return `Imported ${imported.length} ticket(s) from JIRA.`;
+                const result = await api.importJira(jql || undefined, round.id);
+                if (!result.imported.length) {
+                  return `No tickets matched. JIRA was searched with: ${result.jql} — check the status name is exactly right (Settings → JIRA).`;
+                }
+                return `Imported ${result.imported.length} ticket(s) from JIRA.`;
               })
             }
           >
