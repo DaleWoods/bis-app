@@ -47,6 +47,7 @@ Neither blocks the deployment, and neither needs a code change:
 |---|---|---|
 | **JIRA import / write-back** | Add tickets manually or by CSV; export results as CSV. | Add `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` (service account, not a personal login), then Settings → JIRA → "Resolve field ids from JIRA". |
 | **Distribution / reminder email** | Messages are composed and logged, never sent, so the cadence can be rehearsed. | Set the five `SMTP_*` / `EMAIL_FROM` variables — see below. |
+| **AI card drafting** | Cards are drafted from the headings in the JIRA description. | Set `ANTHROPIC_API_KEY` — see below. |
 
 ### Turning on email
 
@@ -80,6 +81,32 @@ Two honest limits:
 
 Microsoft Graph remains supported as an alternative — set the `GRAPH_*` variables and it switches
 provider automatically. SMTP takes precedence when both are configured.
+
+### Turning on AI card drafting
+
+A card is what the committee scores from, and a card written out of a thin JIRA title is a card
+nobody can score. Two drafters exist, and the app picks whichever is available:
+
+| | How it drafts | Needs |
+|---|---|---|
+| Heading parser | Matches headings in the description (`Impact:`, `h2. Current`) onto the four panels. Finds nothing when a ticket has no headings. | Nothing. Always available. |
+| AI | Reads the whole ticket and writes the card in business language, drawing the consequence a commercial reader needs even where the ticket only implies it. | `ANTHROPIC_API_KEY` |
+
+```
+ANTHROPIC_API_KEY=<from console.anthropic.com → API keys>
+```
+
+Same shape as the email decision: a card payment on a self-service console, no IT request. Cost is
+pennies per card. `AI_DRAFT_ENABLED=false` falls back to the heading parser without removing the key.
+
+Three things worth being clear about:
+
+- **Only the ticket's own text is sent** — title, type, description and the stakeholder/impact
+  fields. No scores, no committee names, no round data.
+- **Nothing is auto-published.** Every draft lands in the ticket editor for a coordinator to check,
+  and "Redraft from ticket" is a button someone presses, never something that happens on its own.
+- **It falls back, it does not fail.** A bad key, an outage or a response that will not parse
+  degrades that ticket to the heading parser and logs why. An import never dies on it.
 
 ### Sample data
 

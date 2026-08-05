@@ -26,9 +26,9 @@ interface Props {
 }
 
 /**
- * Coordinator authoring for the ticket card / slide (§7). In the foundation the
- * executive summary and four panels are written here; AI-assisted drafting from
- * the raw JIRA description is Phase 2.
+ * Coordinator authoring for the ticket card / slide (§7). The executive summary
+ * and four panels are written here, and "Redraft from ticket" replaces them with
+ * a fresh draft read out of the JIRA ticket.
  */
 export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
   const [form, setForm] = useState({
@@ -54,6 +54,8 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  /** Non-failure feedback, e.g. which drafter wrote the card just loaded. */
+  const [note, setNote] = useState('');
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -94,8 +96,9 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
                 if (!window.confirm('Redraft this card from the JIRA ticket? Anything written here is replaced.')) return;
                 setSaving(true);
                 setError('');
+                setNote('');
                 try {
-                  const { ticket: drafted, empty } = await api.redraftTicket(ticket.id);
+                  const { ticket: drafted, empty, drafter } = await api.redraftTicket(ticket.id);
                   setForm((current) => ({
                     ...current,
                     execSummary: drafted.execSummary,
@@ -105,6 +108,8 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
                     panelBenefits: drafted.panelBenefits,
                   }));
                   if (empty) setError('Nothing could be pulled from the JIRA description — write the card by hand.');
+                  else if (drafter === 'ai') setNote('Drafted by reading the whole ticket. Check it before you save.');
+                  else setNote('Drafted from the headings in the description. Check it before you save.');
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Could not redraft the card');
                 } finally {
@@ -112,7 +117,7 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
                 }
               }}
             >
-              Redraft from JIRA
+              Redraft from ticket
             </button>
           ) : null}
           <button className="secondary" onClick={onClose} type="button">
@@ -269,6 +274,11 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
         {error ? (
           <p className="status error" role="alert">
             {error}
+          </p>
+        ) : null}
+        {note ? (
+          <p className="status" role="status">
+            {note}
           </p>
         ) : null}
 

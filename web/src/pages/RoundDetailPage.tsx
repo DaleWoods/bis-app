@@ -93,6 +93,12 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span> · Cut-off{' '}
             {formatDateTime(round.cutOffAt)} · {tickets.length} tickets · {scored} with responses · {readyForEstimation}{' '}
             ready to send for estimation
+            {round.distributionSentAt ? (
+              <>
+                {' · '}
+                <span className="badge open">Distributed {formatDateTime(round.distributionSentAt)}</span>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="row">
@@ -157,8 +163,16 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               <button
                 className="secondary"
                 disabled={Boolean(busy)}
-                onClick={() =>
-                  run('distribute', async () => {
+                onClick={() => {
+                  if (
+                    round.distributionSentAt &&
+                    !window.confirm(
+                      `This round was already distributed on ${formatDateTime(round.distributionSentAt)}. Send it again to the whole committee?`,
+                    )
+                  ) {
+                    return;
+                  }
+                  return run('distribute', async () => {
                     const { results } = await api.distribute(round.id, true);
                     const sent = results.filter((r) => r.status === 'SENT').length;
                     const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
@@ -169,10 +183,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                     return `Distribution: ${sent} sent${suppressed ? `, ${suppressed} not sent (email off)` : ''}${
                       failed ? `, ${failed} failed` : ''
                     }.`;
-                  })
-                }
+                  });
+                }}
               >
-                Distribute to committee
+                {round.distributionSentAt ? 'Re-send to committee' : 'Distribute to committee'}
               </button>
               <button
                 className="secondary"
@@ -275,75 +289,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         </table>
       </div>
 
-      <h2>Results</h2>
-      <div className="card table-scroll">
-        <table>
-          <caption className="visually-hidden">Per-ticket results</caption>
-          <thead>
-            <tr>
-              <th scope="col">Ticket</th>
-              <th scope="col" className="num">
-                Responses
-              </th>
-              <th scope="col" className="num">
-                Business score
-              </th>
-              <th scope="col" className="num">
-                Std dev
-              </th>
-              <th scope="col" className="num">
-                Effort
-              </th>
-              <th scope="col" className="num">
-                Ratio
-              </th>
-              <th scope="col">Status</th>
-              <th scope="col">Flags</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map(({ ticket, aggregate }) => (
-              <tr key={ticket.id}>
-                <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
-                  {ticket.jiraId} – {ticket.title}
-                </th>
-                <td className="num">{aggregate.responsesCount}</td>
-                <td className="num">{aggregate.businessScore ?? '—'}</td>
-                <td className="num">{aggregate.stdDev === null ? '—' : aggregate.stdDev.toFixed(1)}</td>
-                <td className="num">{aggregate.effort ?? '—'}</td>
-                <td className="num">{aggregate.priorityRatio === null ? '—' : aggregate.priorityRatio.toFixed(2)}</td>
-                <td>
-                  <span
-                    className={`badge ${
-                      aggregate.priorityBand === 'HIGH'
-                        ? 'high'
-                        : aggregate.priorityBand === 'MEDIUM'
-                          ? 'medium'
-                          : aggregate.discussionRequired || aggregate.toClose
-                            ? 'warn'
-                            : 'low'
-                    }`}
-                  >
-                    {aggregate.statusLabel || '—'}
-                  </span>
-                </td>
-                <td>
-                  {aggregate.sendForEstimation ? <span className="badge high">Send for Est</span> : null}{' '}
-                  {aggregate.clarificationRequested ? <span className="badge">Unsure ×{aggregate.excludedCounts.UNSURE}</span> : null}{' '}
-                  {aggregate.parkRequested ? <span className="badge warn">Park</span> : null}
-                </td>
-              </tr>
-            ))}
-            {!results.length ? (
-              <tr>
-                <td colSpan={8}>No tickets in this round yet.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-
-      <h2>Tickets in this round</h2>
+      <h2>Tickets &amp; results</h2>
+      <p className="hint">Each ticket appears once, with its card content and its live score together.</p>
       <div className="card">
         <div className="row">
           <button onClick={() => setEditing('new')}>Add ticket manually</button>
@@ -356,7 +303,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 if (!result.imported.length) {
                   return `No tickets matched. JIRA was searched with: ${result.jql} — check the status name is exactly right (Settings → JIRA).`;
                 }
-                return `Imported ${result.imported.length} ticket(s) from JIRA.`;
+                const drafted = result.aiDrafted
+                  ? ` ${result.aiDrafted} card(s) drafted from the full ticket — review them before you distribute.`
+                  : '';
+                return `Imported ${result.imported.length} ticket(s) from JIRA.${drafted}`;
               })
             }
           >
@@ -396,15 +346,60 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         </details>
       </div>
 
-      {tickets.map((ticket) => (
-        <div className="card" key={ticket.id}>
+      {tickets.map((ticket) => {
+        const result = results.find((r) => r.ticket.id === ticket.id)?.aggregate;
+        const gaps = [
+          !ticket.execSummary && 'summary',
+          !ticket.panelCurrent && 'Current',
+          !ticket.panelImpacts && 'Impacts',
+          !ticket.panelFuture && 'Future',
+          !ticket.panelBenefits && 'Benefits',
+          !ticket.screenshotAttachmentId && !ticket.screenshotUrl && 'screenshot',
+        ].filter(Boolean) as string[];
+
+        return (
+        <div className="card ticket-row" key={ticket.id} id={`ticket-${ticket.id}`}>
           <div className="row between">
-            <div>
+            <div className="grow">
               <h3 style={{ margin: 0 }}>
                 {ticket.jiraId} – {ticket.title}
               </h3>
-              <p className="hint" style={{ margin: 0 }}>
-                {ticket.execSummary ? 'Card written' : 'No executive summary yet'} · Backend{' '}
+
+              {/* Everything about this ticket lives here - it is not listed twice. */}
+              <div className="metrics">
+                <span className={`badge ${
+                  result?.priorityBand === 'HIGH'
+                    ? 'high'
+                    : result?.priorityBand === 'MEDIUM'
+                      ? 'medium'
+                      : result?.discussionRequired || result?.toClose
+                        ? 'warn'
+                        : ''
+                }`}>
+                  {result?.statusLabel || 'Not scored yet'}
+                </span>
+                <span className="metric">
+                  <b>{result?.responsesCount ?? 0}</b> responses
+                </span>
+                <span className="metric">
+                  <b>{result?.businessScore ?? '—'}</b> score
+                </span>
+                <span className="metric">
+                  <b>{result?.stdDev === null || result?.stdDev === undefined ? '—' : result.stdDev.toFixed(1)}</b> spread
+                </span>
+                <span className="metric">
+                  <b>{result?.effort ?? '—'}</b> effort
+                </span>
+                <span className="metric">
+                  <b>{result?.priorityRatio === null || result?.priorityRatio === undefined ? '—' : result.priorityRatio.toFixed(2)}</b> ratio
+                </span>
+                {result?.sendForEstimation ? <span className="badge high">Send for Est</span> : null}
+                {result?.clarificationRequested ? <span className="badge">Unsure ×{result.excludedCounts.UNSURE}</span> : null}
+                {result?.parkRequested ? <span className="badge warn">Park</span> : null}
+              </div>
+
+              <p className="hint" style={{ margin: '0.4rem 0 0' }}>
+                {gaps.length ? `Card still needs: ${gaps.join(', ')}` : 'Card complete'} · Backend{' '}
                 {ticket.backendPokerScore ?? '—'} · Frontend {ticket.frontendPokerScore ?? '—'} · Manual effort{' '}
                 {ticket.manualEffort ?? '—'}
               </p>
@@ -439,10 +434,15 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {editing ? (
         <TicketEditor
+          // Keyed on the ticket so switching cards remounts the form. Without
+          // it React keeps the previous card's state and only the props that
+          // are read on every render appear to change.
+          key={editing === 'new' ? 'new' : editing.id}
           ticket={editing === 'new' ? null : editing}
           roundId={round.id}
           onClose={() => setEditing(null)}

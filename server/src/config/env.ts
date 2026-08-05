@@ -150,6 +150,24 @@ export const env = {
     },
   },
 
+  /**
+   * AI card drafting (§7). Optional: without a key the app falls back to the
+   * heading parser, which needs no account and no approval. With one, cards are
+   * written from the whole ticket rather than from whatever headings it happens
+   * to use. Only the ticket's own text is sent - no scores, no names of
+   * committee members, no round data.
+   */
+  ai: {
+    apiKey: (process.env.ANTHROPIC_API_KEY ?? '').trim(),
+    model: process.env.ANTHROPIC_MODEL ?? 'claude-opus-5',
+    /** Kill switch that leaves the key in place, for comparing the two drafters. */
+    enabled: bool(process.env.AI_DRAFT_ENABLED, true),
+    timeoutMs: int(process.env.AI_TIMEOUT_MS, 60_000),
+    get configured(): boolean {
+      return Boolean(env.ai.apiKey) && env.ai.enabled;
+    },
+  },
+
   graph: {
     tenantId: process.env.GRAPH_TENANT_ID ?? process.env.ENTRA_TENANT_ID ?? '',
     clientId: process.env.GRAPH_CLIENT_ID ?? '',

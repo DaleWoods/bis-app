@@ -9,13 +9,15 @@ import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound } from './roundService.js';
 import { computeRoundResults } from './resultService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
-import { draftCard } from '../domain/cardDraft.js';
+import { draftCardsFor } from './cardDraftService.js';
 
 export interface ImportResult {
   imported: Ticket[];
   addedToRound: number;
   /** Echoed back so an import that matches nothing can say what it searched. */
   jql: string;
+  /** How many cards the AI drafter wrote, so the UI can say which one ran. */
+  aiDrafted: number;
 }
 
 /** Read the Business Scoring queue and bring it into the app (§12.1). */
@@ -32,12 +34,12 @@ export async function importQueue(
     { jql: options.jql, maxResults: options.maxResults },
   );
 
-  const imported: Ticket[] = [];
-  for (const input of inputs) {
-    // Draft the card from the ticket's own content so a coordinator starts
-    // from something rather than a blank form (§7). preserveAuthored means a
-    // re-sync never overwrites what a coordinator has since written.
-    const draft = draftCard({
+  // Draft the cards from the tickets' own content so a coordinator starts from
+  // something rather than a blank form (§7). Drafted up front and in parallel:
+  // the AI drafter is a network call per ticket, and doing them inside the
+  // insert loop would make a thirty-ticket import feel broken.
+  const drafts = await draftCardsFor(
+    inputs.map((input) => ({
       jiraId: input.jiraId,
       title: input.title,
       type: input.type ?? '',
@@ -46,18 +48,26 @@ export async function importQueue(
       affects: input.affects,
       impacts: input.impacts,
       workaround: input.workaround,
-    });
-    const ticket = await upsertTicket(db, { ...input, ...draft }, { preserveAuthored: true });
+    })),
+  );
+
+  const imported: Ticket[] = [];
+  for (const [index, input] of inputs.entries()) {
+    // preserveAuthored means a re-sync never overwrites what a coordinator has
+    // since written.
+    const ticket = await upsertTicket(db, { ...input, ...drafts[index].draft }, { preserveAuthored: true });
     imported.push(ticket);
     if (options.roundId) await addTicketToRound(db, options.roundId, ticket.id);
   }
 
+  const aiDrafted = drafts.filter((d) => d.drafter === 'ai').length;
   await audit(db, actor, 'jira.import', 'round', options.roundId ?? '', {
     jql: options.jql ?? config.jira.queueJql,
     count: imported.length,
+    aiDrafted,
   });
 
-  return { imported, addedToRound: options.roundId ? imported.length : 0, jql };
+  return { imported, addedToRound: options.roundId ? imported.length : 0, jql, aiDrafted };
 }
 
 /** Refresh RA poker effort (and status) for tickets already in the app (§10.4). */

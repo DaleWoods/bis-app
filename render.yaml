@@ -158,6 +158,24 @@ services:
       - key: GRAPH_SENDER_UPN
         sync: false
 
+      # --- Card drafting ---------------------------------------------------
+      # Optional. Without a key, cards are drafted from the headings in the JIRA
+      # description - fine for a ticket written in sections, thin for one that
+      # is not. With a key, the whole ticket is read and the card is written in
+      # business language, which is what the committee actually needs.
+      #
+      #   ANTHROPIC_API_KEY  from console.anthropic.com → API keys (paid,
+      #                      pennies per card, card payment, no IT involved)
+      #
+      # Only the ticket's own text is sent - no scores, no committee names, no
+      # round data. Every draft still lands in the editor for a coordinator to
+      # check before it goes anywhere near the committee. Set AI_DRAFT_ENABLED
+      # to "false" to fall back to the heading parser without removing the key.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_DRAFT_ENABLED
+        value: "true"
+
       # --- Sample data ---------------------------------------------------
       # The instance starts clean, as agreed (§12.5). To pre-fill a sample round
       # for a walkthrough, add SEED_ON_BOOT=demo in the Render dashboard, deploy

@@ -10,7 +10,8 @@ import { deleteTicket, getTicket, listTickets, upsertTicket } from '../services/
 import { getAppConfig } from '../services/configService.js';
 import { parseCsvObjects } from '../util/csv.js';
 import { fetchAttachment } from '../integrations/jira.js';
-import { draftCard, draftIsEmpty } from '../domain/cardDraft.js';
+import { draftIsEmpty } from '../domain/cardDraft.js';
+import { draftCardFor } from '../services/cardDraftService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
@@ -224,7 +225,7 @@ router.post(
       return;
     }
 
-    const draft = draftCard({
+    const { draft, drafter } = await draftCardFor({
       jiraId: ticket.jiraId,
       title: ticket.title,
       type: ticket.type,
@@ -236,8 +237,8 @@ router.post(
     });
 
     const updated = await upsertTicket(db, { jiraId: ticket.jiraId, title: ticket.title, ...draft });
-    await audit(db, actorOf(req), 'ticket.redraft', 'ticket', ticket.id, { jiraId: ticket.jiraId });
-    res.json({ ticket: updated, empty: draftIsEmpty(draft) });
+    await audit(db, actorOf(req), 'ticket.redraft', 'ticket', ticket.id, { jiraId: ticket.jiraId, drafter });
+    res.json({ ticket: updated, empty: draftIsEmpty(draft), drafter });
   }),
 );
 

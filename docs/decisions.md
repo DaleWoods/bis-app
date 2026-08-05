@@ -98,3 +98,26 @@ GitHub Action). Baking one in would be an assumption; the endpoints are the stab
 `BACKEND_ONLY`, `FRONTEND_ONLY` and `MANUAL` alternatives, plus a per-ticket manual override.
 
 **Revisit when:** RA confirms. It is a dropdown in Settings, not a code change.
+
+---
+
+## D4 — Cards are drafted by AI when a key is configured, by heading parsing otherwise
+
+**Requirement:** §7 card content; the requirements put AI-assisted drafting in Phase 2.
+
+**Decision:** `draftCardFor()` calls the Anthropic API with the ticket's own text and falls back to
+the existing heading parser when no `ANTHROPIC_API_KEY` is set, when the call fails, or when the
+response will not parse. The parser is unchanged and still fully tested.
+
+**Rationale:** the heading parser only works on tickets written in sections, and most are not — it
+was matching on titles and producing cards too thin to score. Reading the whole ticket is the
+difference between "SAP integration error" and "gift wrap orders stall on their way to the warehouse,
+and someone corrects about twenty every morning", which is the language the committee scores in.
+
+**Constraints held:** only ticket text is sent — never scores, committee names or round data. Every
+draft lands in the editor for a coordinator to check; nothing is published automatically. A failure
+degrades one ticket to the parser rather than failing an import.
+
+**Cost:** pennies per card, on a self-service console with card payment — the same shape as the SMTP
+decision, and needing nobody's approval. `AI_DRAFT_ENABLED=false` turns it off without removing the
+key.

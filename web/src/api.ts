@@ -299,7 +299,10 @@ export const api = {
   saveTicket: (input: Partial<Ticket> & { jiraId: string; title: string; roundId?: string }) =>
     request<{ ticket: Ticket }>('/api/tickets', { method: 'POST', body: JSON.stringify(input) }),
   redraftTicket: (id: string) =>
-    request<{ ticket: Ticket; empty: boolean }>(`/api/tickets/${id}/redraft`, { method: 'POST', body: '{}' }),
+    request<{ ticket: Ticket; empty: boolean; drafter: 'ai' | 'text' }>(`/api/tickets/${id}/redraft`, {
+      method: 'POST',
+      body: '{}',
+    }),
   addTicketToRound: (roundId: string, ticketId: string) =>
     request<{ tickets: Ticket[] }>(`/api/rounds/${roundId}/tickets`, {
       method: 'POST',
@@ -315,7 +318,7 @@ export const api = {
       body: JSON.stringify({ csv, roundId }),
     }),
   importJira: (jql: string | undefined, roundId?: string) =>
-    request<{ imported: Ticket[]; addedToRound: number; jql: string }>('/api/tickets/import/jira', {
+    request<{ imported: Ticket[]; addedToRound: number; jql: string; aiDrafted: number }>('/api/tickets/import/jira', {
       method: 'POST',
       body: JSON.stringify({ jql, roundId }),
     }),
@@ -334,6 +337,8 @@ export const api = {
         smtpHost: string;
         graphSendEnabled: boolean;
         authMode: string;
+        aiDrafting: boolean;
+        aiModel: string;
       };
     }>('/api/config'),
   saveConfig: (section: keyof AppConfig, value: unknown) =>

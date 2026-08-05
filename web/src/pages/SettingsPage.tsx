@@ -42,6 +42,8 @@ export function SettingsPage({ member }: { member: Member }) {
     smtpHost: string;
     graphSendEnabled: boolean;
     authMode: string;
+    aiDrafting: boolean;
+    aiModel: string;
   } | null>(null);
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
@@ -290,6 +292,15 @@ export function SettingsPage({ member }: { member: Member }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Card drafting</h2>
+        <p className="hint">
+          {integrations?.aiDrafting
+            ? `On. Cards are drafted by reading the whole ticket (${integrations.aiModel}). Only the ticket's own text is sent — no scores, no committee names. Every draft still needs a coordinator to check it.`
+            : 'Off. Cards are drafted from the headings in the JIRA description, which works when a ticket is written in sections and finds little when it is not. Set ANTHROPIC_API_KEY to draft from the whole ticket instead.'}
+        </p>
       </section>
 
       <section className="card">

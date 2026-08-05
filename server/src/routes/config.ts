@@ -53,6 +53,8 @@ router.get(
         // Kept under the original name so existing screens keep working.
         graphSendEnabled: env.email.canSend,
         authMode: env.auth.mode,
+        aiDrafting: env.ai.configured,
+        aiModel: env.ai.configured ? env.ai.model : '',
       },
     });
   }),
