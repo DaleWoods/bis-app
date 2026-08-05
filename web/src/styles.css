@@ -297,14 +297,65 @@ th.num {
 }
 .ticket-card .summary p {
   margin: 0.25rem 0 0;
-  flex: 1 1 320px;
 }
-.ticket-card .summary img {
-  max-width: 220px;
-  max-height: 140px;
+
+/* The one line a scorer must read. */
+.nutshell {
+  font-size: 1.05rem;
+  line-height: 1.45;
+  margin: 0 0 0.7rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.chip {
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+  color: #44586a;
+}
+.chip-label {
+  color: var(--muted);
+  font-weight: 600;
+  margin-right: 0.2rem;
+}
+
+/* The screenshot earns real estate - it explains faster than prose. */
+.shot {
+  flex: 0 0 auto;
+  display: block;
+  text-decoration: none;
+  max-width: 300px;
+}
+.shot img {
+  display: block;
+  max-width: 100%;
+  max-height: 210px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   object-fit: contain;
+  background: #fff;
+}
+.shot-hint {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+@media (max-width: 640px) {
+  .shot {
+    max-width: 100%;
+  }
+  .shot img {
+    max-height: 260px;
+    width: 100%;
+  }
 }
 .panels {
   display: grid;
@@ -335,11 +386,31 @@ th.num {
   padding: 0.35rem 0.6rem;
   text-align: center;
 }
+.panel-hint {
+  display: block;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: #cfe0ee;
+  letter-spacing: 0.01em;
+}
 .panel p {
   margin: 0;
   padding: 0.6rem;
   font-size: 0.88rem;
-  white-space: pre-wrap;
+}
+.panel ul {
+  margin: 0;
+  padding: 0.6rem 0.6rem 0.6rem 1.35rem;
+  font-size: 0.88rem;
+}
+.panel li {
+  margin-bottom: 0.3rem;
+}
+.panel li:last-child {
+  margin-bottom: 0;
+}
+.panel-empty {
+  color: var(--muted);
 }
 .metadata {
   margin-top: 0.9rem;

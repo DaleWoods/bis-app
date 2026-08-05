@@ -9,6 +9,7 @@ import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound } from './roundService.js';
 import { computeRoundResults } from './resultService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
+import { draftCard } from '../domain/cardDraft.js';
 
 export interface ImportResult {
   imported: Ticket[];
@@ -33,9 +34,20 @@ export async function importQueue(
 
   const imported: Ticket[] = [];
   for (const input of inputs) {
-    // preserveAuthored: a re-sync refreshes JIRA fields but never clobbers the
-    // coordinator's executive summary or four panels (§7).
-    const ticket = await upsertTicket(db, input, { preserveAuthored: true });
+    // Draft the card from the ticket's own content so a coordinator starts
+    // from something rather than a blank form (§7). preserveAuthored means a
+    // re-sync never overwrites what a coordinator has since written.
+    const draft = draftCard({
+      jiraId: input.jiraId,
+      title: input.title,
+      type: input.type ?? '',
+      description: input.rawDescription ?? '',
+      stakeholder: input.stakeholder,
+      affects: input.affects,
+      impacts: input.impacts,
+      workaround: input.workaround,
+    });
+    const ticket = await upsertTicket(db, { ...input, ...draft }, { preserveAuthored: true });
     imported.push(ticket);
     if (options.roundId) await addTicketToRound(db, options.roundId, ticket.id);
   }

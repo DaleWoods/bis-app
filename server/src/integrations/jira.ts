@@ -81,6 +81,15 @@ interface JiraIssue {
   fields: Record<string, any>;
 }
 
+/** An image on the ticket, usable as the card's screenshot. */
+export interface JiraAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  isImage: boolean;
+}
+
 interface SearchResponse {
   issues?: JiraIssue[];
   nextPageToken?: string;
@@ -95,6 +104,7 @@ export async function searchQueue(
 ): Promise<TicketInput[]> {
   const jql = options.jql?.trim() || jiraConfig.queueJql;
   const fields = [
+    'attachment',
     'summary',
     'issuetype',
     'status',
@@ -156,7 +166,41 @@ export function mapIssue(
       valueOf(custom(jiraConfig.originalTestingEnvironmentFieldId)) || (fields.environment ? adfToText(fields.environment) : ''),
     backendPokerScore: numberOf(custom(effortFields.backendFieldId)),
     frontendPokerScore: numberOf(custom(effortFields.frontendFieldId)),
+    attachments: mapAttachments(fields),
     jiraSyncedAt: new Date().toISOString(),
+  };
+}
+
+const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|bmp)$/i;
+
+export function mapAttachments(fields: Record<string, any>): JiraAttachment[] {
+  const raw = Array.isArray(fields?.attachment) ? fields.attachment : [];
+  return raw.map((a: any) => ({
+    id: String(a.id),
+    filename: String(a.filename ?? ''),
+    mimeType: String(a.mimeType ?? ''),
+    size: Number(a.size ?? 0),
+    isImage: IMAGE_TYPES.test(String(a.mimeType ?? '')),
+  }));
+}
+
+/**
+ * Download an attachment's bytes. JIRA attachment URLs need the same
+ * credentials as the API, so the app proxies them rather than pointing a
+ * browser at a URL it cannot authenticate.
+ */
+export async function fetchAttachment(attachmentId: string): Promise<{ buffer: Buffer; contentType: string }> {
+  if (!env.jira.configured) throw new JiraNotConfiguredError();
+  const res = await fetch(`${env.jira.baseUrl}/rest/api/3/attachment/content/${encodeURIComponent(attachmentId)}`, {
+    headers: { authorization: authHeader() },
+    redirect: 'follow',
+  });
+  if (!res.ok) {
+    throw new JiraApiError(res.status, `Could not download attachment ${attachmentId}: ${res.status}`);
+  }
+  return {
+    buffer: Buffer.from(await res.arrayBuffer()),
+    contentType: res.headers.get('content-type') ?? 'application/octet-stream',
   };
 }
 

@@ -8,12 +8,20 @@ import { Ticket } from '../services/ticketService.js';
  * for people who would rather read/circulate a PDF.
  */
 
-const PANELS: Array<{ key: keyof Ticket; label: string }> = [
-  { key: 'panelCurrent', label: 'Current' },
-  { key: 'panelImpacts', label: 'Impacts' },
-  { key: 'panelFuture', label: 'Future' },
-  { key: 'panelBenefits', label: 'Benefits' },
+const PANELS: Array<{ key: keyof Ticket; label: string; hint: string }> = [
+  { key: 'panelCurrent', label: 'Current', hint: "What's happening now" },
+  { key: 'panelImpacts', label: 'Impacts', hint: 'What it causes' },
+  { key: 'panelFuture', label: 'Future', hint: 'What it should be' },
+  { key: 'panelBenefits', label: 'Benefits', hint: 'What we get' },
 ];
+
+function bullets(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split('\n')
+    .map((line) => line.replace(/^[-*•\s]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
 
 function text(value: string | null | undefined): string {
   const trimmed = (value ?? '').trim();
@@ -22,6 +30,7 @@ function text(value: string | null | undefined): string {
 
 export async function buildPdf(input: PackInput): Promise<Buffer> {
   const { round, tickets, config } = input;
+  const screenshots = input.screenshots ?? {};
   const accent = `#${config.accentColour.replace('#', '')}`;
 
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36 });
@@ -50,21 +59,38 @@ export async function buildPdf(input: PackInput): Promise<Buffer> {
       doc.fontSize(10).text(ticket.type, doc.page.width - 156, 21, { width: 120, align: 'right' });
     }
 
-    doc.fillColor(accent).fontSize(11).text('Executive summary', 36, 72);
-    doc.fillColor('#333333').fontSize(10).text(text(ticket.execSummary), 36, 88, { width, height: 60 });
+    const shot = screenshots[ticket.id];
+    const textWidth = shot ? width - 250 : width;
+
+    doc.fillColor(accent).fontSize(10).text('IN A NUTSHELL', 36, 70);
+    doc.fillColor('#222222').fontSize(12).text(text(ticket.execSummary), 36, 86, { width: textWidth, height: 64 });
+
+    if (shot) {
+      try {
+        const base64 = shot.slice(shot.indexOf(',') + 1);
+        doc.image(Buffer.from(base64, 'base64'), doc.page.width - 36 - 230, 70, { fit: [230, 130], align: 'right' });
+      } catch {
+        // An unreadable image must never stop the pack being produced.
+      }
+    }
 
     const panelTop = 156;
     const panelWidth = (width - 3 * 8) / 4;
     const panelHeight = 200;
     PANELS.forEach((panel, index) => {
       const x = 36 + index * (panelWidth + 8);
-      doc.rect(x, panelTop, panelWidth, 20).fill(accent);
-      doc.fillColor('#FFFFFF').fontSize(10).text(panel.label, x, panelTop + 6, { width: panelWidth, align: 'center' });
-      doc.rect(x, panelTop + 20, panelWidth, panelHeight).fillAndStroke('#F4F7FA', '#DCE4EC');
-      doc
-        .fillColor('#333333')
-        .fontSize(9)
-        .text(text(ticket[panel.key] as string), x + 6, panelTop + 28, { width: panelWidth - 12, height: panelHeight - 16 });
+      doc.rect(x, panelTop, panelWidth, 28).fill(accent);
+      doc.fillColor('#FFFFFF').fontSize(10).text(panel.label, x, panelTop + 4, { width: panelWidth, align: 'center' });
+      doc.fillColor('#CFE0EE').fontSize(7).text(panel.hint, x, panelTop + 17, { width: panelWidth, align: 'center' });
+      doc.rect(x, panelTop + 28, panelWidth, panelHeight).fillAndStroke('#F4F7FA', '#DCE4EC');
+
+      const lines = bullets(ticket[panel.key] as string);
+      doc.fillColor('#333333').fontSize(9);
+      if (lines.length) {
+        doc.list(lines, x + 6, panelTop + 36, { width: panelWidth - 12, bulletRadius: 1.5, textIndent: 8 });
+      } else {
+        doc.text('—', x + 6, panelTop + 36, { width: panelWidth - 12 });
+      }
     });
 
     const stripTop = panelTop + panelHeight + 32;

@@ -22,6 +22,7 @@ import {
 } from '../services/roundService.js';
 import { listRoundSubmissions, roundProgress, setSubmissionArchived } from '../services/submissionService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
+import { fetchAttachment } from '../integrations/jira.js';
 import { buildPptx } from '../pack/pptx.js';
 import { buildPdf } from '../pack/pdf.js';
 import { actorOf, asyncHandler } from './helpers.js';
@@ -264,7 +265,21 @@ async function packInput(roundId: string) {
     listCategories(db),
     getAppConfig(db),
   ]);
-  return { db, round, tickets, categories, config: config.pack };
+
+  // Embed JIRA screenshots as data URIs. One unreachable image must never stop
+  // the pack being generated, so each failure is skipped.
+  const screenshots: Record<string, string> = {};
+  for (const ticket of tickets) {
+    if (!ticket.screenshotAttachmentId) continue;
+    try {
+      const { buffer, contentType } = await fetchAttachment(ticket.screenshotAttachmentId);
+      screenshots[ticket.id] = `data:${contentType};base64,${buffer.toString('base64')}`;
+    } catch {
+      // no screenshot for this ticket
+    }
+  }
+
+  return { db, round, tickets, categories, config: config.pack, screenshots };
 }
 
 router.get(

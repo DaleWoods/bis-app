@@ -1,6 +1,23 @@
 import { useState } from 'react';
 import { api, type Ticket } from '../api';
 
+/**
+ * Kept in step with CARD_LIMITS on the server. The committee's complaint is
+ * that cards are too wordy, so the editor shows the budget as it is spent
+ * rather than letting a paragraph land on the slide unnoticed.
+ */
+const LIMITS = { execSummary: 240, panel: 180 };
+
+function Counter({ value, limit }: { value: string; limit: number }) {
+  const used = value.trim().length;
+  const over = used > limit;
+  return (
+    <p className="hint" style={{ color: over ? 'var(--danger)' : undefined, fontWeight: over ? 600 : 400 }}>
+      {used} / {limit} characters{over ? ' — too long for a slide, trim it' : ''}
+    </p>
+  );
+}
+
 interface Props {
   ticket: Ticket | null;
   roundId?: string;
@@ -29,6 +46,7 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
     panelFuture: ticket?.panelFuture ?? '',
     panelBenefits: ticket?.panelBenefits ?? '',
     screenshotUrl: ticket?.screenshotUrl ?? '',
+    screenshotAttachmentId: ticket?.screenshotAttachmentId ?? '',
     originalRequestor: ticket?.originalRequestor ?? '',
     backendPokerScore: ticket?.backendPokerScore ?? '',
     frontendPokerScore: ticket?.frontendPokerScore ?? '',
@@ -66,9 +84,41 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
     <section className="card" aria-label={ticket ? `Edit ${ticket.jiraId}` : 'Add a ticket'}>
       <div className="row between">
         <h2 style={{ marginTop: 0 }}>{ticket ? `Edit ${ticket.jiraId}` : 'Add a ticket'}</h2>
-        <button className="secondary" onClick={onClose} type="button">
-          Close
-        </button>
+        <div className="row">
+          {ticket ? (
+            <button
+              className="secondary"
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                if (!window.confirm('Redraft this card from the JIRA ticket? Anything written here is replaced.')) return;
+                setSaving(true);
+                setError('');
+                try {
+                  const { ticket: drafted, empty } = await api.redraftTicket(ticket.id);
+                  setForm((current) => ({
+                    ...current,
+                    execSummary: drafted.execSummary,
+                    panelCurrent: drafted.panelCurrent,
+                    panelImpacts: drafted.panelImpacts,
+                    panelFuture: drafted.panelFuture,
+                    panelBenefits: drafted.panelBenefits,
+                  }));
+                  if (empty) setError('Nothing could be pulled from the JIRA description — write the card by hand.');
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Could not redraft the card');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              Redraft from JIRA
+            </button>
+          ) : null}
+          <button className="secondary" onClick={onClose} type="button">
+            Close
+          </button>
+        </div>
       </div>
 
       <form onSubmit={save}>
@@ -88,28 +138,39 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
         </div>
 
         <div className="field">
-          <label htmlFor="t-summary">Executive summary</label>
+          <label htmlFor="t-summary">In a nutshell</label>
           <textarea
             id="t-summary"
             value={form.execSummary}
             onChange={(e) => set('execSummary', e.target.value)}
-            placeholder="2–4 sentences: what the item is and the value of resolving it"
+            placeholder="One or two plain sentences a non-specialist would understand. What is wrong, and why it matters."
           />
-          <p className="hint">Shown at the top of the ticket card and on the slide.</p>
+          <Counter value={form.execSummary} limit={LIMITS.execSummary} />
+          <p className="hint">
+            The one line every scorer reads. No jargon, no ticket numbers, no implementation detail.
+          </p>
         </div>
 
         <div className="row">
           {(
             [
-              ['panelCurrent', 'Current', 'The present situation / problem'],
-              ['panelImpacts', 'Impacts', 'What the problem causes'],
-              ['panelFuture', 'Future', 'The target / desired state'],
-              ['panelBenefits', 'Benefits', 'What resolving it delivers'],
+              ['panelCurrent', 'Current', "What's happening now"],
+              ['panelImpacts', 'Impacts', 'What it causes'],
+              ['panelFuture', 'Future', 'What it should be'],
+              ['panelBenefits', 'Benefits', 'What we get'],
             ] as const
           ).map(([key, label, hint]) => (
             <div className="grow field" key={key}>
-              <label htmlFor={`t-${key}`}>{label}</label>
-              <textarea id={`t-${key}`} value={form[key]} onChange={(e) => set(key, e.target.value)} placeholder={hint} />
+              <label htmlFor={`t-${key}`}>
+                {label} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>— {hint}</span>
+              </label>
+              <textarea
+                id={`t-${key}`}
+                value={form[key]}
+                onChange={(e) => set(key, e.target.value)}
+                placeholder={'One short point per line.\nUp to three lines.'}
+              />
+              <Counter value={form[key]} limit={LIMITS.panel} />
             </div>
           ))}
         </div>
@@ -140,8 +201,46 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
 
         <div className="row">
           <div className="grow field">
-            <label htmlFor="t-screenshot">Screenshot URL (optional)</label>
-            <input id="t-screenshot" type="url" value={form.screenshotUrl} onChange={(e) => set('screenshotUrl', e.target.value)} />
+            <label htmlFor="t-shot">Screenshot</label>
+            {ticket?.attachments?.some((a) => a.isImage) ? (
+              <>
+                <select
+                  id="t-shot"
+                  value={form.screenshotAttachmentId}
+                  onChange={(e) => set('screenshotAttachmentId', e.target.value)}
+                >
+                  <option value="">No screenshot</option>
+                  {ticket.attachments
+                    .filter((a) => a.isImage)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.filename}
+                      </option>
+                    ))}
+                </select>
+                <p className="hint">Images attached to the JIRA ticket. A picture saves a paragraph.</p>
+                {form.screenshotAttachmentId ? (
+                  <img
+                    src={`/api/tickets/${ticket.id}/screenshot?attachmentId=${form.screenshotAttachmentId}`}
+                    alt="Selected screenshot"
+                    style={{ marginTop: '0.5rem', maxWidth: '100%', maxHeight: 180, border: '1px solid var(--line)', borderRadius: 'var(--radius)' }}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <input
+                  id="t-shot"
+                  type="url"
+                  value={form.screenshotUrl}
+                  onChange={(e) => set('screenshotUrl', e.target.value)}
+                  placeholder="https://…"
+                />
+                <p className="hint">
+                  No images on the JIRA ticket. Attach one there and re-import, or paste a URL.
+                </p>
+              </>
+            )}
           </div>
           <div className="grow field">
             <label htmlFor="t-requestor">Original requestor email</label>

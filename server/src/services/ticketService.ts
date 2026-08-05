@@ -29,6 +29,18 @@ export interface Ticket {
   frontendPokerScore: number | null;
   manualEffort: number | null;
   jiraSyncedAt: string | null;
+  /** Image attachments on the JIRA ticket, offered as the card's screenshot. */
+  attachments: TicketAttachment[];
+  /** Which attachment is shown on the card. Empty = none chosen. */
+  screenshotAttachmentId: string;
+}
+
+export interface TicketAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  isImage: boolean;
 }
 
 interface TicketRow {
@@ -57,6 +69,8 @@ interface TicketRow {
   frontend_poker_score: number | null;
   manual_effort: number | null;
   jira_synced_at: string | null;
+  attachments: string | null;
+  screenshot_attachment_id: string | null;
 }
 
 export function mapTicket(row: TicketRow): Ticket {
@@ -86,7 +100,19 @@ export function mapTicket(row: TicketRow): Ticket {
     frontendPokerScore: numeric(row.frontend_poker_score),
     manualEffort: numeric(row.manual_effort),
     jiraSyncedAt: row.jira_synced_at,
+    attachments: parseAttachments(row.attachments),
+    screenshotAttachmentId: row.screenshot_attachment_id ?? '',
   };
+}
+
+function parseAttachments(value: string | null): TicketAttachment[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function numeric(value: number | null): number | null {
@@ -96,6 +122,11 @@ function numeric(value: number | null): number | null {
 }
 
 export type TicketInput = Partial<Omit<Ticket, 'id'>> & { jiraId: string; title: string };
+
+/** First image on the ticket, which is nearly always the one worth showing. */
+function defaultScreenshot(attachments: TicketAttachment[] | undefined): string {
+  return attachments?.find((a) => a.isImage)?.id ?? '';
+}
 
 type TicketTextField = keyof Omit<
   Ticket,
@@ -154,8 +185,9 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
         id, jira_id, title, type, jira_status, created_date, stakeholder, affects, impacts, workaround,
         site_affected, original_testing_environment, raw_description, exec_summary, panel_current, panel_impacts,
         panel_future, panel_benefits, screenshot_url, original_requestor, stream, backend_poker_score,
-        frontend_poker_score, manual_effort, jira_synced_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        frontend_poker_score, manual_effort, jira_synced_at, attachments, screenshot_attachment_id,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.jiraId.toUpperCase(),
@@ -182,6 +214,8 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
         input.frontendPokerScore ?? null,
         input.manualEffort ?? null,
         input.jiraSyncedAt ?? null,
+        JSON.stringify(input.attachments ?? []),
+        input.screenshotAttachmentId ?? defaultScreenshot(input.attachments),
         now,
         now,
       ],
@@ -208,6 +242,19 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
     if (input[key] === undefined) continue;
     sets.push(`${column} = ?`);
     params.push(input[key] as string | null);
+  }
+  if (input.attachments !== undefined) {
+    sets.push('attachments = ?');
+    params.push(JSON.stringify(input.attachments));
+    // Keep a valid selection: adopt the first image if none is chosen yet.
+    if (!existing.screenshotAttachmentId) {
+      sets.push('screenshot_attachment_id = ?');
+      params.push(defaultScreenshot(input.attachments));
+    }
+  }
+  if (input.screenshotAttachmentId !== undefined) {
+    sets.push('screenshot_attachment_id = ?');
+    params.push(input.screenshotAttachmentId);
   }
   for (const [key, column] of [
     ['backendPokerScore', 'backend_poker_score'],

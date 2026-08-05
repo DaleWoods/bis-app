@@ -42,10 +42,10 @@ import { Ticket } from '../services/ticketService.js';
  */
 
 const PANELS: Array<{ key: keyof Ticket; label: string; blurb: string }> = [
-  { key: 'panelCurrent', label: 'Current', blurb: 'The present situation / problem' },
-  { key: 'panelImpacts', label: 'Impacts', blurb: 'What the problem causes' },
-  { key: 'panelFuture', label: 'Future', blurb: 'The target / desired state' },
-  { key: 'panelBenefits', label: 'Benefits', blurb: 'What resolving it delivers' },
+  { key: 'panelCurrent', label: 'Current', blurb: "What's happening now" },
+  { key: 'panelImpacts', label: 'Impacts', blurb: 'What it causes' },
+  { key: 'panelFuture', label: 'Future', blurb: 'What it should be' },
+  { key: 'panelBenefits', label: 'Benefits', blurb: 'What we get' },
 ];
 
 function trim(value: string | null | undefined, max = 700): string {
@@ -54,11 +54,22 @@ function trim(value: string | null | undefined, max = 700): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/** Panels are bullets on the card, so they are bullets on the slide too. */
+function bulletLines(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split('\n')
+    .map((line) => line.replace(/^[-*•\s]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
 export interface PackInput {
   round: Round;
   tickets: Ticket[];
   categories: CategoryDef[];
   config: PackConfig;
+  /** ticketId -> data URI, resolved by the caller from JIRA attachments. */
+  screenshots?: Record<string, string>;
 }
 
 export async function buildPptx(input: PackInput): Promise<Buffer> {
@@ -127,20 +138,25 @@ export async function buildPptx(input: PackInput): Promise<Buffer> {
       slide.addText(ticket.type, { x: 8.1, y: 0.22, w: 1.55, h: 0.42, fontSize: 11, bold: true, color: accent, align: 'center', valign: 'middle' });
     }
 
-    const hasImage = Boolean(ticket.screenshotUrl);
-    slide.addText('Executive summary', { x: 0.35, y: 1.0, w: 4, h: 0.28, fontSize: 12, bold: true, color: accent });
-    slide.addText(trim(ticket.execSummary, 520), {
+    const screenshot = input.screenshots?.[ticket.id] ?? '';
+    const hasImage = Boolean(screenshot || ticket.screenshotUrl);
+    slide.addText('In a nutshell', { x: 0.35, y: 1.0, w: 4, h: 0.28, fontSize: 11, bold: true, color: accent });
+    slide.addText(trim(ticket.execSummary, 260), {
       x: 0.35,
-      y: 1.3,
-      w: hasImage ? 6.4 : 9.3,
-      h: 0.95,
-      fontSize: 12,
-      color: '333333',
+      y: 1.28,
+      w: hasImage ? 6.2 : 9.3,
+      h: 1.05,
+      fontSize: 14,
+      color: '222222',
       valign: 'top',
     });
     if (hasImage) {
       try {
-        slide.addImage({ path: ticket.screenshotUrl, x: 6.95, y: 1.05, w: 2.7, h: 1.5, sizing: { type: 'contain', w: 2.7, h: 1.5 } });
+        // Embedded bytes where we have them; a pasted URL otherwise.
+        const image = screenshot
+          ? { data: screenshot }
+          : { path: ticket.screenshotUrl };
+        slide.addImage({ ...image, x: 6.75, y: 1.0, w: 2.9, h: 1.6, sizing: { type: 'contain', w: 2.9, h: 1.6 } });
       } catch {
         // A missing or unreachable screenshot must never fail pack generation.
       }
@@ -152,15 +168,16 @@ export async function buildPptx(input: PackInput): Promise<Buffer> {
       slide.addShape('rect', { x, y: 2.4, w: panelWidth, h: 0.34, fill: { color: accent } });
       slide.addText(panel.label, { x, y: 2.4, w: panelWidth, h: 0.34, fontSize: 12, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
       slide.addShape('rect', { x, y: 2.74, w: panelWidth, h: 1.85, fill: { color: 'F4F7FA' }, line: { color: 'DCE4EC' } });
-      slide.addText(trim(ticket[panel.key] as string, 420), {
-        x: x + 0.08,
-        y: 2.8,
-        w: panelWidth - 0.16,
-        h: 1.73,
-        fontSize: 10,
-        color: '333333',
-        valign: 'top',
-      });
+      const lines = bulletLines(ticket[panel.key] as string);
+      slide.addText(
+        lines.length
+          ? lines.map((line, index) => ({
+              text: trim(line, 110),
+              options: { bullet: true, breakLine: index < lines.length - 1 },
+            }))
+          : '—',
+        { x: x + 0.08, y: 2.8, w: panelWidth - 0.16, h: 1.73, fontSize: 10, color: '333333', valign: 'top' },
+      );
     });
 
     const metadata = [

@@ -58,6 +58,16 @@ export interface Ticket {
   backendPokerScore: number | null;
   frontendPokerScore: number | null;
   manualEffort: number | null;
+  attachments: TicketAttachment[];
+  screenshotAttachmentId: string;
+}
+
+export interface TicketAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  isImage: boolean;
 }
 
 export interface Round {
@@ -288,6 +298,8 @@ export const api = {
   tickets: () => request<{ tickets: Ticket[] }>('/api/tickets'),
   saveTicket: (input: Partial<Ticket> & { jiraId: string; title: string; roundId?: string }) =>
     request<{ ticket: Ticket }>('/api/tickets', { method: 'POST', body: JSON.stringify(input) }),
+  redraftTicket: (id: string) =>
+    request<{ ticket: Ticket; empty: boolean }>(`/api/tickets/${id}/redraft`, { method: 'POST', body: '{}' }),
   addTicketToRound: (roundId: string, ticketId: string) =>
     request<{ tickets: Ticket[] }>(`/api/rounds/${roundId}/tickets`, {
       method: 'POST',
