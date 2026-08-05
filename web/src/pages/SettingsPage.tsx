@@ -281,15 +281,41 @@ export function SettingsPage() {
               className="secondary"
               onClick={async () => {
                 setError('');
+                setMessage('');
                 try {
+                  // Look the ids up and save them, rather than printing them
+                  // for the coordinator to copy across by hand.
                   const { suggestions } = await api.suggestJiraFields();
-                  setMessage(`Resolved field ids: ${Object.entries(suggestions).map(([k, v]) => `${k}=${v || 'not found'}`).join(', ')}`);
+                  const found = Object.entries(suggestions).filter(([, v]) => v);
+                  if (!found.length) {
+                    setError('JIRA returned no matching fields. Check the field names on your site.');
+                    return;
+                  }
+                  await api.saveConfig('jira', {
+                    businessScoreFieldId: suggestions.businessScoreFieldId || undefined,
+                    siteAffectedFieldId: suggestions.siteAffectedFieldId || undefined,
+                    originalTestingEnvironmentFieldId: suggestions.originalTestingEnvironmentFieldId || undefined,
+                    ticketPhaseFieldId: suggestions.ticketPhaseFieldId || undefined,
+                  });
+                  await api.saveConfig('scoring', {
+                    effort: {
+                      backendFieldId: suggestions.backendFieldId || undefined,
+                      frontendFieldId: suggestions.frontendFieldId || undefined,
+                    },
+                  });
+                  const missing = Object.entries(suggestions)
+                    .filter(([, v]) => !v)
+                    .map(([k]) => k.replace(/FieldId$/, ''));
+                  setMessage(
+                    `Saved ${found.length} field id(s) from JIRA.${missing.length ? ` Not found: ${missing.join(', ')}.` : ''}`,
+                  );
+                  await load();
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Could not reach JIRA');
                 }
               }}
             >
-              Resolve field ids from JIRA
+              Find and save field ids from JIRA
             </button>
           </div>
         </form>
