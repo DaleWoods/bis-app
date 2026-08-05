@@ -29,8 +29,32 @@ export async function verifyConnection(): Promise<{ ok: boolean; error?: string 
     await getTransporter().verify();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: explain(err) };
   }
+}
+
+/**
+ * Node's network errors name the syscall, not the mistake. Translate the ones
+ * a misconfiguration actually produces into something a coordinator can act on.
+ */
+export function explain(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: string; responseCode?: number })?.code ?? '';
+  const responseCode = (err as { responseCode?: number })?.responseCode;
+
+  if (code === 'EAI_AGAIN' || code === 'ENOTFOUND') {
+    return `Cannot find the mail server "${env.smtp.host}" — check SMTP_HOST is spelled correctly (for example smtp.gmail.com, not smtp-gmail.com). [${raw}]`;
+  }
+  if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT') {
+    return `The mail server "${env.smtp.host}" did not accept a connection on port ${env.smtp.port} — check SMTP_PORT (587 for most providers, 465 for implicit TLS). [${raw}]`;
+  }
+  if (code === 'EAUTH' || responseCode === 535) {
+    return `The mail server rejected the username or password — check SMTP_USER and SMTP_PASS. For Gmail this must be a 16-character app password with the spaces removed, not your account password. [${raw}]`;
+  }
+  if (responseCode === 550 || responseCode === 553) {
+    return `The mail server refused the sender "${env.email.from}" — it usually has to be verified with the provider first. [${raw}]`;
+  }
+  return raw;
 }
 
 export async function sendViaSmtp(message: MailMessage): Promise<MailOutcome> {
@@ -50,7 +74,7 @@ export async function sendViaSmtp(message: MailMessage): Promise<MailOutcome> {
     });
     return { status: 'SENT' };
   } catch (err) {
-    return { status: 'FAILED', error: err instanceof Error ? err.message : String(err) };
+    return { status: 'FAILED', error: explain(err) };
   }
 }
 
