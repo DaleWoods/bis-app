@@ -20,7 +20,7 @@ import {
   setRoundStatus,
   updateRound,
 } from '../services/roundService.js';
-import { listRoundSubmissions, roundProgress } from '../services/submissionService.js';
+import { listRoundSubmissions, roundProgress, setSubmissionArchived } from '../services/submissionService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
 import { buildPptx } from '../pack/pptx.js';
 import { buildPdf } from '../pack/pdf.js';
@@ -174,6 +174,24 @@ router.put(
     const db = await getDb();
     await reorderRoundTickets(db, req.params.id, ticketIds);
     res.json({ tickets: await listRoundTickets(db, req.params.id) });
+  }),
+);
+
+/**
+ * Archive or restore one submission (coordinator only). An archived submission
+ * stays in the record and the audit log, but stops counting toward the score.
+ */
+router.post(
+  '/rounds/:id/submissions/:submissionId/archive',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const { archived } = z.object({ archived: z.boolean() }).parse(req.body ?? {});
+    const db = await getDb();
+    await setSubmissionArchived(db, req.params.submissionId, archived);
+    await audit(db, actorOf(req), archived ? 'submission.archive' : 'submission.restore', 'submission', req.params.submissionId, {
+      roundId: req.params.id,
+    });
+    res.json({ submissions: await listRoundSubmissions(db, req.params.id) });
   }),
 );
 

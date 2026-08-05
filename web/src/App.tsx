@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, isCoordinator, type Member } from './api';
+import { api, canScore, isCoordinator, type Member } from './api';
 import { Link, matchRoute, useRouter } from './router';
 import { LoginPage } from './pages/LoginPage';
 import { ScorePage } from './pages/ScorePage';
@@ -26,6 +26,7 @@ export function App() {
   if (!member) return <LoginPage onSignedIn={setMember} />;
 
   const coordinator = isCoordinator(member.role);
+  const scorer = canScore(member.role);
 
   return (
     <>
@@ -35,7 +36,7 @@ export function App() {
       <header className="app-header">
         <span className="brand">Business Impact Scoring</span>
         <nav aria-label="Main">
-          <Link to="/">Score</Link>
+          {scorer ? <Link to="/">Score</Link> : null}
           <Link to="/rounds">Rounds</Link>
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
@@ -61,14 +62,28 @@ export function App() {
       </header>
 
       <main id="main">
-        <Routes path={path} member={member} coordinator={coordinator} />
+        <Routes path={path} member={member} coordinator={coordinator} scorer={scorer} />
       </main>
     </>
   );
 }
 
-function Routes({ path, member, coordinator }: { path: string; member: Member; coordinator: boolean }) {
-  if (path === '/' || path === '/score') return <ScorePage member={member} />;
+function Routes({
+  path,
+  member,
+  coordinator,
+  scorer,
+}: {
+  path: string;
+  member: Member;
+  coordinator: boolean;
+  scorer: boolean;
+}) {
+  // Coordinators land on the dashboard, which is their job; scorers land on
+  // the round they need to score.
+  if (path === '/' || path === '/score') {
+    return scorer ? <ScorePage member={member} /> : <RoundsPage member={member} />;
+  }
 
   const score = matchRoute('/score/:id', path);
   if (score) return <ScorePage member={member} roundId={score.id} />;

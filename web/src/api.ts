@@ -82,6 +82,7 @@ export interface Submission {
   closureReason: string;
   closureInfo: string;
   moreInfo: string;
+  archived: boolean;
   scores: Record<string, number>;
   updatedAt: string;
 }
@@ -215,15 +216,21 @@ export const api = {
   myRound: () =>
     request<{
       round: Round | null;
+      canScore: boolean;
       scoringOpen?: boolean;
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
     }>('/api/my/round'),
   myRoundSubmissions: (roundId: string) =>
-    request<{ round: Round; scoringOpen: boolean; tickets: Ticket[]; submissions: Submission[]; categories: Category[] }>(
-      `/api/rounds/${roundId}/my-submissions`,
-    ),
+    request<{
+      round: Round;
+      canScore: boolean;
+      scoringOpen: boolean;
+      tickets: Ticket[];
+      submissions: Submission[];
+      categories: Category[];
+    }>(`/api/rounds/${roundId}/my-submissions`),
   saveSubmission: (
     roundId: string,
     ticketId: string,
@@ -271,6 +278,11 @@ export const api = {
     request<{ emails: Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }> }>(
       `/api/rounds/${id}/emails`,
     ),
+  archiveSubmission: (roundId: string, submissionId: string, archived: boolean) =>
+    request<{ submissions: Submission[] }>(`/api/rounds/${roundId}/submissions/${submissionId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived }),
+    }),
   feedback: (id: string) => request<{ round: Round; tickets: FeedbackTicket[] }>(`/api/rounds/${id}/feedback`),
 
   tickets: () => request<{ tickets: Ticket[] }>('/api/tickets'),
@@ -334,6 +346,11 @@ export const api = {
 
 export function isCoordinator(role: Role | undefined): boolean {
   return role === 'ADMIN' || role === 'COORDINATOR';
+}
+
+/** Only committee members score; coordinators run the round, viewers read it. */
+export function canScore(role: Role | undefined): boolean {
+  return role === 'COMMITTEE';
 }
 
 export function formatDateTime(iso: string | null | undefined): string {

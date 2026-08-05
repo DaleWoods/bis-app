@@ -497,6 +497,9 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 Total
               </th>
               <th scope="col">Notes</th>
+              <th scope="col">
+                <span className="visually-hidden">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -504,18 +507,37 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               const ticket = tickets.find((t) => t.id === submission.ticketId);
               const total = categories.reduce((sum, c) => sum + (submission.scores[c.id] ?? 0), 0);
               return (
-                <tr key={submission.id}>
-                  <td>{submission.memberName ?? submission.memberId}</td>
+                <tr key={submission.id} style={submission.archived ? { opacity: 0.55 } : undefined}>
+                  <td>
+                    {submission.memberName ?? submission.memberId}
+                    {submission.archived ? <span className="badge"> excluded</span> : null}
+                  </td>
                   <td>{ticket?.jiraId ?? '—'}</td>
                   <td>{submission.relevance}</td>
                   <td className="num">{submission.relevance === 'YES' ? total : '—'}</td>
                   <td>{[submission.moreInfo, submission.closureReason, submission.closureInfo].filter(Boolean).join(' · ') || '—'}</td>
+                  <td>
+                    <button
+                      className="secondary"
+                      disabled={Boolean(busy)}
+                      onClick={() =>
+                        run('archive', async () => {
+                          await api.archiveSubmission(round.id, submission.id, !submission.archived);
+                          return submission.archived
+                            ? `Restored ${submission.memberName ?? 'that'} submission — it counts again.`
+                            : `Excluded ${submission.memberName ?? 'that'} submission from the score.`;
+                        })
+                      }
+                    >
+                      {submission.archived ? 'Restore' : 'Exclude'}
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {!submissions.length ? (
               <tr>
-                <td colSpan={5}>No submissions yet.</td>
+                <td colSpan={6}>No submissions yet.</td>
               </tr>
             ) : null}
           </tbody>

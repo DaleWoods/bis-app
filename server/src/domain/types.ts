@@ -6,6 +6,16 @@ export function isCoordinator(role: Role): boolean {
   return role === 'ADMIN' || role === 'COORDINATOR';
 }
 
+/**
+ * Only committee members score. Coordinators run the process and can see every
+ * submission, so letting them also score muddles the two jobs - and §2's whole
+ * point is that scoring is done by a cross-functional panel, not the people
+ * administering it. Viewers are read-only.
+ */
+export function canScore(role: Role): boolean {
+  return role === 'COMMITTEE';
+}
+
 export const ROUND_STATUSES = ['DRAFT', 'OPEN', 'CLOSED', 'FINALISED'] as const;
 export type RoundStatus = (typeof ROUND_STATUSES)[number];
 

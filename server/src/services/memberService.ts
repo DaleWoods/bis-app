@@ -47,10 +47,13 @@ export async function listMembers(db: Db, includeInactive = true): Promise<Membe
   return rows.map(map);
 }
 
-/** The people a round is distributed to and chased for: active committee scorers. */
+/**
+ * The people a round is distributed to, chased for, and measured against:
+ * active committee members only. Coordinators and viewers do not score.
+ */
 export async function listActiveScorers(db: Db): Promise<Member[]> {
   const rows = await db.all<MemberRow>(
-    "SELECT * FROM members WHERE active = 1 AND role IN ('COMMITTEE', 'COORDINATOR', 'ADMIN') ORDER BY name ASC",
+    "SELECT * FROM members WHERE active = 1 AND role = 'COMMITTEE' ORDER BY name ASC",
   );
   return rows.map(map);
 }

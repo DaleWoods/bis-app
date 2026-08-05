@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../auth/middleware.js';
-import { RELEVANCE_VALUES, isCoordinator } from '../domain/types.js';
+import { RELEVANCE_VALUES, canScore, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
 import { getActiveRound, getRound, isScoringOpen, listRoundTickets } from '../services/roundService.js';
@@ -23,11 +23,12 @@ router.get(
     const db = await getDb();
     const round = await getActiveRound(db);
     if (!round) {
-      res.json({ round: null, tickets: [], submissions: [], categories: await listCategories(db) });
+      res.json({ round: null, tickets: [], submissions: [], categories: await listCategories(db), canScore: canScore(req.member!.role) });
       return;
     }
     res.json({
       round,
+      canScore: canScore(req.member!.role),
       scoringOpen: isScoringOpen(round),
       tickets: await listRoundTickets(db, round.id),
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
@@ -52,6 +53,7 @@ router.get(
     }
     res.json({
       round,
+      canScore: canScore(req.member!.role),
       scoringOpen: isScoringOpen(round),
       tickets: await listRoundTickets(db, round.id),
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),

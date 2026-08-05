@@ -47,6 +47,34 @@ people who know each other, or the score becomes an input to something with mone
 
 ---
 
+## D1b — Coordinators and admins do not score
+
+**Requirement:** §4 lists Dale under both Coordinator/Admin and the committee, so the spec allows one
+person to do both.
+
+**Decision (Dale, owner):** they are separate jobs. Only `COMMITTEE` members score. Coordinators run
+rounds and can see every submission; viewers are read-only.
+
+**Rationale:** an app that showed a coordinator both the whole round's submissions *and* a scoring
+form for themselves was confusing to use. It also sits better with §2 — scoring is done by a
+cross-functional panel, not by the people administering the process.
+
+**What changes**
+
+- A `COORDINATOR`/`ADMIN`/`VIEWER` submission is refused server-side, not merely hidden.
+- Distribution, reminders and the progress table cover active committee members only, so a
+  coordinator is no longer chased for scores they cannot give.
+- Coordinators land on the rounds dashboard; the Score tab is not shown to them. They can still read
+  the ticket cards exactly as the committee sees them.
+
+**Watch the minimum-responses gate.** `MIN_SUBMISSIONS` is 5, and removing coordinators from the pool
+shrinks the committee. If tickets start sitting at "Awaiting WOSG Responses", either add committee
+members or lower the threshold in Settings — the number is configuration, not a rule of the maths.
+
+**Recovering earlier data:** scores recorded by a coordinator before this change still count. A
+coordinator can exclude any submission from the round page ("Who scored what" → Exclude), which marks
+it archived so it stops counting without deleting it or its audit trail.
+
 ## D2 — No scheduler process; distribution and reminders are triggered
 
 **Requirement:** §11 cadence, §12.2 automated distribution and reminders.

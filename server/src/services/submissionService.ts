@@ -1,6 +1,6 @@
 import { Db } from '../db/index.js';
 import { SubmissionInput } from '../domain/scoring.js';
-import { RELEVANCE_VALUES, Relevance, ScoringConfig } from '../domain/types.js';
+import { RELEVANCE_VALUES, Relevance, ScoringConfig, canScore } from '../domain/types.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { listCategories } from './configService.js';
@@ -138,6 +138,12 @@ export async function saveSubmission(
 ): Promise<Submission> {
   const { round, ticket, member, payload, config } = args;
 
+  // Coordinators run the round; the committee scores it. Enforced here rather
+  // than only in the UI, so it holds for any caller.
+  if (!canScore(member.role)) {
+    throw new HttpishError(403, 'Coordinators and viewers do not score tickets — only committee members do');
+  }
+
   if (!isScoringOpen(round, args.at ?? new Date())) {
     throw new HttpishError(
       409,
@@ -257,6 +263,19 @@ export async function saveSubmission(
 
   const row = (await db.get<SubmissionRow>('SELECT * FROM submissions WHERE id = ?', [id])) as SubmissionRow;
   return map(row, scores);
+}
+
+/**
+ * Exclude a submission from the aggregates without deleting it (§10.1 treats
+ * archived scores as never counting). Used when a score was recorded by
+ * someone who should not have been scoring, or entered in error.
+ */
+export async function setSubmissionArchived(db: Db, submissionId: string, archived: boolean): Promise<void> {
+  await db.run('UPDATE submissions SET archived = ?, updated_at = ? WHERE id = ?', [
+    archived ? 1 : 0,
+    nowIso(),
+    submissionId,
+  ]);
 }
 
 export interface MemberProgress {

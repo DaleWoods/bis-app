@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, formatDateTime, type Category, type Member, type Relevance, type Round, type Submission, type Ticket } from '../api';
+import { api, formatDateTime, isCoordinator, type Category, type Member, type Relevance, type Round, type Submission, type Ticket } from '../api';
+import { Link } from '../router';
 import { TicketCard } from '../components/TicketCard';
 import { ScoreForm } from '../components/ScoreForm';
 
@@ -19,6 +20,7 @@ export function ScorePage({ member, roundId }: Props) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [relevanceOptions, setRelevanceOptions] = useState<Array<{ value: Relevance; label: string }>>([]);
   const [closureReasons, setClosureReasons] = useState<string[]>([]);
+  const [mayScore, setMayScore] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +35,7 @@ export function ScorePage({ member, roundId }: Props) {
         setRelevanceOptions(model.relevanceOptions);
         setClosureReasons(model.closureReasons);
         setRound(data.round);
+        setMayScore(data.canScore !== false);
         setScoringOpen(Boolean(data.scoringOpen));
         setTickets(data.tickets);
         setCategories(data.categories);
@@ -56,7 +59,39 @@ export function ScorePage({ member, roundId }: Props) {
     return (
       <>
         <h1>Scoring</h1>
-        <div className="notice">There is no open scoring round at the moment. You will get an email when the next round opens.</div>
+        <div className="notice">
+          {mayScore
+            ? 'There is no open scoring round at the moment. You will get an email when the next round opens.'
+            : 'There is no open scoring round at the moment.'}
+        </div>
+        {!mayScore ? (
+          <p>
+            <Link to="/rounds">Go to the rounds dashboard</Link>
+          </p>
+        ) : null}
+      </>
+    );
+  }
+
+  // Coordinators run the round; the committee scores it. Showing them a form
+  // they cannot submit was the confusing part.
+  if (!mayScore) {
+    return (
+      <>
+        <h1>{round.weekLabel}</h1>
+        <p className="lede">
+          You are signed in as a {isCoordinator(member.role) ? 'coordinator' : 'viewer'}, so you do not score tickets —
+          the committee does. This is the round they are working on.
+        </p>
+        <div className="notice">
+          <Link to={isCoordinator(member.role) ? `/rounds/${round.id}` : '/rounds'}>
+            {isCoordinator(member.role) ? 'Open the round dashboard' : 'See the rounds'}
+          </Link>{' '}
+          for submission progress and results.
+        </div>
+        {tickets.map((ticket) => (
+          <TicketCard ticket={ticket} key={ticket.id} />
+        ))}
       </>
     );
   }
