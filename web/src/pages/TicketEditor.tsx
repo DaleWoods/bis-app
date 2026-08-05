@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type Ticket } from '../api';
 
 /**
@@ -56,6 +56,15 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
   const [error, setError] = useState('');
   /** Non-failure feedback, e.g. which drafter wrote the card just loaded. */
   const [note, setNote] = useState('');
+  const root = useRef<HTMLElement | null>(null);
+
+  // The editor opens beside the ticket it belongs to, which on a long round can
+  // be anywhere on the page. Bring it into view on open so the first field is
+  // where you are looking, however far down the list you pressed Edit.
+  useEffect(() => {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    root.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  }, []);
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -83,7 +92,7 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
   }
 
   return (
-    <section className="card" aria-label={ticket ? `Edit ${ticket.jiraId}` : 'Add a ticket'}>
+    <section className="card editor" ref={root} aria-label={ticket ? `Edit ${ticket.jiraId}` : 'Add a ticket'}>
       <div className="row between">
         <h2 style={{ marginTop: 0 }}>{ticket ? `Edit ${ticket.jiraId}` : 'Add a ticket'}</h2>
         <div className="row">

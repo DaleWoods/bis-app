@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import {
   api,
   formatDateTime,
@@ -27,7 +27,12 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
-  const [editing, setEditing] = useState<Ticket | 'new' | null>(null);
+  /**
+   * The ticket id being edited, or 'new'. An id rather than the ticket object,
+   * because the editor is rendered from the list and so always gets the freshly
+   * loaded ticket rather than the copy captured when Edit was pressed.
+   */
+  const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [csv, setCsv] = useState('');
   const [jql, setJql] = useState('');
   const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphSendEnabled: boolean } | null>(null);
@@ -346,6 +351,20 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         </details>
       </div>
 
+      {/* A new ticket opens where the button that created it is, not at the
+          bottom of the list. */}
+      {editing === 'new' ? (
+        <TicketEditor
+          ticket={null}
+          roundId={round.id}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await load();
+          }}
+        />
+      ) : null}
+
       {tickets.map((ticket) => {
         const result = results.find((r) => r.ticket.id === ticket.id)?.aggregate;
         const gaps = [
@@ -357,8 +376,11 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
           !ticket.screenshotAttachmentId && !ticket.screenshotUrl && 'screenshot',
         ].filter(Boolean) as string[];
 
+        const isEditing = editing === ticket.id;
+
         return (
-        <div className="card ticket-row" key={ticket.id} id={`ticket-${ticket.id}`}>
+        <Fragment key={ticket.id}>
+        <div className={`card ticket-row${isEditing ? ' editing' : ''}`} id={`ticket-${ticket.id}`}>
           <div className="row between">
             <div className="grow">
               <h3 style={{ margin: 0 }}>
@@ -405,8 +427,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               </p>
             </div>
             <div className="row">
-              <button className="secondary" onClick={() => setEditing(ticket)}>
-                Edit card
+              <button className="secondary" onClick={() => setEditing(isEditing ? null : ticket.id)}>
+                {isEditing ? 'Close editor' : 'Edit card'}
               </button>
               <button
                 className="danger"
@@ -434,24 +456,26 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             </div>
           </div>
         </div>
+
+        {/* The editor opens under the ticket it belongs to, so a card near the
+            top of a thirty-ticket round does not send you to the bottom of the
+            page to edit it. Rendering it inside this ticket's Fragment also
+            remounts the form when you switch cards - React cannot reuse an
+            instance across two different parents. */}
+        {isEditing ? (
+          <TicketEditor
+            ticket={ticket}
+            roundId={round.id}
+            onClose={() => setEditing(null)}
+            onSaved={async () => {
+              setEditing(null);
+              await load();
+            }}
+          />
+        ) : null}
+        </Fragment>
         );
       })}
-
-      {editing ? (
-        <TicketEditor
-          // Keyed on the ticket so switching cards remounts the form. Without
-          // it React keeps the previous card's state and only the props that
-          // are read on every render appear to change.
-          key={editing === 'new' ? 'new' : editing.id}
-          ticket={editing === 'new' ? null : editing}
-          roundId={round.id}
-          onClose={() => setEditing(null)}
-          onSaved={async () => {
-            setEditing(null);
-            await load();
-          }}
-        />
-      ) : null}
 
       <h2>Email log</h2>
       <p className="hint">
