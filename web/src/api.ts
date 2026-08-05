@@ -319,6 +319,7 @@ export const api = {
         emailProviderLabel: string;
         emailFrom: string;
         emailReplyTo: string;
+        smtpHost: string;
         graphSendEnabled: boolean;
         authMode: string;
       };

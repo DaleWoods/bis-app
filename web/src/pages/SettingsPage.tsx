@@ -5,6 +5,29 @@ import { api, type AppConfig, type Category, type Member, type Role } from '../a
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
  * effort mapping, JIRA field ids and the committee are all editable settings.
  */
+/**
+ * Freemail domains publish a strict DMARC policy, so mail sent "as" one of
+ * them through an unrelated relay is rejected by the recipient - and the relay
+ * still reports success. Catch it here rather than let it fail silently.
+ */
+const STRICT_SENDER_DOMAINS: Record<string, string> = {
+  'hotmail.com': 'smtp-mail.outlook.com',
+  'outlook.com': 'smtp-mail.outlook.com',
+  'live.com': 'smtp-mail.outlook.com',
+  'gmail.com': 'smtp.gmail.com',
+  'googlemail.com': 'smtp.gmail.com',
+  'yahoo.com': 'smtp.mail.yahoo.com',
+  'icloud.com': 'smtp.mail.me.com',
+  'aol.com': 'smtp.aol.com',
+};
+
+function dmarcMismatch(from: string | undefined, host: string | undefined): boolean {
+  if (!from || !host) return false;
+  const domain = from.split('@')[1]?.toLowerCase();
+  const expected = domain ? STRICT_SENDER_DOMAINS[domain] : undefined;
+  return Boolean(expected) && host.toLowerCase() !== expected;
+}
+
 export function SettingsPage({ member }: { member: Member }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -16,6 +39,7 @@ export function SettingsPage({ member }: { member: Member }) {
     emailProviderLabel: string;
     emailFrom: string;
     emailReplyTo: string;
+    smtpHost: string;
     graphSendEnabled: boolean;
     authMode: string;
   } | null>(null);
@@ -383,6 +407,19 @@ EMAIL_REPLY_TO=<where replies should go>`}
           </>
         ) : (
           <>
+            {dmarcMismatch(integrations?.emailFrom, integrations?.smtpHost) ? (
+              <div className="notice warn">
+                <strong>This sender will not deliver.</strong> You are sending as{' '}
+                <strong>{integrations?.emailFrom}</strong> through {integrations?.smtpHost}. Providers like Hotmail,
+                Outlook, Gmail and Yahoo tell the world to reject mail sent on their behalf by anyone else, so recipients
+                — especially Microsoft 365 accounts — will silently discard it. The relay will still report success.
+                <br />
+                <br />
+                Either send from an address on a domain you control and have authenticated with your provider, or use
+                that mailbox&apos;s own SMTP server (for Gmail: <code>smtp.gmail.com</code> with an app password, sending
+                as the same Gmail address).
+              </div>
+            ) : null}
             <p className="lede" style={{ marginBottom: '0.75rem' }}>
               Sending via <strong>{integrations?.emailProviderLabel}</strong>
               {integrations?.emailFrom ? (
@@ -408,7 +445,7 @@ EMAIL_REPLY_TO=<where replies should go>`}
               const result = await api.sendTestEmail();
               setMessage(
                 result.status === 'SENT'
-                  ? `Test email sent to ${result.to} via ${result.provider}. Check your inbox (and spam).`
+                  ? `Handed to ${result.provider} for ${result.to}. That only means the relay accepted it — if nothing arrives, check the provider's own delivery log.`
                   : `Not sent: ${result.error ?? result.status}`,
               );
             } catch (err) {

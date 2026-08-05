@@ -48,6 +48,7 @@ router.get(
         emailProvider: env.email.provider,
         emailProviderLabel: providerLabel(),
         emailFrom: env.email.from || env.smtp.user,
+        smtpHost: env.smtp.host,
         emailReplyTo: env.email.replyTo,
         // Kept under the original name so existing screens keep working.
         graphSendEnabled: env.email.canSend,
