@@ -30,9 +30,23 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [editing, setEditing] = useState<Ticket | 'new' | null>(null);
   const [csv, setCsv] = useState('');
   const [jql, setJql] = useState('');
+  const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphSendEnabled: boolean } | null>(null);
+  const [emails, setEmails] = useState<
+    Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
+  >([]);
 
   const load = useCallback(async () => {
     try {
+      // Integration status drives the notices below, so the coordinator knows
+      // what a button will actually do before pressing it.
+      api
+        .config()
+        .then(({ integrations }) => setIntegrations(integrations))
+        .catch(() => setIntegrations(null));
+      api
+        .emails(roundId)
+        .then(({ emails }) => setEmails(emails))
+        .catch(() => setEmails([]));
       const data = await api.round(roundId);
       setRound(data.round);
       setTickets(data.tickets);
@@ -105,6 +119,31 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         </p>
       ) : null}
 
+      {integrations && !integrations.graphSendEnabled ? (
+        <div className="notice warn">
+          <strong>Email is not switched on.</strong> “Distribute” and “Chase non-responders” compose the messages and
+          record them in the email log below, but send nothing. Share the scoring link with the committee yourself for
+          now — they can sign in and score straight away.
+          <div className="row" style={{ marginTop: '0.6rem' }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => {
+                const link = `${window.location.origin}/score/${round.id}`;
+                try {
+                  await navigator.clipboard.writeText(link);
+                  setMessage(`Scoring link copied: ${link}`);
+                } catch {
+                  setMessage(`Scoring link: ${link}`);
+                }
+              }}
+            >
+              Copy scoring link
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Round actions</h2>
         <div className="row">
@@ -123,9 +162,13 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                     const { results } = await api.distribute(round.id, true);
                     const sent = results.filter((r) => r.status === 'SENT').length;
                     const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
-                    return `Distribution: ${sent} sent, ${suppressed} suppressed (Graph sending disabled), ${
-                      results.filter((r) => r.status === 'FAILED').length
-                    } failed.`;
+                    const failed = results.filter((r) => r.status === 'FAILED').length;
+                    if (suppressed && !sent) {
+                      return `Round opened, but NO EMAIL WAS SENT — email is not configured. ${suppressed} message(s) were composed and logged. Use "Copy scoring link" to share it yourself.`;
+                    }
+                    return `Distribution: ${sent} sent${suppressed ? `, ${suppressed} not sent (email off)` : ''}${
+                      failed ? `, ${failed} failed` : ''
+                    }.`;
                   })
                 }
               >
@@ -137,7 +180,11 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 onClick={() =>
                   run('remind', async () => {
                     const { results } = await api.remind(round.id, false);
-                    return `Reminded ${results.length} member(s) with outstanding tickets.`;
+                    const sent = results.filter((r) => r.status === 'SENT').length;
+                    if (results.length && !sent) {
+                      return `NO EMAIL WAS SENT — email is not configured. ${results.length} reminder(s) were composed and logged.`;
+                    }
+                    return `Reminded ${sent} member(s) with outstanding tickets.`;
                   })
                 }
               >
@@ -391,6 +438,47 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
           }}
         />
       ) : null}
+
+      <h2>Email log</h2>
+      <p className="hint">
+        Every distribution and reminder attempt, whether it was sent or only composed. Failures stay visible here and
+        can be re-triggered from Round actions.
+      </p>
+      <div className="card table-scroll">
+        <table>
+          <caption className="visually-hidden">Email attempts for this round</caption>
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Kind</th>
+              <th scope="col">To</th>
+              <th scope="col">Subject</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {emails.map((entry) => (
+              <tr key={entry.id}>
+                <td>{formatDateTime(entry.sentAt)}</td>
+                <td>{entry.kind}</td>
+                <td>{entry.toAddress}</td>
+                <td>{entry.subject}</td>
+                <td>
+                  <span className={`badge ${entry.status === 'SENT' ? 'high' : entry.status === 'FAILED' ? 'warn' : ''}`}>
+                    {entry.status === 'SUPPRESSED' ? 'NOT SENT (email off)' : entry.status}
+                  </span>
+                  {entry.error && entry.status === 'FAILED' ? <div className="hint">{entry.error}</div> : null}
+                </td>
+              </tr>
+            ))}
+            {!emails.length ? (
+              <tr>
+                <td colSpan={5}>Nothing attempted yet.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
 
       <h2>Who scored what</h2>
       <p className="hint">
