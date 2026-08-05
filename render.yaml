@@ -30,7 +30,10 @@ services:
     # starter = 512MB, which is ample: no browser, no image processing. The
     # PPTX/PDF pack is generated in-process from text.
     plan: starter
-    buildCommand: npm ci && npm run build
+    # --include=dev is required: NODE_ENV=production (below) makes npm skip
+    # devDependencies, and the build needs TypeScript, @types/node and Vite.
+    # Only the build needs them; the running service uses dependencies alone.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
@@ -125,11 +128,9 @@ services:
         sync: false
 
       # --- Sample data ---------------------------------------------------
-      # Left empty: the instance starts clean, as agreed (§12.5). To pre-fill a
-      # sample round for a walkthrough, set SEED_ON_BOOT=demo, deploy once,
-      # then remove it. It only ever seeds a database with no rounds in it.
-      - key: SEED_ON_BOOT
-        value: ""
+      # The instance starts clean, as agreed (§12.5). To pre-fill a sample round
+      # for a walkthrough, add SEED_ON_BOOT=demo in the Render dashboard, deploy
+      # once, then remove it. It only ever seeds a database with no rounds in it.
 
       # Render injects PORT and RENDER_EXTERNAL_URL; the app reads both, so
       # links in generated email point at the deployed host automatically.
