@@ -1,31 +1,30 @@
 import PDFDocument from 'pdfkit';
 import { PackInput } from './pptx.js';
+import { cardLines, labelsFor } from '../domain/card.js';
 import { formatUkDate } from '../util/time.js';
 import { Ticket } from '../services/ticketService.js';
 
 /**
- * PDF twin of the PowerPoint pack (§7) - same ticket data, same layout language,
- * for people who would rather read/circulate a PDF.
+ * PDF twin of the PowerPoint pack (§7) - same ticket data, same layout, for
+ * people who would rather read or circulate a PDF. A4 landscape is close enough
+ * to 16:9 that the two read as the same document.
  */
 
-const PANELS: Array<{ key: keyof Ticket; label: string; hint: string }> = [
-  { key: 'panelCurrent', label: 'Current', hint: "What's happening now" },
-  { key: 'panelImpacts', label: 'Impacts', hint: 'What it causes' },
-  { key: 'panelFuture', label: 'Future', hint: 'What it should be' },
-  { key: 'panelBenefits', label: 'Benefits', hint: 'What we get' },
-];
+const ACCENT_TINT = '#F5F8FB';
+const LINE = '#DCE4EC';
+const INK = '#1F2933';
+const MUTED = '#5A6B7B';
 
-function bullets(value: string | null | undefined): string[] {
-  return (value ?? '')
-    .split('\n')
-    .map((line) => line.replace(/^[-*•\s]+/, '').trim())
-    .filter(Boolean)
-    .slice(0, 3);
+function text(value: string | null | undefined, max = 600): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return '';
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
-function text(value: string | null | undefined): string {
-  const trimmed = (value ?? '').trim();
-  return trimmed || '—';
+function chipParts(fact: string): { label: string; value: string } {
+  const index = fact.indexOf(':');
+  if (index <= 0) return { label: '', value: fact };
+  return { label: fact.slice(0, index).trim(), value: fact.slice(index + 1).trim() };
 }
 
 export async function buildPdf(input: PackInput): Promise<Buffer> {
@@ -38,7 +37,8 @@ export async function buildPdf(input: PackInput): Promise<Buffer> {
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
-  const width = doc.page.width - 72;
+  const M = 36;
+  const width = doc.page.width - M * 2;
 
   // Title page
   doc.rect(0, 0, doc.page.width, doc.page.height).fill(accent);
@@ -52,58 +52,7 @@ export async function buildPdf(input: PackInput): Promise<Buffer> {
 
   for (const ticket of tickets) {
     doc.addPage();
-
-    doc.rect(0, 0, doc.page.width, 54).fill(accent);
-    doc.fillColor('#FFFFFF').fontSize(16).text(`${ticket.jiraId} – ${ticket.title}`, 36, 18, { width: width - 120, ellipsis: true });
-    if (ticket.type) {
-      doc.fontSize(10).text(ticket.type, doc.page.width - 156, 21, { width: 120, align: 'right' });
-    }
-
-    const shot = screenshots[ticket.id];
-    const textWidth = shot ? width - 250 : width;
-
-    doc.fillColor(accent).fontSize(10).text('IN A NUTSHELL', 36, 70);
-    doc.fillColor('#222222').fontSize(12).text(text(ticket.execSummary), 36, 86, { width: textWidth, height: 64 });
-
-    if (shot) {
-      try {
-        const base64 = shot.slice(shot.indexOf(',') + 1);
-        doc.image(Buffer.from(base64, 'base64'), doc.page.width - 36 - 230, 70, { fit: [230, 130], align: 'right' });
-      } catch {
-        // An unreadable image must never stop the pack being produced.
-      }
-    }
-
-    const panelTop = 156;
-    const panelWidth = (width - 3 * 8) / 4;
-    const panelHeight = 200;
-    PANELS.forEach((panel, index) => {
-      const x = 36 + index * (panelWidth + 8);
-      doc.rect(x, panelTop, panelWidth, 28).fill(accent);
-      doc.fillColor('#FFFFFF').fontSize(10).text(panel.label, x, panelTop + 4, { width: panelWidth, align: 'center' });
-      doc.fillColor('#CFE0EE').fontSize(7).text(panel.hint, x, panelTop + 17, { width: panelWidth, align: 'center' });
-      doc.rect(x, panelTop + 28, panelWidth, panelHeight).fillAndStroke('#F4F7FA', '#DCE4EC');
-
-      const lines = bullets(ticket[panel.key] as string);
-      doc.fillColor('#333333').fontSize(9);
-      if (lines.length) {
-        doc.list(lines, x + 6, panelTop + 36, { width: panelWidth - 12, bulletRadius: 1.5, textIndent: 8 });
-      } else {
-        doc.text('—', x + 6, panelTop + 36, { width: panelWidth - 12 });
-      }
-    });
-
-    const stripTop = panelTop + panelHeight + 32;
-    doc.rect(36, stripTop, width, 34).fill('#EFF3F7');
-    const metadata = [
-      `Created: ${formatUkDate(ticket.createdDate) || '—'}`,
-      `Type: ${text(ticket.type)}`,
-      `Stakeholder: ${text(ticket.stakeholder)}`,
-      `Affects: ${text(ticket.affects)}`,
-      `Impacts: ${text(ticket.impacts)}`,
-      `Workaround: ${text(ticket.workaround)}`,
-    ].join('   ·   ');
-    doc.fillColor('#445566').fontSize(8.5).text(metadata, 44, stripTop + 11, { width: width - 16, ellipsis: true });
+    ticketPage(doc, ticket, accent, screenshots[ticket.id] ?? '', M, width);
   }
 
   doc.addPage();
@@ -114,4 +63,152 @@ export async function buildPdf(input: PackInput): Promise<Buffer> {
 
   doc.end();
   return done;
+}
+
+function ticketPage(
+  doc: PDFKit.PDFDocument,
+  ticket: Ticket,
+  accent: string,
+  screenshot: string,
+  M: number,
+  width: number,
+): void {
+  const labels = labelsFor(ticket.cardKind);
+  const facts = cardLines(ticket.impactFacts, 4);
+  const hasImage = Boolean(screenshot);
+  const hasAside = hasImage || facts.length > 0;
+
+  const narrativeW = hasAside ? width * 0.6 : width;
+  const asideX = M + width * 0.63;
+  const asideW = width - width * 0.63;
+
+  // --- Header ------------------------------------------------------------
+  doc.rect(0, 0, doc.page.width, 52).fill(accent);
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9).text(ticket.jiraId, M, 16);
+  doc.fontSize(15).text(ticket.title, M + 62, 15, { width: width - 62 - 110, ellipsis: true, lineBreak: false });
+
+  const chip = labels.kind.toUpperCase();
+  const chipW = 100;
+  doc.roundedRect(doc.page.width - M - chipW, 14, chipW, 22, 11).fill('#FFFFFF');
+  doc.fillColor(accent).fontSize(8).text(chip, doc.page.width - M - chipW, 21, { width: chipW, align: 'center' });
+
+  // --- Headline ----------------------------------------------------------
+  let y = 68;
+  const headline = text(ticket.execSummary, 260);
+  if (headline) {
+    doc.fillColor(INK).font('Helvetica-Bold').fontSize(12.5).text(headline, M, y, { width: narrativeW, lineGap: 1 });
+    y = Math.max(y + 34, doc.y + 10);
+  }
+  const narrativeTop = y;
+
+  // --- Narrative ---------------------------------------------------------
+  const bandTop = doc.page.height - 106;
+  const sections = [
+    { ...labels.current, value: ticket.panelCurrent },
+    { ...labels.impacts, value: ticket.panelImpacts },
+    { ...labels.future, value: ticket.panelFuture },
+  ];
+
+  // Sections flow at the height their content needs rather than being spread
+  // over the page. Three short sections evenly distributed leave bands of dead
+  // space between them, which reads as an unfinished slide.
+  for (const section of sections) {
+    const top = y;
+
+    doc.fillColor(accent).font('Helvetica-Bold').fontSize(8).text(section.label.toUpperCase(), M + 10, top, { continued: true });
+    doc.fillColor(MUTED).font('Helvetica-Oblique').fontSize(7).text(`   ${section.hint}`);
+
+    const lines = cardLines(section.value);
+    doc.font('Helvetica').fontSize(9.5).fillColor(INK);
+    if (lines.length) {
+      doc.list(lines, M + 12, top + 14, { width: narrativeW - 14, bulletRadius: 1.5, textIndent: 8, lineGap: 1.5 });
+    } else {
+      doc.fillColor('#A3AEB9').font('Helvetica-Oblique').text('Not written yet', M + 12, top + 14, { width: narrativeW - 14 });
+    }
+
+    // Drawn after the text, now that its height is known. The rule sits left of
+    // the text column, so painting it here cannot cover anything.
+    doc.rect(M, top, 3, Math.max(14, doc.y - top - 2)).fill(accent);
+    y = Math.min(doc.y + 16, bandTop - 20);
+  }
+
+  // --- Aside: picture, caption, chips ------------------------------------
+  if (hasAside) {
+    // The aside starts level with the narrative, not wherever the narrative
+    // happened to finish.
+    let asideY = narrativeTop;
+    if (hasImage) {
+      const maxH = facts.length ? 165 : 230;
+      let imageH = maxH;
+      let drawn = false;
+      try {
+        const bytes = Buffer.from(screenshot.slice(screenshot.indexOf(',') + 1), 'base64');
+        // Size the frame to the picture instead of leaving a band of tint above
+        // and below a wide screenshot. openImage is pdfkit's own API but is
+        // missing from @types/pdfkit, hence the cast.
+        const image = (doc as unknown as { openImage(src: Buffer): { width: number; height: number } }).openImage(bytes);
+        const scaled = ((asideW - 8) * image.height) / image.width;
+        imageH = Math.min(maxH, Math.round(scaled) + 8);
+        doc.rect(asideX, asideY, asideW, imageH).fillAndStroke(ACCENT_TINT, LINE);
+        doc.image(bytes, asideX + 4, asideY + 4, { fit: [asideW - 8, imageH - 8], align: 'center', valign: 'center' });
+        drawn = true;
+      } catch {
+        // An unreadable image must never stop the pack being produced.
+      }
+      if (!drawn) imageH = 0;
+      asideY += imageH + 6;
+
+      const caption = text(ticket.screenshotCaption, 160);
+      if (caption) {
+        doc.fillColor(MUTED).font('Helvetica-Oblique').fontSize(7.5).text(caption, asideX, asideY, { width: asideW });
+        asideY = doc.y + 8;
+      }
+    }
+
+    if (facts.length) {
+      doc.fillColor(accent).font('Helvetica-Bold').fontSize(7.5).text('THE NUMBERS', asideX, asideY, { width: asideW });
+      asideY += 12;
+      for (const fact of facts) {
+        if (asideY + 22 > bandTop) break;
+        const { label, value } = chipParts(fact);
+        doc.roundedRect(asideX, asideY, asideW, 20, 4).fillAndStroke(ACCENT_TINT, LINE);
+        doc.fillColor(accent).font('Helvetica-Bold').fontSize(7.5).text(label ? `${label}  ` : '', asideX + 6, asideY + 6, {
+          width: asideW - 12,
+          continued: Boolean(label),
+          lineBreak: false,
+        });
+        doc.fillColor(INK).font('Helvetica').fontSize(8).text(value, label ? undefined : asideX + 6, label ? undefined : asideY + 6, {
+          width: asideW - 12,
+          lineBreak: false,
+          ellipsis: true,
+        });
+        asideY += 24;
+      }
+    }
+  }
+
+  // --- "If we fix it" band ----------------------------------------------
+  const benefit = text(ticket.panelBenefits, 220);
+  if (benefit) {
+    doc.rect(M, bandTop, width, 30).fill(ACCENT_TINT);
+    doc.rect(M, bandTop, 3, 30).fill(accent);
+    doc.fillColor(accent).font('Helvetica-Bold').fontSize(8).text(labels.benefits.toUpperCase(), M + 12, bandTop + 11, { continued: true });
+    doc.fillColor(INK).font('Helvetica').fontSize(9.5).text(`   ${benefit}`, { width: width - 24, ellipsis: true, lineBreak: false });
+  }
+
+  // --- Metadata ----------------------------------------------------------
+  const metadata: Array<[string, string]> = [
+    ['Raised by', ticket.stakeholder],
+    ['Since', formatUkDate(ticket.createdDate)],
+    ['Affects', ticket.affects || ticket.siteAffected],
+    ['Workaround', ticket.workaround || 'None'],
+    ['Priority', ticket.priority],
+  ];
+  const strip = metadata
+    .filter(([, value]) => value && value.trim())
+    .map(([label, value]) => `${label}: ${value}`)
+    .join('     ·     ');
+  if (strip) {
+    doc.fillColor(MUTED).font('Helvetica').fontSize(7.5).text(strip, M, bandTop + 42, { width, ellipsis: true, lineBreak: false });
+  }
 }

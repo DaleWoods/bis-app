@@ -33,6 +33,9 @@ export interface Category {
   active: boolean;
 }
 
+export type { CardKind } from './card';
+import type { CardKind } from './card';
+
 export interface Ticket {
   id: string;
   jiraId: string;
@@ -47,11 +50,19 @@ export interface Ticket {
   siteAffected: string;
   originalTestingEnvironment: string;
   rawDescription: string;
+  rawComments: string;
+  priority: string;
+  labels: string;
+  components: string;
+  linkedIssues: string;
+  cardKind: CardKind | '';
   execSummary: string;
   panelCurrent: string;
   panelImpacts: string;
   panelFuture: string;
   panelBenefits: string;
+  impactFacts: string;
+  screenshotCaption: string;
   screenshotUrl: string;
   originalRequestor: string;
   stream: 'ECOM' | 'IDM';

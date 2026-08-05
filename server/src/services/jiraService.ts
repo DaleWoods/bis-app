@@ -9,7 +9,7 @@ import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound } from './roundService.js';
 import { computeRoundResults } from './resultService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
-import { draftCardsFor } from './cardDraftService.js';
+import { draftCardsFor, draftToTicketFields } from './cardDraftService.js';
 
 export interface ImportResult {
   imported: Ticket[];
@@ -44,10 +44,19 @@ export async function importQueue(
       title: input.title,
       type: input.type ?? '',
       description: input.rawDescription ?? '',
+      comments: input.rawComments,
       stakeholder: input.stakeholder,
       affects: input.affects,
       impacts: input.impacts,
       workaround: input.workaround,
+      priority: input.priority,
+      labels: input.labels,
+      components: input.components,
+      siteAffected: input.siteAffected,
+      environment: input.originalTestingEnvironment,
+      linkedIssues: input.linkedIssues,
+      createdDate: input.createdDate,
+      imageFilenames: (input.attachments ?? []).filter((a) => a.isImage).map((a) => a.filename),
     })),
   );
 
@@ -55,7 +64,8 @@ export async function importQueue(
   for (const [index, input] of inputs.entries()) {
     // preserveAuthored means a re-sync never overwrites what a coordinator has
     // since written.
-    const ticket = await upsertTicket(db, { ...input, ...drafts[index].draft }, { preserveAuthored: true });
+    const fields = draftToTicketFields(drafts[index].draft, input.attachments ?? []);
+    const ticket = await upsertTicket(db, { ...input, ...fields }, { preserveAuthored: true });
     imported.push(ticket);
     if (options.roundId) await addTicketToRound(db, options.roundId, ticket.id);
   }

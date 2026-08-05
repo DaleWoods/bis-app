@@ -121,3 +121,35 @@ degrades one ticket to the parser rather than failing an import.
 **Cost:** pennies per card, on a self-service console with card payment — the same shape as the SMTP
 decision, and needing nobody's approval. `AI_DRAFT_ENABLED=false` turns it off without removing the
 key.
+
+---
+
+## D5 — The slide is structured by what kind of ticket it is, not by four fixed panels
+
+**Requirement:** §7 card content — Current / Impacts / Future / Benefits.
+
+**Decision:** the ticket slide carries a kind chip (problem / improvement / new capability), a
+headline set large, **three** narrative sections whose labels follow that kind, a captioned
+screenshot beside quantified impact chips, an "if we fix it" line, and a metadata strip. The full
+JIRA description goes into the speaker notes.
+
+**Rationale:** the four-column deck was reported as telling committee members nothing about what a
+ticket actually was. Two causes, and both are structural rather than editorial:
+
+- **The labels asked the wrong question.** "What's happening now" reads fine for a defect and makes
+  no sense for something that does not exist yet. A scorer looking at a new capability needs to be
+  asked "what can't we do today". One table, three readings, no new fields.
+- **The picture was a thumbnail and the figures were buried.** A screenshot of a broken carousel
+  explains it faster than any three bullets, and a scorer weighs "20 orders corrected by hand every
+  morning" differently from "operations are impacted". Both now have their own space, and the
+  screenshot carries a caption saying what to look at — without one it is decoration.
+
+Three sections rather than four because Benefits was never a list: it is the single reason to
+prioritise the thing, and it reads better as one line along the foot of the slide.
+
+**Where the length went:** nowhere. The earlier complaint that the decks were too wordy still holds,
+and every field is still clipped — the answer to "it does not tell me enough" is more structure and a
+bigger picture, not longer paragraphs. Detail that genuinely does not fit is in the speaker notes.
+
+**Migration:** `002_slide_card.sql`. Existing cards keep their content and render under the problem
+wording until someone redrafts or edits them; nothing is lost and nothing needs re-entering.

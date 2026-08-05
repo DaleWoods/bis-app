@@ -45,11 +45,18 @@ historic rounds keep their maths.
 
 The in-app ticket card is the primary scoring surface, and `GET /api/rounds/:id/pack.pptx` (and
 `.pdf`) generates the circulating pack from the same fields: title slide, a how-to-score slide, one
-slide per ticket (header with type chip, executive summary + optional screenshot, the four labelled
-panels, metadata strip), closing thank-you slide.
+slide per ticket, closing thank-you slide.
 
-Population is JIRA-field mapping plus coordinator authoring in `TicketEditor.tsx`. A JIRA re-sync
-refreshes the JIRA-owned fields but never overwrites an authored summary or panel.
+The ticket slide departs from the four fixed Current / Impacts / Future / Benefits panels the
+requirements sketch. It carries a kind chip (problem / improvement / new capability), a headline set
+large, three narrative sections whose labels follow that kind, a captioned screenshot beside
+quantified impact chips, an "if we fix it" line and a metadata strip - see docs/decisions.md D5 for
+why. The full JIRA description goes into the speaker notes, so detail is available without putting it
+on the slide.
+
+Population is JIRA-field mapping plus AI drafting (D4) and coordinator authoring in
+`TicketEditor.tsx`. A JIRA re-sync refreshes the JIRA-owned fields but never overwrites authored
+card content.
 
 ## §8 Relevance & closure
 

@@ -89,8 +89,8 @@ nobody can score. Two drafters exist, and the app picks whichever is available:
 
 | | How it drafts | Needs |
 |---|---|---|
-| Heading parser | Matches headings in the description (`Impact:`, `h2. Current`) onto the four panels. Finds nothing when a ticket has no headings. | Nothing. Always available. |
-| AI | Reads the whole ticket and writes the card in business language, drawing the consequence a commercial reader needs even where the ticket only implies it. | `ANTHROPIC_API_KEY` |
+| Heading parser | Matches headings in the description (`Impact:`, `h2. Current`) onto the card's sections. Finds nothing when a ticket has no headings, and never fills the impact chips or the screenshot caption. | Nothing. Always available. |
+| AI | Reads the whole ticket — description, every comment, labels, priority, components, linked issues — and writes the card in business language, drawing the consequence a commercial reader needs even where the ticket only implies it. Picks which attached image explains it best and captions it. | `ANTHROPIC_API_KEY` |
 
 ```
 ANTHROPIC_API_KEY=<from console.anthropic.com → API keys>
@@ -101,8 +101,10 @@ pennies per card. `AI_DRAFT_ENABLED=false` falls back to the heading parser with
 
 Three things worth being clear about:
 
-- **Only the ticket's own text is sent** — title, type, description and the stakeholder/impact
-  fields. No scores, no committee names, no round data.
+- **Only the ticket's own text is sent** — title, type, description, comments, labels, priority,
+  components, linked-issue titles and the names of its image files. No scores, no committee names, no
+  round data. Images themselves are never uploaded; only their filenames, so the drafter can say
+  which one to show.
 - **Nothing is auto-published.** Every draft lands in the ticket editor for a coordinator to check,
   and "Redraft from ticket" is a button someone presses, never something that happens on its own.
 - **It falls back, it does not fail.** A bad key, an outage or a response that will not parse
@@ -303,8 +305,6 @@ is not on the committee is refused rather than silently admitted.
 
 ## What is deliberately not here
 
-- **AI-drafted ticket summaries** (Phase 2). The coordinator writes the executive summary and the four
-  panels; the JIRA description is imported alongside them as raw material.
 - **Cross-round trend analytics** (Phase 3). Finalised rounds are snapshotted into `ticket_results`
   precisely so that work has clean data to build on.
 - **Historic import.** The process starts clean, as agreed.

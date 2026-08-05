@@ -10,8 +10,8 @@ import { deleteTicket, getTicket, listTickets, upsertTicket } from '../services/
 import { getAppConfig } from '../services/configService.js';
 import { parseCsvObjects } from '../util/csv.js';
 import { fetchAttachment } from '../integrations/jira.js';
-import { draftIsEmpty } from '../domain/cardDraft.js';
-import { draftCardFor } from '../services/cardDraftService.js';
+import { draftIsEmpty } from '../domain/card.js';
+import { draftCardFor, draftToTicketFields, sourceFromTicket } from '../services/cardDraftService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
@@ -225,18 +225,13 @@ router.post(
       return;
     }
 
-    const { draft, drafter } = await draftCardFor({
+    const { draft, drafter } = await draftCardFor(sourceFromTicket(ticket));
+
+    const updated = await upsertTicket(db, {
       jiraId: ticket.jiraId,
       title: ticket.title,
-      type: ticket.type,
-      description: ticket.rawDescription,
-      stakeholder: ticket.stakeholder,
-      affects: ticket.affects,
-      impacts: ticket.impacts,
-      workaround: ticket.workaround,
+      ...draftToTicketFields(draft, ticket.attachments),
     });
-
-    const updated = await upsertTicket(db, { jiraId: ticket.jiraId, title: ticket.title, ...draft });
     await audit(db, actorOf(req), 'ticket.redraft', 'ticket', ticket.id, { jiraId: ticket.jiraId, drafter });
     res.json({ ticket: updated, empty: draftIsEmpty(draft), drafter });
   }),

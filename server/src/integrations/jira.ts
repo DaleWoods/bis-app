@@ -96,6 +96,28 @@ interface SearchResponse {
   isLast?: boolean;
 }
 
+/**
+ * Everything a card drafter can use. Comments are the important addition: the
+ * business impact of a ticket is more often argued out in the comments than
+ * written in the description, and a card drafted without them reads like a
+ * restated title.
+ */
+const CONTEXT_FIELDS = [
+  'attachment',
+  'summary',
+  'issuetype',
+  'status',
+  'created',
+  'reporter',
+  'description',
+  'environment',
+  'comment',
+  'labels',
+  'priority',
+  'components',
+  'issuelinks',
+];
+
 /** Read the Business Scoring queue (§12.1). */
 export async function searchQueue(
   jiraConfig: JiraConfig,
@@ -104,14 +126,7 @@ export async function searchQueue(
 ): Promise<TicketInput[]> {
   const jql = options.jql?.trim() || jiraConfig.queueJql;
   const fields = [
-    'attachment',
-    'summary',
-    'issuetype',
-    'status',
-    'created',
-    'reporter',
-    'description',
-    'environment',
+    ...CONTEXT_FIELDS,
     jiraConfig.siteAffectedFieldId,
     jiraConfig.originalTestingEnvironmentFieldId,
     jiraConfig.ticketPhaseFieldId,
@@ -145,6 +160,35 @@ export async function getIssue(
   return mapIssue(issue, jiraConfig, effortFields);
 }
 
+/** Newest comments last, so the drafter reads the thread in the order it happened. */
+export function commentsToText(fields: Record<string, any>, maxComments = 20): string {
+  const raw = Array.isArray(fields?.comment?.comments) ? fields.comment.comments : [];
+  return raw
+    .slice(-maxComments)
+    .map((comment: any) => {
+      const who = comment?.author?.displayName ?? 'Someone';
+      const when = String(comment?.created ?? '').slice(0, 10);
+      const body = adfToText(comment?.body).trim();
+      return body ? `[${when}] ${who}: ${body}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** "blocks ECOM-1301 (Homepage promo rotation)" - scale and duplication signals. */
+export function linksToText(fields: Record<string, any>): string {
+  const raw = Array.isArray(fields?.issuelinks) ? fields.issuelinks : [];
+  return raw
+    .map((link: any) => {
+      const other = link?.outwardIssue ?? link?.inwardIssue;
+      if (!other?.key) return '';
+      const relation = link?.outwardIssue ? link?.type?.outward : link?.type?.inward;
+      return `${relation ?? 'relates to'} ${other.key} (${other?.fields?.summary ?? ''})`.trim();
+    })
+    .filter(Boolean)
+    .join('; ');
+}
+
 export function mapIssue(
   issue: JiraIssue,
   jiraConfig: JiraConfig,
@@ -161,6 +205,11 @@ export function mapIssue(
     stakeholder: fields.reporter?.displayName ?? '',
     originalRequestor: (fields.reporter?.emailAddress ?? '').toLowerCase(),
     rawDescription: adfToText(fields.description),
+    rawComments: commentsToText(fields),
+    priority: fields.priority?.name ?? '',
+    labels: Array.isArray(fields.labels) ? fields.labels.join(', ') : '',
+    components: Array.isArray(fields.components) ? fields.components.map((c: any) => c?.name).filter(Boolean).join(', ') : '',
+    linkedIssues: linksToText(fields),
     siteAffected: valueOf(custom(jiraConfig.siteAffectedFieldId)),
     originalTestingEnvironment:
       valueOf(custom(jiraConfig.originalTestingEnvironmentFieldId)) || (fields.environment ? adfToText(fields.environment) : ''),

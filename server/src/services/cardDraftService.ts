@@ -1,6 +1,8 @@
 import { env } from '../config/env.js';
-import { type CardDraft, type DraftSource, draftCard, draftIsEmpty } from '../domain/cardDraft.js';
+import { type CardDraft, draftIsEmpty } from '../domain/card.js';
+import { type DraftSource, draftCard } from '../domain/cardDraft.js';
 import { draftCardWithAi } from '../integrations/anthropic.js';
+import type { Ticket } from './ticketService.js';
 
 /**
  * One way in for card drafting, so callers do not care which drafter ran.
@@ -18,6 +20,32 @@ export interface DraftOutcome {
   drafter: Drafter;
   /** Set when AI was configured but did not work, so Settings can say why. */
   aiError?: string;
+}
+
+/**
+ * Everything on a ticket that says something about what it is. Assembled in one
+ * place so an import and a later redraft feed the drafter identically.
+ */
+export function sourceFromTicket(ticket: Ticket): DraftSource {
+  return {
+    jiraId: ticket.jiraId,
+    title: ticket.title,
+    type: ticket.type,
+    description: ticket.rawDescription,
+    comments: ticket.rawComments,
+    stakeholder: ticket.stakeholder,
+    affects: ticket.affects,
+    impacts: ticket.impacts,
+    workaround: ticket.workaround,
+    priority: ticket.priority,
+    labels: ticket.labels,
+    components: ticket.components,
+    siteAffected: ticket.siteAffected,
+    environment: ticket.originalTestingEnvironment,
+    linkedIssues: ticket.linkedIssues,
+    createdDate: ticket.createdDate,
+    imageFilenames: ticket.attachments.filter((a) => a.isImage).map((a) => a.filename),
+  };
 }
 
 export async function draftCardFor(source: DraftSource): Promise<DraftOutcome> {
@@ -56,4 +84,25 @@ export async function draftCardsFor(sources: DraftSource[], concurrency = 4): Pr
 
   await Promise.all(Array.from({ length: Math.min(concurrency, sources.length) }, worker));
   return outcomes;
+}
+
+/**
+ * The draft as ticket columns. The drafter names the image it wants by
+ * filename; the ticket stores attachment ids, so it is resolved here rather
+ * than letting a filename leak into the data model.
+ */
+export function draftToTicketFields(
+  draft: CardDraft,
+  attachments: Array<{ id: string; filename: string; isImage: boolean }> = [],
+): Partial<Ticket> {
+  const { screenshotPick, kind, ...rest } = draft;
+  const picked = screenshotPick
+    ? attachments.find((a) => a.isImage && a.filename === screenshotPick)?.id
+    : undefined;
+
+  return {
+    ...rest,
+    cardKind: kind,
+    ...(picked ? { screenshotAttachmentId: picked } : {}),
+  };
 }

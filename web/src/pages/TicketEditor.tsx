@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Ticket } from '../api';
-
-/**
- * Kept in step with CARD_LIMITS on the server. The committee's complaint is
- * that cards are too wordy, so the editor shows the budget as it is spent
- * rather than letting a paragraph land on the slide unnoticed.
- */
-const LIMITS = { execSummary: 240, panel: 180 };
+import { CARD_KINDS, CARD_LIMITS as LIMITS, KIND_HINTS, labelsFor, type CardKind } from '../card';
 
 function Counter({ value, limit }: { value: string; limit: number }) {
   const used = value.trim().length;
@@ -40,11 +34,14 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
     affects: ticket?.affects ?? '',
     impacts: ticket?.impacts ?? '',
     workaround: ticket?.workaround ?? '',
+    cardKind: (ticket?.cardKind || 'PROBLEM') as CardKind,
     execSummary: ticket?.execSummary ?? '',
     panelCurrent: ticket?.panelCurrent ?? '',
     panelImpacts: ticket?.panelImpacts ?? '',
     panelFuture: ticket?.panelFuture ?? '',
     panelBenefits: ticket?.panelBenefits ?? '',
+    impactFacts: ticket?.impactFacts ?? '',
+    screenshotCaption: ticket?.screenshotCaption ?? '',
     screenshotUrl: ticket?.screenshotUrl ?? '',
     screenshotAttachmentId: ticket?.screenshotAttachmentId ?? '',
     originalRequestor: ticket?.originalRequestor ?? '',
@@ -57,6 +54,9 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
   /** Non-failure feedback, e.g. which drafter wrote the card just loaded. */
   const [note, setNote] = useState('');
   const root = useRef<HTMLElement | null>(null);
+  // Section labels follow the kind, and the kind is editable, so this is read
+  // from the form rather than from the ticket as loaded.
+  const labels = labelsFor(form.cardKind);
 
   // The editor opens beside the ticket it belongs to, which on a long round can
   // be anywhere on the page. Bring it into view on open so the first field is
@@ -110,14 +110,20 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
                   const { ticket: drafted, empty, drafter } = await api.redraftTicket(ticket.id);
                   setForm((current) => ({
                     ...current,
+                    cardKind: (drafted.cardKind || current.cardKind) as CardKind,
                     execSummary: drafted.execSummary,
                     panelCurrent: drafted.panelCurrent,
                     panelImpacts: drafted.panelImpacts,
                     panelFuture: drafted.panelFuture,
                     panelBenefits: drafted.panelBenefits,
+                    impactFacts: drafted.impactFacts,
+                    screenshotCaption: drafted.screenshotCaption,
+                    // The drafter may also have picked a more telling image.
+                    screenshotAttachmentId: drafted.screenshotAttachmentId || current.screenshotAttachmentId,
                   }));
-                  if (empty) setError('Nothing could be pulled from the JIRA description — write the card by hand.');
-                  else if (drafter === 'ai') setNote('Drafted by reading the whole ticket. Check it before you save.');
+                  if (empty) setError('Nothing could be pulled from the JIRA ticket — write the card by hand.');
+                  else if (drafter === 'ai')
+                    setNote('Drafted from the whole ticket, comments included. Check it before you save.');
                   else setNote('Drafted from the headings in the description. Check it before you save.');
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Could not redraft the card');
@@ -152,31 +158,43 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
         </div>
 
         <div className="field">
-          <label htmlFor="t-summary">In a nutshell</label>
+          <label htmlFor="t-kind">What kind of ticket is this?</label>
+          <select id="t-kind" value={form.cardKind || 'PROBLEM'} onChange={(e) => set('cardKind', e.target.value as CardKind)}>
+            {CARD_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {labelsFor(kind).kind} — {KIND_HINTS[kind]}
+              </option>
+            ))}
+          </select>
+          <p className="hint">Sets how the slide labels its three sections. A committee scores a fault and a gap differently.</p>
+        </div>
+
+        <div className="field">
+          <label htmlFor="t-summary">Headline</label>
           <textarea
             id="t-summary"
             value={form.execSummary}
             onChange={(e) => set('execSummary', e.target.value)}
-            placeholder="One or two plain sentences a non-specialist would understand. What is wrong, and why it matters."
+            placeholder="One or two plain sentences a non-specialist would understand. What this is, and why it matters commercially."
           />
           <Counter value={form.execSummary} limit={LIMITS.execSummary} />
           <p className="hint">
-            The one line every scorer reads. No jargon, no ticket numbers, no implementation detail.
+            Set large at the top of the slide — the line read if nothing else is. No jargon, no ticket numbers, no
+            implementation detail.
           </p>
         </div>
 
         <div className="row">
           {(
             [
-              ['panelCurrent', 'Current', "What's happening now"],
-              ['panelImpacts', 'Impacts', 'What it causes'],
-              ['panelFuture', 'Future', 'What it should be'],
-              ['panelBenefits', 'Benefits', 'What we get'],
+              ['panelCurrent', labels.current],
+              ['panelImpacts', labels.impacts],
+              ['panelFuture', labels.future],
             ] as const
-          ).map(([key, label, hint]) => (
+          ).map(([key, section]) => (
             <div className="grow field" key={key}>
               <label htmlFor={`t-${key}`}>
-                {label} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>— {hint}</span>
+                {section.label} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>— {section.hint}</span>
               </label>
               <textarea
                 id={`t-${key}`}
@@ -187,6 +205,34 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
               <Counter value={form[key]} limit={LIMITS.panel} />
             </div>
           ))}
+        </div>
+
+        <div className="row">
+          <div className="grow field">
+            <label htmlFor="t-panelBenefits">{labels.benefits}…</label>
+            <input
+              id="t-panelBenefits"
+              type="text"
+              value={form.panelBenefits}
+              onChange={(e) => set('panelBenefits', e.target.value)}
+              placeholder="…every promotion we pay for actually gets seen."
+            />
+            <Counter value={form.panelBenefits} limit={LIMITS.benefit} />
+            <p className="hint">One line along the foot of the slide. The single strongest reason to prioritise it.</p>
+          </div>
+          <div className="grow field">
+            <label htmlFor="t-facts">The numbers</label>
+            <textarea
+              id="t-facts"
+              value={form.impactFacts}
+              onChange={(e) => set('impactFacts', e.target.value)}
+              placeholder={'Affects: all mobile customers\nFrequency: every homepage visit\nOpen since: March'}
+            />
+            <p className="hint">
+              One per line as “Label: value”, up to four. Shown as chips beside the screenshot. Leave a line out rather
+              than guessing a figure.
+            </p>
+          </div>
         </div>
 
         <h3>Metadata strip</h3>
@@ -240,6 +286,18 @@ export function TicketEditor({ ticket, roundId, onClose, onSaved }: Props) {
                     style={{ marginTop: '0.5rem', maxWidth: '100%', maxHeight: 180, border: '1px solid var(--line)', borderRadius: 'var(--radius)' }}
                   />
                 ) : null}
+                <label htmlFor="t-caption" style={{ marginTop: '0.6rem' }}>
+                  What are we looking at?
+                </label>
+                <input
+                  id="t-caption"
+                  type="text"
+                  value={form.screenshotCaption}
+                  onChange={(e) => set('screenshotCaption', e.target.value)}
+                  placeholder="The banner never advances past the first promotion"
+                />
+                <Counter value={form.screenshotCaption} limit={LIMITS.screenshotCaption} />
+                <p className="hint">Printed under the image. A screenshot nobody can read is decoration.</p>
               </>
             ) : (
               <>

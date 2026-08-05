@@ -17,11 +17,22 @@ export interface Ticket {
   siteAffected: string;
   originalTestingEnvironment: string;
   rawDescription: string;
+  /** Flattened JIRA comments, kept so a redraft sees what the import saw. */
+  rawComments: string;
+  priority: string;
+  labels: string;
+  components: string;
+  linkedIssues: string;
+  /** PROBLEM | IMPROVEMENT | FEATURE - drives the slide's section labels. */
+  cardKind: string;
   execSummary: string;
   panelCurrent: string;
   panelImpacts: string;
   panelFuture: string;
   panelBenefits: string;
+  /** Quantified chips, one per line. */
+  impactFacts: string;
+  screenshotCaption: string;
   screenshotUrl: string;
   originalRequestor: string;
   stream: Stream;
@@ -57,11 +68,19 @@ interface TicketRow {
   site_affected: string;
   original_testing_environment: string;
   raw_description: string;
+  raw_comments: string | null;
+  priority: string | null;
+  labels: string | null;
+  components: string | null;
+  linked_issues: string | null;
+  card_kind: string | null;
   exec_summary: string;
   panel_current: string;
   panel_impacts: string;
   panel_future: string;
   panel_benefits: string;
+  impact_facts: string | null;
+  screenshot_caption: string | null;
   screenshot_url: string;
   original_requestor: string;
   stream: string;
@@ -88,11 +107,19 @@ export function mapTicket(row: TicketRow): Ticket {
     siteAffected: row.site_affected,
     originalTestingEnvironment: row.original_testing_environment,
     rawDescription: row.raw_description,
+    rawComments: row.raw_comments ?? '',
+    priority: row.priority ?? '',
+    labels: row.labels ?? '',
+    components: row.components ?? '',
+    linkedIssues: row.linked_issues ?? '',
+    cardKind: row.card_kind ?? '',
     execSummary: row.exec_summary,
     panelCurrent: row.panel_current,
     panelImpacts: row.panel_impacts,
     panelFuture: row.panel_future,
     panelBenefits: row.panel_benefits,
+    impactFacts: row.impact_facts ?? '',
+    screenshotCaption: row.screenshot_caption ?? '',
     screenshotUrl: row.screenshot_url,
     originalRequestor: row.original_requestor,
     stream: (row.stream as Stream) ?? 'ECOM',
@@ -144,11 +171,19 @@ const TEXT_FIELDS: Array<[TicketTextField, string]> = [
   ['siteAffected', 'site_affected'],
   ['originalTestingEnvironment', 'original_testing_environment'],
   ['rawDescription', 'raw_description'],
+  ['rawComments', 'raw_comments'],
+  ['priority', 'priority'],
+  ['labels', 'labels'],
+  ['components', 'components'],
+  ['linkedIssues', 'linked_issues'],
+  ['cardKind', 'card_kind'],
   ['execSummary', 'exec_summary'],
   ['panelCurrent', 'panel_current'],
   ['panelImpacts', 'panel_impacts'],
   ['panelFuture', 'panel_future'],
   ['panelBenefits', 'panel_benefits'],
+  ['impactFacts', 'impact_facts'],
+  ['screenshotCaption', 'screenshot_caption'],
   ['screenshotUrl', 'screenshot_url'],
   ['originalRequestor', 'original_requestor'],
   ['stream', 'stream'],
@@ -183,11 +218,12 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
     await db.run(
       `INSERT INTO tickets (
         id, jira_id, title, type, jira_status, created_date, stakeholder, affects, impacts, workaround,
-        site_affected, original_testing_environment, raw_description, exec_summary, panel_current, panel_impacts,
-        panel_future, panel_benefits, screenshot_url, original_requestor, stream, backend_poker_score,
+        site_affected, original_testing_environment, raw_description, raw_comments, priority, labels, components,
+        linked_issues, card_kind, exec_summary, panel_current, panel_impacts, panel_future, panel_benefits,
+        impact_facts, screenshot_caption, screenshot_url, original_requestor, stream, backend_poker_score,
         frontend_poker_score, manual_effort, jira_synced_at, attachments, screenshot_attachment_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.jiraId.toUpperCase(),
@@ -202,11 +238,19 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
         input.siteAffected ?? '',
         input.originalTestingEnvironment ?? '',
         input.rawDescription ?? '',
+        input.rawComments ?? '',
+        input.priority ?? '',
+        input.labels ?? '',
+        input.components ?? '',
+        input.linkedIssues ?? '',
+        input.cardKind ?? '',
         input.execSummary ?? '',
         input.panelCurrent ?? '',
         input.panelImpacts ?? '',
         input.panelFuture ?? '',
         input.panelBenefits ?? '',
+        input.impactFacts ?? '',
+        input.screenshotCaption ?? '',
         input.screenshotUrl ?? '',
         input.originalRequestor ?? '',
         input.stream ?? 'ECOM',
@@ -224,7 +268,17 @@ export async function upsertTicket(db: Db, input: TicketInput, options: { preser
   }
 
   // Coordinator-authored pack content (§7) is never overwritten by a JIRA re-sync.
-  const authored = new Set(['execSummary', 'panelCurrent', 'panelImpacts', 'panelFuture', 'panelBenefits', 'screenshotUrl']);
+  const authored = new Set([
+    'cardKind',
+    'execSummary',
+    'panelCurrent',
+    'panelImpacts',
+    'panelFuture',
+    'panelBenefits',
+    'impactFacts',
+    'screenshotCaption',
+    'screenshotUrl',
+  ]);
   const sets: string[] = [];
   const params: Array<string | number | null> = [];
 

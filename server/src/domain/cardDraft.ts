@@ -1,10 +1,11 @@
 /**
  * Turns a raw JIRA ticket into a first draft of the scoring card (§7).
  *
- * Pure and testable: no database, no network, no AI. The requirements put
- * AI-assisted drafting in Phase 2, and a large part of what a person would do
- * here is mechanical - JIRA descriptions are already written in sections, and
- * the panels map onto those sections.
+ * Pure and testable: no database, no network, no AI. It reads headings, which
+ * works when a ticket is written in sections and finds very little when it is
+ * not. That limit is why the AI drafter exists; this one is the fallback that
+ * needs no account, no key and no approval, and it is what runs when the model
+ * is unreachable.
  *
  * The other half of the job is restraint. The complaint about the current decks
  * is that they are too wordy, so every field is clipped to a length a committee
@@ -12,33 +13,34 @@
  * bullets. The coordinator edits from there.
  */
 
+import { CARD_LIMITS, type CardDraft, kindFromIssueType } from './card.js';
+
+export { CARD_LIMITS } from './card.js';
+export type { CardDraft } from './card.js';
+export { draftIsEmpty } from './card.js';
+
 export interface DraftSource {
   jiraId: string;
   title: string;
   type: string;
   /** Plain text flattened out of the JIRA description. */
   description: string;
+  /** Flattened comments. Often where the business impact actually lives. */
+  comments?: string;
   stakeholder?: string;
   affects?: string;
   impacts?: string;
   workaround?: string;
+  priority?: string;
+  labels?: string;
+  components?: string;
+  siteAffected?: string;
+  environment?: string;
+  linkedIssues?: string;
+  createdDate?: string | null;
+  /** Image filenames on the ticket, so a drafter can pick the telling one. */
+  imageFilenames?: string[];
 }
-
-export interface CardDraft {
-  execSummary: string;
-  panelCurrent: string;
-  panelImpacts: string;
-  panelFuture: string;
-  panelBenefits: string;
-}
-
-/** Deliberately tight. A card is a prompt to score, not a specification. */
-export const CARD_LIMITS = {
-  execSummary: 240,
-  panel: 180,
-  bulletsPerPanel: 3,
-  bullet: 90,
-} as const;
 
 type PanelKey = 'current' | 'impacts' | 'future' | 'benefits';
 
@@ -202,17 +204,19 @@ export function draftCard(source: DraftSource): CardDraft {
   };
 
   return {
+    kind: kindFromIssueType(source.type),
     execSummary: firstSentences(leadIn || source.title, CARD_LIMITS.execSummary),
     // With nothing labelled, unlabelled prose is more likely to describe the
     // problem than anything else, so it seeds "Current" only.
     panelCurrent: panelText('current', buckets.current.length ? '' : unlabelled.join('\n')),
     panelImpacts: panelText('impacts', source.impacts ?? ''),
     panelFuture: panelText('future'),
-    panelBenefits: panelText('benefits'),
+    // A single line on the slide now, not a column of bullets.
+    panelBenefits: firstSentences(buckets.benefits.join('\n'), CARD_LIMITS.benefit),
+    // Reading a figure out of prose is exactly the judgement a regex cannot
+    // make, so this drafter leaves the impact chips and the caption to the
+    // coordinator rather than guessing.
+    impactFacts: '',
+    screenshotCaption: '',
   };
-}
-
-/** True when a draft found nothing worth showing, so the UI can say so. */
-export function draftIsEmpty(draft: CardDraft): boolean {
-  return !draft.panelCurrent && !draft.panelImpacts && !draft.panelFuture && !draft.panelBenefits;
 }

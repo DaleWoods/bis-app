@@ -52,12 +52,16 @@ CREATE TABLE IF NOT EXISTS tickets (
   site_affected                TEXT NOT NULL DEFAULT '',
   original_testing_environment TEXT NOT NULL DEFAULT '',
   raw_description              TEXT NOT NULL DEFAULT '',
-  -- §7 distribution pack / ticket card content (coordinator authored in foundation)
-  exec_summary                 TEXT NOT NULL DEFAULT '',
+  -- §7 distribution pack / ticket card content (drafted, coordinator edited).
+  -- The rest of the card - card_kind, impact_facts, screenshot_caption - and the
+  -- JIRA context the drafter reads come from migrations/002_slide_card.sql. New
+  -- columns go in a migration and never here, so a database that has been
+  -- running for months and a fresh one end up identical.
+  exec_summary                 TEXT NOT NULL DEFAULT '',   -- the headline
   panel_current                TEXT NOT NULL DEFAULT '',
   panel_impacts                TEXT NOT NULL DEFAULT '',
   panel_future                 TEXT NOT NULL DEFAULT '',
-  panel_benefits               TEXT NOT NULL DEFAULT '',
+  panel_benefits               TEXT NOT NULL DEFAULT '',   -- the "if we do this" line
   screenshot_url               TEXT NOT NULL DEFAULT '',
   original_requestor           TEXT NOT NULL DEFAULT '',   -- email, drives §8 "isn't relevant today" rule
   stream                       TEXT NOT NULL DEFAULT 'ECOM',  -- ECOM | IDM (§12.4)

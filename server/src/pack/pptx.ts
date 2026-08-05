@@ -12,6 +12,7 @@ interface PptxSlide {
   addShape(shape: string, options: Record<string, unknown>): unknown;
   addImage(options: Record<string, unknown>): unknown;
   addTable(rows: unknown[], options: Record<string, unknown>): unknown;
+  addNotes(text: string): unknown;
 }
 
 interface PptxPresentation {
@@ -25,6 +26,7 @@ interface PptxPresentation {
 
 const PptxGenJS = pptxgen as unknown as new () => PptxPresentation;
 import { CategoryDef, PackConfig } from '../domain/types.js';
+import { cardLines, labelsFor } from '../domain/card.js';
 import { formatUkDate } from '../util/time.js';
 import { Round } from '../services/roundService.js';
 import { Ticket } from '../services/ticketService.js';
@@ -36,31 +38,50 @@ import { Ticket } from '../services/ticketService.js';
  * matching PowerPoint for circulation and archiving. Both are driven from the
  * same ticket data, so they cannot drift.
  *
- * Layout per slide: header (JIRA ID – Title + type chip), executive summary,
- * four labelled panels (Current / Impacts / Future / Benefits), metadata strip.
- * Plus a title slide and a closing thank-you slide, as today.
+ * The slide is laid out for someone who has never seen the system and will not
+ * ask a follow-up question:
+ *
+ *   ┌ header ─ id · kind chip · title ───────────────────────────────┐
+ *   │ HEADLINE - the one sentence, set large                         │
+ *   ├ narrative (3 sections, labelled by kind) ─┬ screenshot ────────┤
+ *   │ • what is going on                        │  [ image ]         │
+ *   │ • who it hurts                            │  caption           │
+ *   │ • what done looks like                    │  impact chips      │
+ *   ├ "If we fix it, …" ─────────────────────────────────────────────┤
+ *   └ metadata strip ────────────────────────────────────────────────┘
+ *
+ * The picture gets a third of the slide because a screenshot with a caption
+ * explains a broken carousel faster than any three bullets can.
  */
 
-const PANELS: Array<{ key: keyof Ticket; label: string; blurb: string }> = [
-  { key: 'panelCurrent', label: 'Current', blurb: "What's happening now" },
-  { key: 'panelImpacts', label: 'Impacts', blurb: 'What it causes' },
-  { key: 'panelFuture', label: 'Future', blurb: 'What it should be' },
-  { key: 'panelBenefits', label: 'Benefits', blurb: 'What we get' },
-];
+const SLIDE_W = 10;
+const MARGIN = 0.34;
+const CONTENT_W = SLIDE_W - MARGIN * 2;
+/** Where the slide body stops and the "if we fix it" band begins. */
+const ASIDE_BOTTOM = 4.42;
+
+const INK = '1F2933';
+const MUTED = '5A6B7B';
+const PANEL_BG = 'F5F8FB';
+const PANEL_LINE = 'DCE4EC';
+
+interface Geometry {
+  narrativeW: number;
+  asideX: number;
+  asideW: number;
+}
 
 function trim(value: string | null | undefined, max = 700): string {
   const text = (value ?? '').trim();
-  if (!text) return '—';
+  if (!text) return '';
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/** Panels are bullets on the card, so they are bullets on the slide too. */
-function bulletLines(value: string | null | undefined): string[] {
-  return (value ?? '')
-    .split('\n')
-    .map((line) => line.replace(/^[-*•\s]+/, '').trim())
-    .filter(Boolean)
-    .slice(0, 3);
+/** An impact chip is "Label: value"; the label is set apart so it scans. */
+function chipParts(fact: string): { label: string; value: string } {
+  const index = fact.indexOf(':');
+  if (index <= 0) return { label: '', value: fact };
+  return { label: fact.slice(0, index).trim(), value: fact.slice(index + 1).trim() };
 }
 
 export interface PackInput {
@@ -120,82 +141,7 @@ export async function buildPptx(input: PackInput): Promise<Buffer> {
 
   // --- One slide per ticket ---------------------------------------------
   for (const ticket of tickets) {
-    const slide = pptx.addSlide();
-
-    slide.addShape('rect', { x: 0, y: 0, w: 10, h: 0.85, fill: { color: accent } });
-    slide.addText(`${ticket.jiraId} – ${ticket.title}`, {
-      x: 0.35,
-      y: 0.12,
-      w: 7.6,
-      h: 0.6,
-      fontSize: 20,
-      bold: true,
-      color: 'FFFFFF',
-      valign: 'middle',
-    });
-    if (ticket.type) {
-      slide.addShape('roundRect', { x: 8.1, y: 0.22, w: 1.55, h: 0.42, fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF' } });
-      slide.addText(ticket.type, { x: 8.1, y: 0.22, w: 1.55, h: 0.42, fontSize: 11, bold: true, color: accent, align: 'center', valign: 'middle' });
-    }
-
-    const screenshot = input.screenshots?.[ticket.id] ?? '';
-    const hasImage = Boolean(screenshot || ticket.screenshotUrl);
-    slide.addText('In a nutshell', { x: 0.35, y: 1.0, w: 4, h: 0.28, fontSize: 11, bold: true, color: accent });
-    slide.addText(trim(ticket.execSummary, 260), {
-      x: 0.35,
-      y: 1.28,
-      w: hasImage ? 6.2 : 9.3,
-      h: 1.05,
-      fontSize: 14,
-      color: '222222',
-      valign: 'top',
-    });
-    if (hasImage) {
-      try {
-        // Embedded bytes where we have them; a pasted URL otherwise.
-        const image = screenshot
-          ? { data: screenshot }
-          : { path: ticket.screenshotUrl };
-        slide.addImage({ ...image, x: 6.75, y: 1.0, w: 2.9, h: 1.6, sizing: { type: 'contain', w: 2.9, h: 1.6 } });
-      } catch {
-        // A missing or unreachable screenshot must never fail pack generation.
-      }
-    }
-
-    const panelWidth = 2.28;
-    PANELS.forEach((panel, index) => {
-      const x = 0.35 + index * (panelWidth + 0.09);
-      slide.addShape('rect', { x, y: 2.4, w: panelWidth, h: 0.34, fill: { color: accent } });
-      slide.addText(panel.label, { x, y: 2.4, w: panelWidth, h: 0.34, fontSize: 12, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
-      slide.addShape('rect', { x, y: 2.74, w: panelWidth, h: 1.85, fill: { color: 'F4F7FA' }, line: { color: 'DCE4EC' } });
-      const lines = bulletLines(ticket[panel.key] as string);
-      slide.addText(
-        lines.length
-          ? lines.map((line, index) => ({
-              text: trim(line, 110),
-              options: { bullet: true, breakLine: index < lines.length - 1 },
-            }))
-          : '—',
-        { x: x + 0.08, y: 2.8, w: panelWidth - 0.16, h: 1.73, fontSize: 10, color: '333333', valign: 'top' },
-      );
-    });
-
-    const metadata = [
-      ['Created', formatUkDate(ticket.createdDate)],
-      ['Type', ticket.type],
-      ['Stakeholder', ticket.stakeholder],
-      ['Affects', ticket.affects],
-      ['Impacts', ticket.impacts],
-      ['Workaround', ticket.workaround],
-    ];
-    slide.addShape('rect', { x: 0.35, y: 4.72, w: 9.3, h: 0.55, fill: { color: 'EFF3F7' } });
-    slide.addText(
-      metadata.map(([label, value], index) => ({
-        text: `${label}: ${value || '—'}${index < metadata.length - 1 ? '   ·   ' : ''}`,
-        options: { bold: false },
-      })),
-      { x: 0.45, y: 4.72, w: 9.1, h: 0.55, fontSize: 9.5, color: '445566', valign: 'middle' },
-    );
+    ticketSlide(pptx.addSlide(), ticket, accent, input.screenshots?.[ticket.id] ?? '');
   }
 
   // --- Closing slide -----------------------------------------------------
@@ -207,4 +153,294 @@ export async function buildPptx(input: PackInput): Promise<Buffer> {
 
   const data = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer;
   return data;
+}
+
+function ticketSlide(slide: PptxSlide, ticket: Ticket, accent: string, screenshot: string): void {
+  const labels = labelsFor(ticket.cardKind);
+  const facts = cardLines(ticket.impactFacts, 4);
+  const hasImage = Boolean(screenshot || ticket.screenshotUrl);
+  // The aside earns its width only when it has something in it. With neither a
+  // picture nor a quantified fact, the narrative takes the whole slide rather
+  // than sitting in a column beside white space.
+  const hasAside = hasImage || facts.length > 0;
+  const geometry: Geometry = hasAside
+    ? { narrativeW: 5.65, asideX: MARGIN + 5.9, asideW: CONTENT_W - 5.9 }
+    : { narrativeW: CONTENT_W, asideX: 0, asideW: 0 };
+
+  header(slide, ticket, accent, labels.kind);
+  const narrativeTop = headline(slide, ticket, geometry);
+
+  narrative(slide, ticket, accent, geometry, narrativeTop, labels);
+  if (hasAside) aside(slide, ticket, accent, geometry, narrativeTop, screenshot, facts, hasImage);
+
+  benefitBand(slide, ticket, accent, labels.benefits);
+  metadataStrip(slide, ticket);
+
+  // Speaker notes carry the detail that would make the slide wordy. Anyone who
+  // wants more than the slide gives has it a keystroke away.
+  slide.addNotes(
+    [
+      `${ticket.jiraId} — ${ticket.title}`,
+      ticket.stakeholder ? `Raised by ${ticket.stakeholder}${ticket.createdDate ? ` on ${formatUkDate(ticket.createdDate)}` : ''}` : '',
+      ticket.workaround ? `Workaround: ${ticket.workaround}` : '',
+      '',
+      trim(ticket.rawDescription, 1800),
+    ]
+      .filter((line) => line !== undefined)
+      .join('\n'),
+  );
+}
+
+function header(slide: PptxSlide, ticket: Ticket, accent: string, kindLabel: string): void {
+  slide.addShape('rect', { x: 0, y: 0, w: SLIDE_W, h: 0.82, fill: { color: accent } });
+
+  slide.addText(
+    [
+      { text: ticket.jiraId, options: { bold: true, color: 'FFFFFF', fontSize: 12 } },
+      { text: `   ${ticket.title}`, options: { color: 'FFFFFF', fontSize: 17, bold: true } },
+    ],
+    { x: MARGIN, y: 0.08, w: CONTENT_W - 1.75, h: 0.66, valign: 'middle' },
+  );
+
+  // The kind chip tells a scorer in one word whether they are looking at
+  // something broken or something we cannot do yet. They score differently.
+  slide.addShape('roundRect', {
+    x: SLIDE_W - MARGIN - 1.65,
+    y: 0.21,
+    w: 1.65,
+    h: 0.4,
+    fill: { color: 'FFFFFF' },
+    line: { color: 'FFFFFF' },
+    rectRadius: 0.18,
+  });
+  slide.addText(kindLabel.toUpperCase(), {
+    x: SLIDE_W - MARGIN - 1.65,
+    y: 0.21,
+    w: 1.65,
+    h: 0.4,
+    fontSize: 9.5,
+    bold: true,
+    color: accent,
+    align: 'center',
+    valign: 'middle',
+    charSpacing: 0.6,
+  });
+}
+
+/** Returns the y the rest of the slide starts at. */
+function headline(slide: PptxSlide, ticket: Ticket, geometry: Geometry): number {
+  const text = trim(ticket.execSummary, 260);
+  if (!text) return 1.02;
+
+  slide.addText(text, {
+    x: MARGIN,
+    y: 0.98,
+    w: geometry.narrativeW,
+    h: 0.62,
+    fontSize: 13.5,
+    bold: true,
+    color: INK,
+    valign: 'top',
+    lineSpacingMultiple: 1.05,
+  });
+  return 1.68;
+}
+
+/**
+ * How tall each narrative section wants to be, given its bullets.
+ *
+ * PowerPoint does the real text layout, so this estimates: roughly 16
+ * characters per inch at 10.5pt, one line per wrap. Sections then take the room
+ * they need instead of an equal third each - three short sections spread over
+ * the full height leave bands of dead space that read as an unfinished slide.
+ * If they collectively want more than there is, everything is scaled to fit.
+ */
+export function sectionHeights(
+  sections: Array<{ value: string }>,
+  width: number,
+  available: number,
+): number[] {
+  const LABEL = 0.26;
+  const LINE = 0.2;
+  const GAP = 0.14;
+  const charsPerLine = Math.max(20, Math.round(width * 16));
+
+  const wanted = sections.map((section) => {
+    const lines = cardLines(section.value);
+    const rows = lines.length
+      ? lines.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)), 0)
+      : 1;
+    return LABEL + rows * LINE + GAP;
+  });
+
+  const total = wanted.reduce((sum, h) => sum + h, 0);
+  if (total <= available) return wanted;
+  return wanted.map((h) => (h / total) * available);
+}
+
+function narrative(
+  slide: PptxSlide,
+  ticket: Ticket,
+  accent: string,
+  geometry: Geometry,
+  top: number,
+  labels: ReturnType<typeof labelsFor>,
+): void {
+  const sections: Array<{ label: string; hint: string; value: string }> = [
+    { ...labels.current, value: ticket.panelCurrent },
+    { ...labels.impacts, value: ticket.panelImpacts },
+    { ...labels.future, value: ticket.panelFuture },
+  ];
+
+  const available = ASIDE_BOTTOM - top;
+  const heights = sectionHeights(sections, geometry.narrativeW, available);
+  let cursor = top;
+
+  sections.forEach((section, index) => {
+    const y = cursor;
+    const height = heights[index];
+    cursor += height;
+
+    // A coloured rule rather than a filled header bar: the eye still finds the
+    // section, and the space goes to the words instead of the chrome.
+    slide.addShape('rect', { x: MARGIN, y: y + 0.02, w: 0.05, h: height - 0.14, fill: { color: accent } });
+    slide.addText(
+      [
+        { text: section.label.toUpperCase(), options: { bold: true, color: accent, fontSize: 9.5, charSpacing: 0.5 } },
+        { text: `  ${section.hint}`, options: { color: MUTED, fontSize: 8.5, italic: true } },
+      ],
+      { x: MARGIN + 0.14, y, w: geometry.narrativeW - 0.14, h: 0.24, valign: 'middle' },
+    );
+
+    const lines = cardLines(section.value);
+    slide.addText(
+      lines.length
+        ? lines.map((line, lineIndex) => ({
+            text: line,
+            options: { bullet: { characterCode: '2022' }, breakLine: lineIndex < lines.length - 1 },
+          }))
+        : [{ text: 'Not written yet', options: { italic: true, color: 'A3AEB9' } }],
+      {
+        x: MARGIN + 0.16,
+        y: y + 0.24,
+        w: geometry.narrativeW - 0.2,
+        h: height - 0.3,
+        fontSize: 10.5,
+        color: INK,
+        valign: 'top',
+        lineSpacingMultiple: 1.02,
+      },
+    );
+  });
+}
+
+function aside(
+  slide: PptxSlide,
+  ticket: Ticket,
+  accent: string,
+  geometry: Geometry,
+  top: number,
+  screenshot: string,
+  facts: string[],
+  hasImage: boolean,
+): void {
+  const { asideX: x, asideW: w } = geometry;
+  const caption = trim(ticket.screenshotCaption, 160);
+  let y = top;
+
+  // Budget the column before drawing anything. A slide is fixed height, so a
+  // picture sized first pushes the chips off the bottom edge - where, unlike a
+  // web page, nobody ever finds them.
+  const available = ASIDE_BOTTOM - top;
+  const captionSpace = hasImage && caption ? 0.38 : 0;
+  const chipHeight = facts.length ? 0.3 : 0;
+  const chipSpace = facts.length ? 0.22 + facts.length * chipHeight : 0;
+  const imageHeight = hasImage ? Math.max(0.9, Math.min(2.5, available - captionSpace - chipSpace - 0.08)) : 0;
+
+  if (hasImage) {
+    slide.addShape('rect', { x, y, w, h: imageHeight, fill: { color: PANEL_BG }, line: { color: PANEL_LINE } });
+    try {
+      const image = screenshot ? { data: screenshot } : { path: ticket.screenshotUrl };
+      slide.addImage({
+        ...image,
+        x: x + 0.06,
+        y: y + 0.06,
+        w: w - 0.12,
+        h: imageHeight - 0.12,
+        sizing: { type: 'contain', w: w - 0.12, h: imageHeight - 0.12 },
+      });
+    } catch {
+      // A missing or unreachable screenshot must never fail pack generation.
+    }
+    y += imageHeight + 0.06;
+
+    if (caption) {
+      slide.addText(caption, { x, y, w, h: 0.34, fontSize: 8.5, italic: true, color: MUTED, valign: 'top' });
+      y += 0.38;
+    }
+  }
+
+  if (!facts.length) return;
+
+  slide.addText('THE NUMBERS', { x, y, w, h: 0.2, fontSize: 8.5, bold: true, color: accent, charSpacing: 0.5 });
+  y += 0.22;
+
+  facts.forEach((fact, index) => {
+    const { label, value } = chipParts(fact);
+    const chipY = y + index * chipHeight;
+    slide.addShape('roundRect', {
+      x,
+      y: chipY,
+      w,
+      h: chipHeight - 0.04,
+      fill: { color: PANEL_BG },
+      line: { color: PANEL_LINE },
+      rectRadius: 0.06,
+    });
+    slide.addText(
+      label
+        ? [
+            { text: `${label}  `, options: { bold: true, color: accent, fontSize: 8.5 } },
+            { text: value, options: { color: INK, fontSize: 9 } },
+          ]
+        : [{ text: value, options: { color: INK, fontSize: 9 } }],
+      { x: x + 0.09, y: chipY, w: w - 0.18, h: chipHeight - 0.04, valign: 'middle' },
+    );
+  });
+}
+
+function benefitBand(slide: PptxSlide, ticket: Ticket, accent: string, lead: string): void {
+  const benefit = trim(ticket.panelBenefits, 220);
+  if (!benefit) return;
+
+  slide.addShape('rect', { x: MARGIN, y: 4.52, w: CONTENT_W, h: 0.46, fill: { color: PANEL_BG } });
+  slide.addShape('rect', { x: MARGIN, y: 4.52, w: 0.05, h: 0.46, fill: { color: accent } });
+  slide.addText(
+    [
+      { text: `${lead.toUpperCase()}  `, options: { bold: true, color: accent, fontSize: 9.5, charSpacing: 0.5 } },
+      { text: benefit, options: { color: INK, fontSize: 11 } },
+    ],
+    { x: MARGIN + 0.16, y: 4.52, w: CONTENT_W - 0.24, h: 0.46, valign: 'middle' },
+  );
+}
+
+function metadataStrip(slide: PptxSlide, ticket: Ticket): void {
+  const metadata: Array<[string, string]> = [
+    ['Raised by', ticket.stakeholder],
+    ['Since', formatUkDate(ticket.createdDate)],
+    ['Affects', ticket.affects || ticket.siteAffected],
+    ['Workaround', ticket.workaround || 'None'],
+    ['Priority', ticket.priority],
+  ];
+
+  const parts = metadata.filter(([, value]) => value && value.trim());
+  if (!parts.length) return;
+
+  slide.addText(
+    parts.flatMap(([label, value], index) => [
+      { text: `${label}: `, options: { bold: true, color: MUTED, fontSize: 8.5 } },
+      { text: `${value}${index < parts.length - 1 ? '     ' : ''}`, options: { color: MUTED, fontSize: 8.5 } },
+    ]),
+    { x: MARGIN, y: 5.06, w: CONTENT_W, h: 0.3, valign: 'middle' },
+  );
 }

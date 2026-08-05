@@ -76,6 +76,11 @@ export async function seedDemo(db: Db): Promise<string> {
       panelImpacts: 'Misdirected deliveries, refunds and re-ships; a steady stream of customer service contacts.',
       panelFuture: 'The default address is pre-selected and preserved through the whole checkout flow.',
       panelBenefits: 'Fewer delivery errors, lower support demand, better checkout completion.',
+      cardKind: 'PROBLEM',
+      impactFacts:
+        'Affects: customers with 2+ saved addresses\nFrequency: every checkout\nWorkaround: re-type the address\nOpen since: January',
+      screenshotCaption:
+        'The checkout address step, showing the first address selected instead of the customer\'s default.',
       backendPokerScore: 8,
       frontendPokerScore: 8,
       // 5 valid responses -> mean 43, sample sd 12.83, effort 16 -> 2.69 Medium
@@ -95,6 +100,11 @@ export async function seedDemo(db: Db): Promise<string> {
       panelImpacts: 'Slow returns handling and repeated inbound contacts.',
       panelFuture: 'Every confirmation email carries a printable packing note.',
       panelBenefits: 'Faster returns, less manual effort, fewer contacts.',
+      cardKind: 'IMPROVEMENT',
+      impactFacts:
+        'Manual effort: agents write one per request\nAffects: every customer returning an item\nVolume: ~40 returns a week',
+      screenshotCaption:
+        'The confirmation email today, with nothing a customer can print for the parcel.',
       backendPokerScore: 8,
       frontendPokerScore: 5,
       // mean 13, effort 13 -> ratio 1.0 Low
@@ -114,6 +124,11 @@ export async function seedDemo(db: Db): Promise<string> {
       panelImpacts: 'Recommendation-driven revenue is invisible in reporting.',
       panelFuture: 'A supported widget with full event tracking and personalisation hooks.',
       panelBenefits: 'Attribution, measurable uplift, a platform for personalisation.',
+      cardKind: 'FEATURE',
+      impactFacts:
+        'Affects: every product and basket page\nBlind spot: recommendation revenue unreported\nAge: predates the current analytics stack',
+      screenshotCaption:
+        'The recommendations strip on a product page — no tracking fires when it is clicked.',
       backendPokerScore: 13,
       frontendPokerScore: 8,
       // sample sd 18.4 -> discussion required
@@ -133,6 +148,11 @@ export async function seedDemo(db: Db): Promise<string> {
       panelImpacts: 'Wrong order status, daily manual correction, avoidable contacts.',
       panelFuture: 'Reliable status sync with alerting when a batch fails.',
       panelBenefits: 'Accurate order status, no daily manual fix, fewer contacts.',
+      cardKind: 'PROBLEM',
+      impactFacts:
+        'Manual effort: corrected by hand every morning\nAffects: partially despatched orders\nVisible to: customers and agents',
+      screenshotCaption:
+        'An order stuck at \'Processing\' in the account area after half of it has shipped.',
       backendPokerScore: 13,
       frontendPokerScore: 8,
       // mean 36 -> the business score confirmed against the real ticket
