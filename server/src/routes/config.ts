@@ -6,6 +6,7 @@ import { audit } from '../services/auditService.js';
 import { deactivateCategory, getAppConfig, listCategories, saveCategory, saveConfigSection } from '../services/configService.js';
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
 import { suggestFieldIds } from '../integrations/jira.js';
+import { providerLabel, sendMail } from '../integrations/mail.js';
 import { actorOf, asyncHandler } from './helpers.js';
 import { env } from '../config/env.js';
 
@@ -43,10 +44,56 @@ router.get(
       integrations: {
         jiraConfigured: env.jira.configured,
         graphConfigured: env.graph.configured,
-        graphSendEnabled: env.graph.sendEnabled,
+        emailProvider: env.email.provider,
+        emailProviderLabel: providerLabel(),
+        emailFrom: env.email.from || env.smtp.user,
+        emailReplyTo: env.email.replyTo,
+        // Kept under the original name so existing screens keep working.
+        graphSendEnabled: env.email.canSend,
         authMode: env.auth.mode,
       },
     });
+  }),
+);
+
+/**
+ * Send a test email to the signed-in coordinator, so email can be proved
+ * working without opening a round and mailing the whole committee.
+ */
+router.post(
+  '/email/test',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const to = String(req.body?.to ?? req.member?.email ?? '').trim();
+    if (!to) {
+      res.status(400).json({ error: 'No address to send to' });
+      return;
+    }
+
+    if (env.email.provider === 'none') {
+      res.status(400).json({
+        error: 'No email provider configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS and EMAIL_FROM.',
+      });
+      return;
+    }
+
+    const outcome = await sendMail({
+      to: [to],
+      subject: 'Business Impact Scoring — test email',
+      html: `<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">
+<p>This is a test from the Business Impact Scoring app.</p>
+<p>If you can read this, distribution and reminder email will reach the committee.</p>
+<p style="color:#666;font-size:12px">Sent via ${providerLabel()}.</p></div>`,
+    });
+
+    const db = await getDb();
+    await audit(db, actorOf(req), 'email.test', 'member', req.member?.id ?? '', { to, status: outcome.status });
+
+    if (outcome.status === 'FAILED') {
+      res.status(502).json({ error: `Send failed: ${outcome.error}`, provider: providerLabel() });
+      return;
+    }
+    res.json({ status: outcome.status, provider: providerLabel(), to, error: outcome.error });
   }),
 );
 

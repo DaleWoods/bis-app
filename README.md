@@ -46,7 +46,40 @@ Neither blocks the deployment, and neither needs a code change:
 | | Until it is configured | To switch it on |
 |---|---|---|
 | **JIRA import / write-back** | Add tickets manually or by CSV; export results as CSV. | Add `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` (service account, not a personal login), then Settings → JIRA → "Resolve field ids from JIRA". |
-| **Distribution / reminder email** | Messages are composed and logged, never sent, so the cadence can be rehearsed. | Add the `GRAPH_*` app registration with `Mail.Send`, then set `GRAPH_SEND_ENABLED=true`. |
+| **Distribution / reminder email** | Messages are composed and logged, never sent, so the cadence can be rehearsed. | Set the five `SMTP_*` / `EMAIL_FROM` variables — see below. |
+
+### Turning on email
+
+Distribution and reminders go out over **SMTP**, which needs no approval from anyone: sign up with a
+provider, verify the single address you will send from, and set five environment variables.
+
+| Provider | Host | Free allowance |
+|---|---|---|
+| Brevo | `smtp-relay.brevo.com` | 300 emails/day |
+| SendGrid | `smtp.sendgrid.net` | 100 emails/day |
+| Gmail (app password) | `smtp.gmail.com` | fine for a committee |
+
+```
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=<your login>
+SMTP_PASS=<api key or app password>
+EMAIL_FROM=<the address you verified with the provider>
+EMAIL_REPLY_TO=<coordinator address, so replies come back to a person>
+```
+
+Then **Settings → Email → "Send a test email to me"** proves it before you mail the committee.
+`EMAIL_SEND_ENABLED=false` composes and logs without sending, for rehearsing the cadence.
+
+Two honest limits:
+
+- **Sending as your company domain** needs SPF/DKIM DNS records on that domain, which is a DNS
+  change only IT can make. Send from an address you control instead and set `EMAIL_REPLY_TO`.
+- **Deliverability.** Mail from an unfamiliar external domain can land in Junk on a corporate tenant
+  the first time. Ask the committee to mark the first one as safe.
+
+Microsoft Graph remains supported as an alternative — set the `GRAPH_*` variables and it switches
+provider automatically. SMTP takes precedence when both are configured.
 
 ### Sample data
 

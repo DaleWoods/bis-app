@@ -101,6 +101,55 @@ export const env = {
     },
   },
 
+  /**
+   * SMTP - the route that needs nobody's approval. Any provider works:
+   * SendGrid, Brevo, Mailgun, Postmark, Gmail with an app password, or a
+   * personal Outlook.com account. Sign up, verify the one address you will
+   * send from, paste the credentials here.
+   *
+   * Sending as a company domain is the one thing this cannot do on its own -
+   * that needs SPF/DKIM DNS records on the domain. Send from an address you
+   * control and set EMAIL_REPLY_TO so replies land where you want them.
+   */
+  smtp: {
+    host: process.env.SMTP_HOST ?? '',
+    port: int(process.env.SMTP_PORT, 587),
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    /** STARTTLS on 587 (secure=false) or implicit TLS on 465 (secure=true). */
+    secure: bool(process.env.SMTP_SECURE, int(process.env.SMTP_PORT, 587) === 465),
+    /**
+     * Certificate validation. Leave on for any public provider. Only turn it
+     * off for an internal relay with a self-signed certificate, and know that
+     * doing so removes the guarantee you are talking to the right server.
+     */
+    rejectUnauthorized: bool(process.env.SMTP_TLS_REJECT_UNAUTHORIZED, true),
+    get configured(): boolean {
+      return Boolean(env.smtp.host && env.smtp.user && env.smtp.pass);
+    },
+  },
+
+  email: {
+    /** Address the committee sees as the sender. Must be one the provider allows. */
+    from: process.env.EMAIL_FROM ?? '',
+    fromName: process.env.EMAIL_FROM_NAME ?? 'Business Impact Scoring',
+    /** Where replies go - usually the coordinator. */
+    replyTo: process.env.EMAIL_REPLY_TO ?? '',
+    /** Kill switch: compose and log without sending, for rehearsing the cadence. */
+    sendEnabled: bool(process.env.EMAIL_SEND_ENABLED, true),
+    /** 'smtp' | 'graph' | 'none'. Auto-detected from what is configured. */
+    get provider(): 'smtp' | 'graph' | 'none' {
+      const explicit = (process.env.EMAIL_PROVIDER ?? '').toLowerCase();
+      if (explicit === 'smtp' || explicit === 'graph' || explicit === 'none') return explicit;
+      if (env.smtp.configured) return 'smtp';
+      if (env.graph.configured && env.graph.sendEnabled) return 'graph';
+      return 'none';
+    },
+    get canSend(): boolean {
+      return env.email.provider !== 'none' && env.email.sendEnabled;
+    },
+  },
+
   graph: {
     tenantId: process.env.GRAPH_TENANT_ID ?? process.env.ENTRA_TENANT_ID ?? '',
     clientId: process.env.GRAPH_CLIENT_ID ?? '',

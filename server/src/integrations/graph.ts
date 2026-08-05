@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import type { MailMessage, MailOutcome } from './mail.js';
 
 /**
  * Microsoft Graph mail (§12.2): distribution and reminder/escalation email sent
@@ -39,28 +40,8 @@ async function accessToken(): Promise<string> {
   return body.access_token;
 }
 
-export interface MailAttachment {
-  name: string;
-  contentType: string;
-  contentBytes: string; // base64
-}
-
-export interface MailMessage {
-  to: string[];
-  subject: string;
-  html: string;
-  attachments?: MailAttachment[];
-}
-
-export type MailOutcome = { status: 'SENT' | 'SUPPRESSED' | 'FAILED'; error?: string };
-
-export async function sendMail(message: MailMessage): Promise<MailOutcome> {
-  if (!env.graph.sendEnabled || !env.graph.configured) {
-    console.info(
-      `[graph] send disabled - would email ${message.to.join(', ')} | subject: ${message.subject}`,
-    );
-    return { status: 'SUPPRESSED', error: env.graph.configured ? 'Sending disabled' : 'Graph not configured' };
-  }
+export async function sendViaGraph(message: MailMessage): Promise<MailOutcome> {
+  if (!env.graph.configured) return { status: 'SUPPRESSED', error: 'Graph not configured' };
 
   try {
     const token = await accessToken();

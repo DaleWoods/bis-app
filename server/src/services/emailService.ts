@@ -1,6 +1,6 @@
 import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
-import { MailAttachment, sendMail } from '../integrations/graph.js';
+import { MailAttachment, sendMail } from '../integrations/mail.js';
 import { newId } from '../util/id.js';
 import { formatUkDate, nowIso } from '../util/time.js';
 import { Member } from './memberService.js';

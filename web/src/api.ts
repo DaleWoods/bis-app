@@ -298,13 +298,27 @@ export const api = {
     request<{
       config: AppConfig;
       categories: Category[];
-      integrations: { jiraConfigured: boolean; graphConfigured: boolean; graphSendEnabled: boolean; authMode: string };
+      integrations: {
+        jiraConfigured: boolean;
+        graphConfigured: boolean;
+        emailProvider: 'smtp' | 'graph' | 'none';
+        emailProviderLabel: string;
+        emailFrom: string;
+        emailReplyTo: string;
+        graphSendEnabled: boolean;
+        authMode: string;
+      };
     }>('/api/config'),
   saveConfig: (section: keyof AppConfig, value: unknown) =>
     request<{ config: AppConfig }>(`/api/config/${section}`, { method: 'PUT', body: JSON.stringify(value) }),
   saveCategory: (input: Partial<Category> & { position: number; name: string }) =>
     request<{ category: Category }>('/api/categories', { method: 'POST', body: JSON.stringify(input) }),
   suggestJiraFields: () => request<{ suggestions: Record<string, string> }>('/api/jira/fields/suggest'),
+  sendTestEmail: (to?: string) =>
+    request<{ status: string; provider: string; to: string; error?: string }>('/api/email/test', {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+    }),
 
   members: () => request<{ members: Member[] }>('/api/members'),
   saveMember: (input: { id?: string; name: string; email: string; team?: string; role?: Role; active?: boolean }) =>

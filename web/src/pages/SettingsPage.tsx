@@ -9,7 +9,17 @@ export function SettingsPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphConfigured: boolean; graphSendEnabled: boolean; authMode: string } | null>(null);
+  const [integrations, setIntegrations] = useState<{
+    jiraConfigured: boolean;
+    graphConfigured: boolean;
+    emailProvider: 'smtp' | 'graph' | 'none';
+    emailProviderLabel: string;
+    emailFrom: string;
+    emailReplyTo: string;
+    graphSendEnabled: boolean;
+    authMode: string;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [newMember, setNewMember] = useState({ name: '', email: '', team: '', role: 'COMMITTEE' as Role });
@@ -248,10 +258,75 @@ export function SettingsPage() {
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>Email</h2>
+        {integrations?.emailProvider === 'none' ? (
+          <>
+            <div className="notice warn">
+              <strong>No email provider configured.</strong> Distribution and reminders are composed and logged, but
+              nothing is sent.
+            </div>
+            <p>
+              Any SMTP provider works and none of them need your IT department — sign up, verify the one address you
+              will send from, then set these in your host&apos;s environment settings:
+            </p>
+            <pre style={{ background: 'var(--panel-alt)', padding: '0.75rem', borderRadius: 'var(--radius)', overflowX: 'auto', fontSize: '0.85rem' }}>
+{`SMTP_HOST=smtp-relay.brevo.com     # or smtp.sendgrid.net, smtp.gmail.com, ...
+SMTP_PORT=587
+SMTP_USER=<your login>
+SMTP_PASS=<api key or app password>
+EMAIL_FROM=<the address you verified>
+EMAIL_REPLY_TO=<where replies should go>`}
+            </pre>
+            <p className="hint">
+              Sending <em>as</em> a company domain needs SPF/DKIM DNS records, which does need IT. Sending from an
+              address you control, with replies routed back to you, does not.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="lede" style={{ marginBottom: '0.75rem' }}>
+              Sending via <strong>{integrations?.emailProviderLabel}</strong>
+              {integrations?.emailFrom ? (
+                <>
+                  {' '}
+                  as <strong>{integrations.emailFrom}</strong>
+                </>
+              ) : null}
+              {integrations?.emailReplyTo ? <> · replies to {integrations.emailReplyTo}</> : null}
+              {integrations?.graphSendEnabled ? null : ' — sending is currently disabled (EMAIL_SEND_ENABLED=false)'}
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          className="secondary"
+          disabled={testing}
+          onClick={async () => {
+            setTesting(true);
+            setMessage('');
+            setError('');
+            try {
+              const result = await api.sendTestEmail();
+              setMessage(
+                result.status === 'SENT'
+                  ? `Test email sent to ${result.to} via ${result.provider}. Check your inbox (and spam).`
+                  : `Not sent: ${result.error ?? result.status}`,
+              );
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Could not send the test email');
+            } finally {
+              setTesting(false);
+            }
+          }}
+        >
+          {testing ? 'Sending…' : 'Send a test email to me'}
+        </button>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>Cadence</h2>
         <p className="hint">
-          Distribution and reminders are scheduled around these, not hard-coded weekdays. Email is{' '}
-          {integrations?.graphSendEnabled ? 'live' : 'in preview mode (messages are logged, not sent)'}.
+          Distribution and reminders are scheduled around these, not hard-coded weekdays.
         </p>
         <form
           onSubmit={(event) => {

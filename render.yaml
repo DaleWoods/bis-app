@@ -111,13 +111,44 @@ services:
       - key: JIRA_API_TOKEN
         sync: false
 
-      # --- Email (Microsoft Graph) ---------------------------------------
-      # With GRAPH_SEND_ENABLED=false, distribution and reminder messages are
-      # composed and logged but never sent, so the cadence can be rehearsed.
-      # Flip to "true" when the app registration has Mail.Send and you are
-      # ready for the committee to receive real email.
-      - key: GRAPH_SEND_ENABLED
-        value: "false"
+      # --- Email -----------------------------------------------------------
+      # SMTP is the route that needs no approval from anyone. Sign up with any
+      # provider (Brevo, SendGrid, Mailgun, Postmark, or Gmail with an app
+      # password), verify the single address you will send from, and set these
+      # four in the Render dashboard. Distribution and reminders go live
+      # immediately - no redeploy, no code change.
+      #
+      #   SMTP_HOST   smtp-relay.brevo.com / smtp.sendgrid.net / smtp.gmail.com
+      #   SMTP_PORT   587
+      #   SMTP_USER   your login for that provider
+      #   SMTP_PASS   the API key or app password
+      #   EMAIL_FROM  the address you verified with the provider
+      #
+      # Sending *as* a company domain additionally needs SPF/DKIM DNS records
+      # on that domain. Sending from an address you control does not - set
+      # EMAIL_REPLY_TO so replies come back to the coordinator.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: Business Impact Scoring
+      - key: EMAIL_REPLY_TO
+        sync: false
+      # Set to "false" to compose and log messages without sending them, for
+      # rehearsing the cadence.
+      - key: EMAIL_SEND_ENABLED
+        value: "true"
+
+      # Microsoft Graph is the alternative, if an app registration with
+      # Mail.Send ever does arrive. Setting these switches provider
+      # automatically; SMTP takes precedence when both are present.
       - key: GRAPH_TENANT_ID
         sync: false
       - key: GRAPH_CLIENT_ID
