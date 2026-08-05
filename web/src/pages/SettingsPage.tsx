@@ -43,6 +43,39 @@ export function SettingsPage() {
   if (error && !config) return <p className="status error">{error}</p>;
   if (!config) return <p>Loading…</p>;
 
+  async function saveMemberField(input: Parameters<typeof api.saveMember>[0]) {
+    setMessage('');
+    setError('');
+    try {
+      await api.saveMember(input);
+      setMessage('Member updated.');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the member');
+      await load();
+    }
+  }
+
+  async function removeMember(member: Member) {
+    setMessage('');
+    setError('');
+    try {
+      const { count } = await api.memberSubmissionCount(member.id);
+      const warning =
+        count > 0
+          ? `Delete ${member.name}? Their ${count} submission(s) go too, which changes the results of any round still open. Finalised rounds keep their frozen figures.`
+          : `Delete ${member.name}?`;
+      if (!window.confirm(warning)) return;
+      const { submissionsRemoved } = await api.deleteMember(member.id, count > 0);
+      setMessage(
+        `${member.name} deleted${submissionsRemoved ? `, along with ${submissionsRemoved} submission(s)` : ''}.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete the member');
+    }
+  }
+
   async function saveSection(section: keyof AppConfig, value: unknown, label: string) {
     setMessage('');
     setError('');
@@ -462,14 +495,50 @@ EMAIL_REPLY_TO=<where replies should go>`}
                 <th scope="col">Team</th>
                 <th scope="col">Role</th>
                 <th scope="col">Active</th>
+                <th scope="col">
+                  <span className="visually-hidden">Delete</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {members.map((member) => (
                 <tr key={member.id}>
-                  <td>{member.name}</td>
-                  <td>{member.email}</td>
-                  <td>{member.team || '—'}</td>
+                  <td>
+                    <input
+                      type="text"
+                      aria-label={`Name for ${member.name}`}
+                      defaultValue={member.name}
+                      onBlur={async (event) => {
+                        const name = event.target.value.trim();
+                        if (!name || name === member.name) return;
+                        await saveMemberField({ ...member, name });
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="email"
+                      aria-label={`Email for ${member.name}`}
+                      defaultValue={member.email}
+                      onBlur={async (event) => {
+                        const email = event.target.value.trim();
+                        if (!email || email === member.email) return;
+                        await saveMemberField({ ...member, email });
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      aria-label={`Team for ${member.name}`}
+                      defaultValue={member.team}
+                      onBlur={async (event) => {
+                        const team = event.target.value.trim();
+                        if (team === member.team) return;
+                        await saveMemberField({ ...member, team });
+                      }}
+                    />
+                  </td>
                   <td>
                     <select
                       aria-label={`Role for ${member.name}`}
@@ -487,14 +556,24 @@ EMAIL_REPLY_TO=<where replies should go>`}
                     </select>
                   </td>
                   <td>
-                    <button
-                      className="secondary"
-                      onClick={async () => {
-                        await api.saveMember({ ...member, active: !member.active });
-                        await load();
-                      }}
+                    <label
+                      htmlFor={`member-active-${member.id}`}
+                      style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center', fontWeight: 400, marginBottom: 0 }}
                     >
+                      <input
+                        id={`member-active-${member.id}`}
+                        type="checkbox"
+                        checked={member.active}
+                        onChange={async (event) => {
+                          await saveMemberField({ ...member, active: event.target.checked });
+                        }}
+                      />
                       {member.active ? 'Active' : 'Inactive'}
+                    </label>
+                  </td>
+                  <td>
+                    <button className="danger" onClick={() => removeMember(member)}>
+                      Delete
                     </button>
                   </td>
                 </tr>

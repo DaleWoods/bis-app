@@ -294,7 +294,9 @@ export const api = {
       body: JSON.stringify({ ticketId }),
     }),
   removeTicketFromRound: (roundId: string, ticketId: string) =>
-    request<{ tickets: Ticket[] }>(`/api/rounds/${roundId}/tickets/${ticketId}`, { method: 'DELETE' }),
+    request<{ tickets: Ticket[]; submissionsRemoved: number }>(`/api/rounds/${roundId}/tickets/${ticketId}`, {
+      method: 'DELETE',
+    }),
   importCsv: (csv: string, roundId?: string) =>
     request<{ imported: Ticket[]; skipped: string[] }>('/api/tickets/import/csv', {
       method: 'POST',
@@ -337,6 +339,12 @@ export const api = {
   members: () => request<{ members: Member[] }>('/api/members'),
   saveMember: (input: { id?: string; name: string; email: string; team?: string; role?: Role; active?: boolean }) =>
     request<{ member: Member }>('/api/members', { method: 'POST', body: JSON.stringify(input) }),
+
+  deleteMember: (id: string, force = false) =>
+    request<{ ok: boolean; submissionsRemoved: number }>(`/api/members/${id}${force ? '?force=true' : ''}`, {
+      method: 'DELETE',
+    }),
+  memberSubmissionCount: (id: string) => request<{ count: number }>(`/api/members/${id}/submission-count`),
 
   audit: (limit = 200) =>
     request<{ entries: Array<{ id: string; at: string; actorEmail: string; action: string; entityType: string; entityId: string; detail: unknown }> }>(

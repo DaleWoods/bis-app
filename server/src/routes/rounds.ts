@@ -160,9 +160,12 @@ router.delete(
   requireCoordinator,
   asyncHandler(async (req, res) => {
     const db = await getDb();
-    await removeTicketFromRound(db, req.params.id, req.params.ticketId);
-    await audit(db, actorOf(req), 'round.ticket.remove', 'round', req.params.id, { ticketId: req.params.ticketId });
-    res.json({ tickets: await listRoundTickets(db, req.params.id) });
+    const { submissionsRemoved } = await removeTicketFromRound(db, req.params.id, req.params.ticketId);
+    await audit(db, actorOf(req), 'round.ticket.remove', 'round', req.params.id, {
+      ticketId: req.params.ticketId,
+      submissionsRemoved,
+    });
+    res.json({ tickets: await listRoundTickets(db, req.params.id), submissionsRemoved });
   }),
 );
 

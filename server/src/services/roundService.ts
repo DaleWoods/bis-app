@@ -178,8 +178,39 @@ export async function addTicketToRound(db: Db, roundId: string, ticketId: string
   ]);
 }
 
-export async function removeTicketFromRound(db: Db, roundId: string, ticketId: string): Promise<void> {
-  await db.run('DELETE FROM round_tickets WHERE round_id = ? AND ticket_id = ?', [roundId, ticketId]);
+/**
+ * Take a ticket out of a round, along with the scores given to it in that
+ * round - otherwise those submissions linger, show up under "who scored what",
+ * and come back if the ticket is added again.
+ *
+ * Refused on a finalised round: those results are frozen and written back to
+ * JIRA, so removing a ticket would rewrite history.
+ */
+export async function removeTicketFromRound(
+  db: Db,
+  roundId: string,
+  ticketId: string,
+): Promise<{ submissionsRemoved: number }> {
+  const round = await getRound(db, roundId);
+  if (!round) throw new HttpishError(404, 'Round not found');
+  if (round.status === 'FINALISED') {
+    throw new HttpishError(409, 'This round is finalised — its tickets and scores cannot be changed');
+  }
+
+  const row = await db.get<{ count: number }>(
+    'SELECT COUNT(*) AS count FROM submissions WHERE round_id = ? AND ticket_id = ?',
+    [roundId, ticketId],
+  );
+  const submissionsRemoved = Number(row?.count ?? 0);
+
+  await db.tx(async (tx) => {
+    // submission_scores cascade from submissions.
+    await tx.run('DELETE FROM submissions WHERE round_id = ? AND ticket_id = ?', [roundId, ticketId]);
+    await tx.run('DELETE FROM ticket_results WHERE round_id = ? AND ticket_id = ?', [roundId, ticketId]);
+    await tx.run('DELETE FROM round_tickets WHERE round_id = ? AND ticket_id = ?', [roundId, ticketId]);
+  });
+
+  return { submissionsRemoved };
 }
 
 export async function reorderRoundTickets(db: Db, roundId: string, ticketIds: string[]): Promise<void> {

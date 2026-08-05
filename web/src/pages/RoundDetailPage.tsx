@@ -416,12 +416,23 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               <button
                 className="danger"
                 disabled={Boolean(busy)}
-                onClick={() =>
-                  run('remove', async () => {
-                    await api.removeTicketFromRound(round.id, ticket.id);
-                    return `${ticket.jiraId} removed from this round.`;
-                  })
-                }
+                onClick={() => {
+                  const scored = submissions.filter((s) => s.ticketId === ticket.id && !s.archived).length;
+                  if (
+                    scored > 0 &&
+                    !window.confirm(
+                      `Remove ${ticket.jiraId} from this round? The ${scored} score(s) already given to it will be deleted.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  return run('remove', async () => {
+                    const { submissionsRemoved } = await api.removeTicketFromRound(round.id, ticket.id);
+                    return `${ticket.jiraId} removed from this round${
+                      submissionsRemoved ? `, along with ${submissionsRemoved} score(s) for it` : ''
+                    }.`;
+                  });
+                }}
               >
                 Remove
               </button>

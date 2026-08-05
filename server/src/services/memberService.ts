@@ -1,4 +1,5 @@
 import { Db } from '../db/index.js';
+import { HttpishError } from './roundService.js';
 import { Role } from '../domain/types.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
@@ -83,6 +84,13 @@ export async function saveMember(db: Db, input: MemberInput): Promise<Member> {
     ? await db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [input.id])
     : await db.get<MemberRow>('SELECT * FROM members WHERE LOWER(email) = LOWER(?)', [input.email]);
 
+  // Email is the identity used for sign-in, so a clash has to be caught here
+  // rather than surfacing as a database error.
+  const clash = await db.get<MemberRow>('SELECT id FROM members WHERE LOWER(email) = LOWER(?)', [input.email]);
+  if (clash && clash.id !== existing?.id) {
+    throw new HttpishError(409, `${input.email} is already used by another member`);
+  }
+
   if (existing) {
     await db.run('UPDATE members SET name = ?, email = ?, team = ?, role = ?, active = ?, updated_at = ? WHERE id = ?', [
       input.name,
@@ -102,6 +110,30 @@ export async function saveMember(db: Db, input: MemberInput): Promise<Member> {
     [id, input.name, input.email, input.team ?? '', input.role ?? 'COMMITTEE', (input.active ?? true) ? 1 : 0, now, now],
   );
   return (await getMember(db, id)) as Member;
+}
+
+/** How much history a member carries - shown before deleting them. */
+export async function countMemberSubmissions(db: Db, id: string): Promise<number> {
+  const row = await db.get<{ count: number }>('SELECT COUNT(*) AS count FROM submissions WHERE member_id = ?', [id]);
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * Remove a member outright. Their submissions go with them (the foreign key
+ * cascades), which changes the aggregates of any round still open. Finalised
+ * rounds keep their frozen figures in ticket_results, so history stays intact.
+ * Callers must pass force once the caller has seen the submission count.
+ */
+export async function deleteMember(db: Db, id: string, options: { force?: boolean } = {}): Promise<{ submissionsRemoved: number }> {
+  const submissions = await countMemberSubmissions(db, id);
+  if (submissions > 0 && !options.force) {
+    throw new HttpishError(
+      409,
+      `That member has ${submissions} submission(s). Deleting them removes those scores from any open round — confirm to go ahead, or set them inactive instead to keep the history.`,
+    );
+  }
+  await db.run('DELETE FROM members WHERE id = ?', [id]);
+  return { submissionsRemoved: submissions };
 }
 
 export async function recordLogin(db: Db, id: string, entraOid?: string | null): Promise<void> {
