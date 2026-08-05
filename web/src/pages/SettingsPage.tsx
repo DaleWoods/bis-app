@@ -149,7 +149,34 @@ export function SettingsPage() {
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Categories</h2>
-        <p className="hint">Categories are data. Reword, reweight, reorder or retire them without a code change.</p>
+        <p className="hint">
+          Categories are data. Reword, reweight, reorder or retire them without a code change. Unticking
+          &ldquo;Active&rdquo; removes a category from the scoring form for everyone.
+        </p>
+        {categories.filter((c) => c.active).length === 0 ? (
+          <div className="notice warn">
+            <strong>No categories are active, so the scoring form is empty</strong> — committee members cannot score
+            anything. Restore the seven defaults to fix it.
+          </div>
+        ) : null}
+        <div className="row" style={{ marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={async () => {
+              setError('');
+              try {
+                const { categories } = await api.restoreDefaultCategories();
+                setMessage(`Restored the seven default categories (${categories.filter((c) => c.active).length} active).`);
+                await load();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not restore the categories');
+              }
+            }}
+          >
+            Restore the seven default categories
+          </button>
+        </div>
         <div className="table-scroll">
           <table>
             <caption className="visually-hidden">Scoring categories</caption>
@@ -178,15 +205,26 @@ export function SettingsPage() {
                     {category.scaleMin}–{category.scaleMax}
                   </td>
                   <td>
-                    <button
-                      className="secondary"
-                      onClick={async () => {
-                        await api.saveCategory({ ...category, active: !category.active });
-                        await load();
-                      }}
+                    <label
+                      htmlFor={`cat-active-${category.id}`}
+                      style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center', fontWeight: 400, marginBottom: 0 }}
                     >
+                      <input
+                        id={`cat-active-${category.id}`}
+                        type="checkbox"
+                        checked={category.active}
+                        onChange={async (event) => {
+                          const next = event.target.checked;
+                          if (!next && categories.filter((c) => c.active).length <= 1) {
+                            setError('At least one category must stay active — otherwise there is nothing to score.');
+                            return;
+                          }
+                          await api.saveCategory({ ...category, active: next });
+                          await load();
+                        }}
+                      />
                       {category.active ? 'Active' : 'Inactive'}
-                    </button>
+                    </label>
                   </td>
                 </tr>
               ))}

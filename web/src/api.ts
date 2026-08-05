@@ -311,6 +311,8 @@ export const api = {
     }>('/api/config'),
   saveConfig: (section: keyof AppConfig, value: unknown) =>
     request<{ config: AppConfig }>(`/api/config/${section}`, { method: 'PUT', body: JSON.stringify(value) }),
+  restoreDefaultCategories: () =>
+    request<{ categories: Category[] }>('/api/categories/restore-defaults', { method: 'POST', body: '{}' }),
   saveCategory: (input: Partial<Category> & { position: number; name: string }) =>
     request<{ category: Category }>('/api/categories', { method: 'POST', body: JSON.stringify(input) }),
   suggestJiraFields: () => request<{ suggestions: Record<string, string> }>('/api/jira/fields/suggest'),

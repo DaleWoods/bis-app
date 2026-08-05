@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { requireAuth, requireCoordinator } from '../auth/middleware.js';
 import { audit } from '../services/auditService.js';
-import { deactivateCategory, getAppConfig, listCategories, saveCategory, saveConfigSection } from '../services/configService.js';
+import { deactivateCategory, getAppConfig, listCategories, restoreDefaultCategories, saveCategory, saveConfigSection } from '../services/configService.js';
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
 import { suggestFieldIds } from '../integrations/jira.js';
 import { providerLabel, sendMail } from '../integrations/mail.js';
@@ -182,6 +182,20 @@ router.post(
     const category = await saveCategory(db, input);
     await audit(db, actorOf(req), input.id ? 'category.update' : 'category.create', 'category', category.id, input);
     res.json({ category });
+  }),
+);
+
+/** Recovery: put the seven default categories back and reactivate them (§6). */
+router.post(
+  '/categories/restore-defaults',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const categories = await restoreDefaultCategories(db);
+    await audit(db, actorOf(req), 'category.restore-defaults', 'category', '', {
+      active: categories.filter((c) => c.active).length,
+    });
+    res.json({ categories });
   }),
 );
 

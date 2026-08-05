@@ -176,6 +176,17 @@ export async function saveSubmission(
   }
 
   const categories = await listCategories(db);
+
+  // With no categories there is nothing to score, and an empty "Yes" would be
+  // stored as a valid response worth 0 - dragging down the ticket's average and
+  // counting toward its minimum-responses gate. Refuse rather than record that.
+  if (payload.relevance === 'YES' && categories.length === 0) {
+    throw new HttpishError(
+      409,
+      'There are no active scoring categories, so scores cannot be recorded. Ask the coordinator to restore them in Settings.',
+    );
+  }
+
   const scores: Record<string, number> = {};
   if (payload.relevance === 'YES') {
     for (const category of categories) {

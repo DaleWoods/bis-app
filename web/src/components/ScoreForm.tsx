@@ -101,7 +101,14 @@ export function ScoreForm({
         })}
       </fieldset>
 
-      {relevance === 'YES' ? (
+      {relevance === 'YES' && categories.length === 0 ? (
+        <div className="notice warn">
+          <strong>There are no scoring categories set up.</strong> Nothing can be scored until a coordinator restores
+          them (Settings → Categories → &ldquo;Restore the seven default categories&rdquo;).
+        </div>
+      ) : null}
+
+      {relevance === 'YES' && categories.length > 0 ? (
         <fieldset disabled={disabled}>
           <legend>Impact scores (0–10)</legend>
           <div className="score-grid">
@@ -182,7 +189,7 @@ export function ScoreForm({
       </div>
 
       <div className="row">
-        <button type="submit" disabled={disabled || saving}>
+        <button type="submit" disabled={disabled || saving || (relevance === 'YES' && categories.length === 0)}>
           {saving ? 'Saving…' : submission ? 'Update my score' : 'Submit my score'}
         </button>
         {submission ? <span className="hint">Last saved {new Date(submission.updatedAt).toLocaleString('en-GB')}</span> : null}

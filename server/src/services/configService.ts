@@ -170,6 +170,45 @@ export async function deactivateCategory(db: Db, id: string): Promise<void> {
   await db.run('UPDATE categories SET active = 0, updated_at = ? WHERE id = ?', [nowIso(), id]);
 }
 
+/**
+ * Put the seven categories of §6 back: reactivates any that were switched off
+ * and recreates any that were removed, leaving their names, descriptions and
+ * weights alone if they have been edited. The recovery path for an instance
+ * where the scoring form has gone empty.
+ */
+export async function restoreDefaultCategories(db: Db): Promise<CategoryDef[]> {
+  const now = nowIso();
+  for (const seed of SEED_CATEGORIES) {
+    const existing = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [seed.id]);
+    if (existing) {
+      await db.run('UPDATE categories SET active = 1, position = ?, updated_at = ? WHERE id = ?', [
+        seed.position,
+        now,
+        seed.id,
+      ]);
+    } else {
+      await db.run(
+        `INSERT INTO categories (id, position, name, description, zero_label, max_label, weight, scale_min, scale_max, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [
+          seed.id,
+          seed.position,
+          seed.name,
+          seed.description,
+          seed.zeroLabel,
+          seed.maxLabel,
+          seed.weight,
+          seed.scaleMin,
+          seed.scaleMax,
+          now,
+          now,
+        ],
+      );
+    }
+  }
+  return listCategories(db, true);
+}
+
 export async function ensureSeedCategories(db: Db): Promise<void> {
   const existing = await db.get<{ count: number }>('SELECT COUNT(*) AS count FROM categories');
   if (Number(existing?.count ?? 0) > 0) return;
