@@ -1,0 +1,22 @@
+# Local PostgreSQL, matching the Azure Database for PostgreSQL target (§12.3).
+# Not needed for day-to-day development - the app falls back to SQLite - but
+# use it to exercise the production database before deploying.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bis
+      POSTGRES_PASSWORD: bis
+      POSTGRES_DB: bis
+    ports:
+      - '5432:5432'
+    volumes:
+      - bis-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bis']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bis-pgdata:

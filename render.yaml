@@ -1,0 +1,135 @@
+# Render.com blueprint for the Business Impact Scoring app.
+#
+# In the Render dashboard: New → Blueprint → this repository. Render reads this
+# file, creates the database and the web service, and prompts for the values
+# marked below.
+#
+# This deploys the REAL application on managed PostgreSQL - every feature live,
+# nothing stubbed.
+#
+# Sign-in is name/email: the committee picks their name from a list. That suits
+# an internal tool with a known committee, and is a deliberate departure from
+# §4 of the requirements (Entra ID SSO) - see docs/decisions.md. Moving
+# to SSO later is configuration, not a rewrite; the switch is at the bottom.
+#
+# JIRA import / write-back goes live when the service-account token is set.
+# Until then you add tickets manually or by CSV and export results as CSV.
+
+databases:
+  - name: bis-db
+    databaseName: bis
+    user: bis
+    # free lets you trial it at no cost, but Render deletes free databases after
+    # 30 days. Move to basic-256mb before this holds scoring data you need.
+    plan: free
+
+services:
+  - type: web
+    name: bis-app
+    runtime: node
+    # starter = 512MB, which is ample: no browser, no image processing. The
+    # PPTX/PDF pack is generated in-process from text.
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+
+      # --- Database ------------------------------------------------------
+      - key: DB_DRIVER
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bis-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+
+      # --- Session -------------------------------------------------------
+      # Render generates this once and keeps it; it never appears in git.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+      # --- First way in --------------------------------------------------
+      # THE ONE VALUE YOU MUST SET. A fresh database has no members, and
+      # sign-in needs one. Put YOUR work email at the Render prompt: the app
+      # creates it as an ADMIN on boot, and you add the rest of the committee
+      # in Settings. Setting it again later also restores admin rights if they
+      # are ever lost.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NAME
+        sync: false
+
+      # --- Sign-in -------------------------------------------------------
+      # Pick your name from the committee list. The coordinator manages who is
+      # on that list in Settings.
+      - key: AUTH_MODE
+        value: email
+      # Set to "true" if you would rather people add themselves on first visit.
+      # Off by default because a new scorer's submissions count toward the
+      # average and the minimum-responses gate.
+      - key: ALLOW_SELF_REGISTRATION
+        value: "false"
+
+      # To move to Microsoft 365 SSO later:
+      #   1. set AUTH_MODE=entra
+      #   2. add ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET
+      #   3. set ENTRA_REDIRECT_URI to https://<your-host>/auth/callback
+      #      (and register that exact URI on the app registration)
+      # The server refuses to start on AUTH_MODE=entra with the registration
+      # missing, so a half-finished switch fails loudly rather than quietly.
+      - key: ENTRA_TENANT_ID
+        sync: false
+      - key: ENTRA_CLIENT_ID
+        sync: false
+      - key: ENTRA_CLIENT_SECRET
+        sync: false
+      - key: ENTRA_REDIRECT_URI
+        sync: false
+      # Restricts sign-in to your own domain(s), comma separated, once SSO is on.
+      - key: ENTRA_ALLOWED_EMAIL_DOMAINS
+        sync: false
+
+      # --- JIRA ----------------------------------------------------------
+      # A service account and API token - never a personal login. Once these
+      # are set, "Import from JIRA" and "Write scores to JIRA" go live, and
+      # Settings → JIRA → "Resolve field ids" finds the customfield ids for you.
+      - key: JIRA_BASE_URL
+        sync: false
+      - key: JIRA_EMAIL
+        sync: false
+      - key: JIRA_API_TOKEN
+        sync: false
+
+      # --- Email (Microsoft Graph) ---------------------------------------
+      # With GRAPH_SEND_ENABLED=false, distribution and reminder messages are
+      # composed and logged but never sent, so the cadence can be rehearsed.
+      # Flip to "true" when the app registration has Mail.Send and you are
+      # ready for the committee to receive real email.
+      - key: GRAPH_SEND_ENABLED
+        value: "false"
+      - key: GRAPH_TENANT_ID
+        sync: false
+      - key: GRAPH_CLIENT_ID
+        sync: false
+      - key: GRAPH_CLIENT_SECRET
+        sync: false
+      - key: GRAPH_SENDER_UPN
+        sync: false
+
+      # --- Sample data ---------------------------------------------------
+      # Left empty: the instance starts clean, as agreed (§12.5). To pre-fill a
+      # sample round for a walkthrough, set SEED_ON_BOOT=demo, deploy once,
+      # then remove it. It only ever seeds a database with no rounds in it.
+      - key: SEED_ON_BOOT
+        value: ""
+
+      # Render injects PORT and RENDER_EXTERNAL_URL; the app reads both, so
+      # links in generated email point at the deployed host automatically.
