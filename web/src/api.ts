@@ -346,6 +346,12 @@ export const api = {
     }),
   memberSubmissionCount: (id: string) => request<{ count: number }>(`/api/members/${id}/submission-count`),
 
+  resetData: (confirm: string) =>
+    request<{ counts: Record<string, number> }>('/api/admin/reset-data', {
+      method: 'POST',
+      body: JSON.stringify({ confirm }),
+    }),
+
   audit: (limit = 200) =>
     request<{ entries: Array<{ id: string; at: string; actorEmail: string; action: string; entityType: string; entityId: string; detail: unknown }> }>(
       `/api/audit?limit=${limit}`,

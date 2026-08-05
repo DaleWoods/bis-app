@@ -102,7 +102,7 @@ function Routes({
   const feedback = matchRoute('/feedback/:id', path);
   if (feedback) return <FeedbackPage roundId={feedback.id} />;
 
-  if (path === '/settings') return coordinator ? <SettingsPage /> : <Forbidden />;
+  if (path === '/settings') return coordinator ? <SettingsPage member={member} /> : <Forbidden />;
   if (path === '/audit') return coordinator ? <AuditPage /> : <Forbidden />;
 
   return (

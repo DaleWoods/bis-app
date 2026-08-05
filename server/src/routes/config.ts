@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
-import { requireAuth, requireCoordinator } from '../auth/middleware.js';
+import { requireAuth, requireCoordinator, requireRole } from '../auth/middleware.js';
 import { audit } from '../services/auditService.js';
 import { deactivateCategory, getAppConfig, listCategories, restoreDefaultCategories, saveCategory, saveConfigSection } from '../services/configService.js';
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
 import { suggestFieldIds } from '../integrations/jira.js';
 import { providerLabel, sendMail } from '../integrations/mail.js';
+import { resetOperationalData } from '../services/adminService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 import { env } from '../config/env.js';
 
@@ -216,6 +217,27 @@ router.get(
   requireCoordinator,
   asyncHandler(async (_req, res) => {
     res.json({ suggestions: await suggestFieldIds() });
+  }),
+);
+
+/**
+ * Start afresh: delete every round, ticket and score, keeping the committee,
+ * the categories and all configuration. Admin only, and the exact phrase has
+ * to be typed - there is no undo.
+ */
+router.post(
+  '/admin/reset-data',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const { confirm } = z.object({ confirm: z.string() }).parse(req.body ?? {});
+    if (confirm !== 'DELETE ALL ROUNDS') {
+      res.status(400).json({ error: 'Type DELETE ALL ROUNDS to confirm' });
+      return;
+    }
+    const db = await getDb();
+    const counts = await resetOperationalData(db);
+    await audit(db, actorOf(req), 'admin.reset-data', 'system', '', counts);
+    res.json({ counts });
   }),
 );
 

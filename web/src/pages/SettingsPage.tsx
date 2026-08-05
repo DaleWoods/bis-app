@@ -5,7 +5,7 @@ import { api, type AppConfig, type Category, type Member, type Role } from '../a
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
  * effort mapping, JIRA field ids and the committee are all editable settings.
  */
-export function SettingsPage() {
+export function SettingsPage({ member }: { member: Member }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -23,6 +23,8 @@ export function SettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [newMember, setNewMember] = useState({ name: '', email: '', team: '', role: 'COMMITTEE' as Role });
+  const [resetPhrase, setResetPhrase] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   async function load() {
     try {
@@ -624,6 +626,56 @@ EMAIL_REPLY_TO=<where replies should go>`}
           </div>
         </form>
       </section>
+
+      {member.role === 'ADMIN' ? (
+        <section className="card" style={{ borderColor: 'var(--danger)' }}>
+          <h2 style={{ marginTop: 0, color: 'var(--danger)' }}>Start afresh</h2>
+          <p>
+            Deletes <strong>every round, ticket, score, result, email log entry and JIRA write-back record</strong>.
+            Your committee, the seven categories and all settings are kept. The audit log is kept too.
+          </p>
+          <p className="hint">There is no undo. Type the phrase to enable the button.</p>
+          <div className="row">
+            <div className="grow field">
+              <label htmlFor="reset-confirm">Type DELETE ALL ROUNDS</label>
+              <input
+                id="reset-confirm"
+                type="text"
+                value={resetPhrase}
+                onChange={(e) => setResetPhrase(e.target.value)}
+                placeholder="DELETE ALL ROUNDS"
+                autoComplete="off"
+              />
+            </div>
+            <div style={{ alignSelf: 'end' }} className="field">
+              <button
+                type="button"
+                className="danger"
+                disabled={resetPhrase !== 'DELETE ALL ROUNDS' || resetting}
+                onClick={async () => {
+                  if (!window.confirm('Delete every round, ticket and score? This cannot be undone.')) return;
+                  setResetting(true);
+                  setMessage('');
+                  setError('');
+                  try {
+                    const { counts } = await api.resetData(resetPhrase);
+                    setResetPhrase('');
+                    setMessage(
+                      `Cleared: ${counts.rounds} round(s), ${counts.tickets} ticket(s), ${counts.submissions} submission(s), ${counts.scores} category score(s).`,
+                    );
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Could not clear the data');
+                  } finally {
+                    setResetting(false);
+                  }
+                }}
+              >
+                {resetting ? 'Clearing…' : 'Delete all rounds, tickets and scores'}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }
