@@ -108,7 +108,7 @@ export async function writeBackRound(
   db: Db,
   actor: AuditActor,
   round: Round,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; ignoreMinSubmissions?: boolean } = {},
 ): Promise<WriteBackEntry[]> {
   const config = await getAppConfig(db);
   if (!env.jira.configured) throw new jira.JiraNotConfiguredError();
@@ -126,15 +126,25 @@ export async function writeBackRound(
     const key = `${round.id}:${ticket.id}:${aggregate.businessScore ?? 'null'}`;
 
     if (aggregate.businessScore === null) {
-      entries.push({ jiraId: ticket.jiraId, businessScore: null, status: 'SKIPPED', reason: 'No valid submissions' });
+      entries.push({
+        jiraId: ticket.jiraId,
+        businessScore: null,
+        status: 'SKIPPED',
+        reason: aggregate.submissionsCount
+          ? 'Nobody answered "Yes" to the relevance question, so there is no score to write'
+          : 'Nobody has scored this ticket',
+      });
       continue;
     }
-    if (!aggregate.minSubmissionsMet) {
+    // The minimum-responses gate (§10) is a rule about confidence, not about
+    // JIRA, so a coordinator can knowingly write past it - for a test ticket, or
+    // a round the committee will never reach a quorum on.
+    if (!aggregate.minSubmissionsMet && !options.ignoreMinSubmissions) {
       entries.push({
         jiraId: ticket.jiraId,
         businessScore: aggregate.businessScore,
         status: 'SKIPPED',
-        reason: `Fewer than ${config.scoring.minSubmissions} responses – rolls over`,
+        reason: `${aggregate.responsesCount} of the ${config.scoring.minSubmissions} responses needed — rolls over to the next round`,
       });
       continue;
     }

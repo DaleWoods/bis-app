@@ -137,6 +137,21 @@ const jiraSchema = z.object({
   transitionName: z.string().optional(),
 });
 
+const automationSchema = z.object({
+  enabled: z.boolean().optional(),
+  createRounds: z.boolean().optional(),
+  importFromJira: z.boolean().optional(),
+  rollOverUnscored: z.boolean().optional(),
+  distribute: z.boolean().optional(),
+  remind: z.boolean().optional(),
+  close: z.boolean().optional(),
+  finalise: z.boolean().optional(),
+  // Capped rather than unbounded: a delay longer than the weekly cycle would
+  // leave rounds stacking up unfinalised with no sign of why.
+  finaliseDelayHours: z.number().min(0).max(72).optional(),
+  writeBack: z.boolean().optional(),
+});
+
 const packSchema = z.object({
   organisation: z.string().optional(),
   deckTitle: z.string().optional(),
@@ -144,7 +159,13 @@ const packSchema = z.object({
   accentColour: z.string().optional(),
 });
 
-const sectionSchemas = { scoring: scoringSchema, cadence: cadenceSchema, jira: jiraSchema, pack: packSchema } as const;
+const sectionSchemas = {
+  scoring: scoringSchema,
+  cadence: cadenceSchema,
+  automation: automationSchema,
+  jira: jiraSchema,
+  pack: packSchema,
+} as const;
 
 router.put(
   '/config/:section',

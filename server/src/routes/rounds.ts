@@ -22,6 +22,7 @@ import {
 } from '../services/roundService.js';
 import { listRoundSubmissions, roundProgress, setSubmissionArchived } from '../services/submissionService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
+import { describeNext, listAutomationLog, runDueAutomation } from '../services/automationService.js';
 import { fetchAttachment } from '../integrations/jira.js';
 import { buildPptx } from '../pack/pptx.js';
 import { buildPdf } from '../pack/pdf.js';
@@ -46,8 +47,11 @@ router.get(
 const roundSchema = z.object({
   weekLabel: z.string().min(1),
   cutOffAt: z.string().min(1),
+  /** Start of the scoring window. Null clears it, so the round waits for a person. */
+  opensAt: z.string().nullable().optional(),
   stream: z.enum(STREAMS).optional(),
   notes: z.string().optional(),
+  automationPaused: z.boolean().optional(),
 });
 
 router.post(
@@ -112,10 +116,53 @@ router.post(
   asyncHandler(async (req, res) => {
     const { status } = z.object({ status: z.enum(['OPEN', 'CLOSED', 'FINALISED']) }).parse(req.body ?? {});
     const db = await getDb();
+    const before = await getRound(db, req.params.id);
     const round = await setRoundStatus(db, req.params.id, status);
     if (status === 'FINALISED') await snapshotRoundResults(db, round);
-    await audit(db, actorOf(req), `round.${status.toLowerCase()}`, 'round', round.id, {});
+    // Reopening is the one transition worth naming in the audit log on its own:
+    // it unfreezes results that may already have been written to JIRA.
+    const action = before?.status === 'FINALISED' ? 'round.reopen' : `round.${status.toLowerCase()}`;
+    await audit(db, actorOf(req), action, 'round', round.id, { from: before?.status });
     res.json({ round });
+  }),
+);
+
+/**
+ * What the app has done to this round on its own, and what it will do next.
+ * Automation that cannot be inspected is automation nobody trusts.
+ */
+router.get(
+  '/rounds/:id/automation',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    const config = await getAppConfig(db);
+    res.json({
+      next: describeNext(round, config.automation),
+      paused: round.automationPaused,
+      enabled: config.automation.enabled,
+      log: await listAutomationLog(db, round.id),
+    });
+  }),
+);
+
+/**
+ * Run everything that is due, now, instead of waiting for the next tick. The
+ * override in the other direction: the same code path, on demand.
+ */
+router.post(
+  '/automation/run',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const run = await runDueAutomation(db);
+    await audit(db, actorOf(req), 'automation.run', 'round', '', { steps: run.steps.length });
+    res.json(run);
   }),
 );
 
@@ -410,14 +457,16 @@ router.post(
   '/rounds/:id/writeback',
   requireCoordinator,
   asyncHandler(async (req, res) => {
-    const { force } = z.object({ force: z.boolean().optional() }).parse(req.body ?? {});
+    const { force, ignoreMinSubmissions } = z
+      .object({ force: z.boolean().optional(), ignoreMinSubmissions: z.boolean().optional() })
+      .parse(req.body ?? {});
     const db = await getDb();
     const round = await getRound(db, req.params.id);
     if (!round) {
       res.status(404).json({ error: 'Round not found' });
       return;
     }
-    const entries = await writeBackRound(db, actorOf(req), round, { force });
+    const entries = await writeBackRound(db, actorOf(req), round, { force, ignoreMinSubmissions });
     res.json({ entries });
   }),
 );

@@ -9,6 +9,7 @@ import { migrate } from './db/migrate.js';
 import { attachMember } from './auth/middleware.js';
 import { ensureDefaultConfig, ensureSeedCategories } from './services/configService.js';
 import { seedBase, seedDemo } from './db/seed.js';
+import { startScheduler, stopScheduler } from './services/scheduler.js';
 import { getMemberByEmail, saveMember } from './services/memberService.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
@@ -98,7 +99,12 @@ if (isDirectRun) {
     console.log(`[bis] API listening on :${env.port} (auth=${env.auth.mode}, db=${env.db.driver})`);
   });
 
+  // Started only for the real server, never for a migration or a seed run, so a
+  // one-shot command can never distribute a round as a side effect.
+  startScheduler();
+
   const shutdown = async () => {
+    stopScheduler();
     server.close();
     await closeDb();
     process.exit(0);

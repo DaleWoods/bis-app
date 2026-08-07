@@ -6,9 +6,11 @@ import {
   type Member,
   type MemberProgress,
   type Round,
+  type AutomationStatus,
   type Submission,
   type Ticket,
   type TicketResult,
+  type WriteBackEntry,
 } from '../api';
 import { Link } from '../router';
 import { TicketEditor } from './TicketEditor';
@@ -36,6 +38,9 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [csv, setCsv] = useState('');
   const [jql, setJql] = useState('');
   const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphSendEnabled: boolean } | null>(null);
+  const [automation, setAutomation] = useState<AutomationStatus | null>(null);
+  const [showAutomationLog, setShowAutomationLog] = useState(false);
+  const [writeBackEntries, setWriteBackEntries] = useState<WriteBackEntry[]>([]);
   const [emails, setEmails] = useState<
     Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
   >([]);
@@ -52,6 +57,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         .emails(roundId)
         .then(({ emails }) => setEmails(emails))
         .catch(() => setEmails([]));
+      api
+        .automationStatus(roundId)
+        .then(setAutomation)
+        .catch(() => setAutomation(null));
       const data = await api.round(roundId);
       setRound(data.round);
       setTickets(data.tickets);
@@ -81,6 +90,30 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
     } finally {
       setBusy('');
     }
+  }
+
+  /**
+   * Runs the write-back and keeps the per-ticket answer on screen. The toast
+   * gives the count; the table below gives the reasons, which is what a
+   * coordinator actually needs when nothing was written.
+   */
+  function writeBack(ignoreMinSubmissions: boolean) {
+    if (
+      ignoreMinSubmissions &&
+      !window.confirm('Write these scores to JIRA on fewer responses than the minimum? The score goes across as it stands.')
+    ) {
+      return;
+    }
+    return run('writeback', async () => {
+      const { entries } = await api.writeBack(round!.id, { ignoreMinSubmissions });
+      setWriteBackEntries(entries);
+      const ok = entries.filter((e) => e.status === 'SUCCESS').length;
+      const skipped = entries.filter((e) => e.status === 'SKIPPED').length;
+      const failed = entries.filter((e) => e.status === 'FAILED').length;
+      if (!entries.length) return 'No tickets in this round to write back.';
+      if (!ok) return `Nothing written — ${skipped} skipped, ${failed} failed. See why below.`;
+      return `JIRA write-back: ${ok} written${skipped ? `, ${skipped} skipped` : ''}${failed ? `, ${failed} failed` : ''}.`;
+    });
   }
 
   if (error && !round) return <p className="status error">{error}</p>;
@@ -228,26 +261,145 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               <Link className="button secondary" to={`/feedback/${round.id}`}>
                 Open feedback view
               </Link>
-              <button
-                disabled={Boolean(busy)}
-                onClick={() =>
-                  run('writeback', async () => {
-                    const { entries } = await api.writeBack(round.id);
-                    const ok = entries.filter((e) => e.status === 'SUCCESS').length;
-                    const skipped = entries.filter((e) => e.status === 'SKIPPED').length;
-                    const failed = entries.filter((e) => e.status === 'FAILED');
-                    return `JIRA write-back: ${ok} written, ${skipped} skipped, ${failed.length} failed${
-                      failed.length ? ` (${failed[0].reason ?? ''})` : ''
-                    }.`;
-                  })
-                }
-              >
+              <button disabled={Boolean(busy)} onClick={() => writeBack(false)}>
                 Write scores to JIRA
+              </button>
+              {/*
+                Reopening is deliberately not styled as a primary action: the
+                results are frozen and may already be in JIRA. The confirm says
+                so rather than the button trying to.
+              */}
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Reopen this round for scoring?\n\nThe frozen results are released and will be recalculated when you finalise it again. Any scores already written to JIRA stay there until you write back a second time.',
+                    )
+                  ) {
+                    return;
+                  }
+                  return run('reopen', async () => {
+                    await api.setRoundStatus(round.id, 'CLOSED');
+                    await api.setRoundStatus(round.id, 'OPEN');
+                    return 'Round reopened — the committee can score it again.';
+                  });
+                }}
+              >
+                Reopen for scoring
               </button>
             </>
           )}
         </div>
+
+        {/* What the app will do next, and the way to overrule it. */}
+        {automation ? (
+          <div className="automation">
+            <p className="next">
+              <span className={`dot ${automation.paused || !automation.enabled ? 'off' : 'on'}`} aria-hidden="true" />
+              {automation.next}
+            </p>
+            <div className="row">
+              {automation.enabled ? (
+                <button
+                  className="secondary"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    run('pause', async () => {
+                      await api.setRoundAutomation(round.id, !automation.paused);
+                      return automation.paused
+                        ? 'Automation resumed for this round.'
+                        : 'Automation paused for this round — every step is yours to run.';
+                    })
+                  }
+                >
+                  {automation.paused ? 'Resume automation' : 'Pause automation for this round'}
+                </button>
+              ) : null}
+              {automation.log.length ? (
+                <button className="secondary" type="button" onClick={() => setShowAutomationLog((v) => !v)}>
+                  {showAutomationLog ? 'Hide' : 'Show'} what the app has done ({automation.log.length})
+                </button>
+              ) : null}
+            </div>
+
+            {showAutomationLog ? (
+              <ul className="automation-log">
+                {automation.log.map((entry) => (
+                  <li key={entry.action}>
+                    <strong>{entry.action}</strong> <span className="hint">{formatDateTime(entry.ranAt)}</span>
+                    <div>{entry.outcome || 'In progress…'}</div>
+                    {entry.detail ? <pre>{entry.detail}</pre> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </div>
+
+      {/*
+        The write-back result, per ticket. "1 skipped" on its own tells a
+        coordinator nothing - the reason is the whole answer, and it used to be
+        thrown away.
+      */}
+      {writeBackEntries.length ? (
+        <div className="card">
+          <div className="row between">
+            <h2 style={{ marginTop: 0 }}>JIRA write-back</h2>
+            <button className="secondary" type="button" onClick={() => setWriteBackEntries([])}>
+              Dismiss
+            </button>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <caption className="visually-hidden">What happened to each ticket</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ticket</th>
+                  <th scope="col" className="num">
+                    Score
+                  </th>
+                  <th scope="col">Result</th>
+                  <th scope="col">Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {writeBackEntries.map((entry) => (
+                  <tr key={entry.jiraId}>
+                    <th scope="row" className="plain">
+                      {entry.jiraId}
+                    </th>
+                    <td className="num">{entry.businessScore ?? '—'}</td>
+                    <td>
+                      <span
+                        className={`badge ${entry.status === 'SUCCESS' ? 'high' : entry.status === 'FAILED' ? 'warn' : ''}`}
+                      >
+                        {entry.status === 'SUCCESS' ? 'Written' : entry.status === 'FAILED' ? 'Failed' : 'Skipped'}
+                      </span>
+                      {entry.transitionedTo ? <div className="hint">Moved to {entry.transitionedTo}</div> : null}
+                    </td>
+                    <td>{entry.reason ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {writeBackEntries.some((e) => e.status === 'SKIPPED' && e.businessScore !== null) ? (
+            <div className="row" style={{ marginTop: '0.75rem' }}>
+              <button className="secondary" disabled={Boolean(busy)} onClick={() => writeBack(true)}>
+                Write the skipped scores anyway
+              </button>
+              <p className="hint" style={{ margin: 0 }}>
+                Overrides the minimum-responses gate. The score goes to JIRA as it stands, on fewer responses than the
+                settings ask for.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <h2>Submission progress</h2>
       <div className="card table-scroll">

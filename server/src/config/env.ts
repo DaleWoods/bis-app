@@ -55,6 +55,15 @@ export const env = {
   /** Permits a SQLite file in a production build, instead of PostgreSQL. */
   allowSqlite: bool(process.env.ALLOW_SQLITE, false),
 
+  /**
+   * The in-process ticker behind automation. On by default and cheap when
+   * automation itself is off, which it is until a coordinator turns it on in
+   * Settings. Set false to stop this instance ticking at all - the honest use
+   * for that is running more than one instance, where you would want exactly
+   * one of them driving the cycle.
+   */
+  schedulerEnabled: bool(process.env.SCHEDULER_ENABLED, true),
+
   /** '' (none) | 'base' (committee placeholders) | 'demo' (also a sample round). */
   seedOnBoot: process.env.SEED_ON_BOOT ?? '',
 

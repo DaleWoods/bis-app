@@ -77,6 +77,11 @@ it archived so it stops counting without deleting it or its audit trail.
 
 ## D2 — No scheduler process; distribution and reminders are triggered
 
+> **Superseded by D6.** The app now runs the cycle itself. The endpoints below
+> still exist and every manual button still works — D6 added a clock in front of
+> them, it did not replace them.
+
+
 **Requirement:** §11 cadence, §12.2 automated distribution and reminders.
 
 **Decision:** the app exposes distribution and reminder endpoints, driven from the round page, and
@@ -153,3 +158,61 @@ bigger picture, not longer paragraphs. Detail that genuinely does not fit is in 
 
 **Migration:** `002_slide_card.sql`. Existing cards keep their content and render under the problem
 wording until someone redrafts or edits them; nothing is lost and nothing needs re-entering.
+
+---
+
+## D6 — The app runs the weekly cycle itself, and every step can still be done by hand
+
+**Requirement:** §11 cadence, §12.2 automated distribution and reminders. Supersedes D2.
+
+**Decision:** an interval inside the web service asks "what is due" once a minute and runs it:
+create next week's round, fill it from the JIRA queue, roll over tickets that missed the minimum,
+open and distribute it, chase non-responders, close at the cut-off, finalise after a grace period,
+write the scores to JIRA and transition the ticket. Each step is separately switchable, off by
+default, and none of them removes a button.
+
+**Why in-process rather than a cron service:** it needs no extra Render component, no scheduler to
+configure and no second deployment to keep in step with the app — the same reasoning that made SMTP
+the right answer for email. D2 kept the hosting choice open; it has now been made.
+
+**What makes it safe to run every minute:**
+
+- **Exactly once.** Every step claims a row in `round_automation_log`, which has a unique key on
+  (round, action). A step that has run cannot run again — however often the tick fires, and across a
+  restart mid-cycle.
+- **Late, never skipped.** The scheduler asks what is *due*, not what is due *right now*. A service
+  asleep over the cut-off closes, finalises and writes back on its first tick after it wakes, in one
+  pass rather than one step per minute.
+- **Manual is not a conflict.** Every step re-reads the round first. Closing a round early is not an
+  error; the close step simply finds it closed.
+- **No new authority.** Automation calls the same service functions the buttons call, with the same
+  guards. It cannot write a score the minimum-responses gate would reject.
+- **Failures stop, they do not loop.** A failed step stays claimed with its error on the round page.
+  Retrying a bad JIRA token every 60 seconds helps nobody; the matching manual button re-runs it.
+
+**The overrides, because automation without a way out is not trustworthy:**
+
+| Want to | Do this |
+|---|---|
+| Stop the app touching one round | "Pause automation for this round" |
+| Close scoring early | "Close scoring" — automation finds it closed |
+| Reopen a round that finalised wrongly | "Reopen for scoring" |
+| Run what is due now, not in a minute | `POST /api/automation/run` |
+| Turn it all off | The master switch in Settings |
+
+**Reopening a finalised round** is new. It used to be a dead end on the reasoning that finalised
+results are frozen — but that is exactly why a way back is needed when a round finalises with the
+wrong scores in it, and with the app finalising rounds unattended it stopped being hypothetical.
+Reopening clears the finalised stamp and the close/finalise/write-back log entries so the tail of the
+cycle can run again. Anything already in JIRA stays there until a fresh write-back replaces it, and
+the confirmation dialog says so.
+
+**The honest limits:**
+
+- **One instance.** The claim rows mean a second instance could not double-run a step, but the
+  design assumes one. `SCHEDULER_ENABLED=false` takes an instance out of the rotation.
+- **Timezones are arithmetic, not a library.** The cadence hour is read as wall-clock time in the
+  configured timezone using `Intl`, recalculated per round. Good enough for a weekly rhythm; it is
+  not a scheduling product.
+- **A round with no tickets is never distributed.** It waits rather than emailing the committee an
+  empty deck, and goes out on the next tick once a ticket lands.

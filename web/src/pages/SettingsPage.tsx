@@ -471,9 +471,99 @@ EMAIL_REPLY_TO=<where replies should go>`}
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>Run the round automatically</h2>
+        <p className="hint">
+          The app can run the weekly cycle itself, on the Cadence below. Every step is separate, so you can let it
+          create and chase a round long before you let it write to JIRA — and nothing here removes a button. Doing a
+          step yourself just means automation finds it already done, and any round can be paused on its own page.
+        </p>
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const on = (name: string) => form.get(name) === 'on';
+            saveSection(
+              'automation',
+              {
+                enabled: on('enabled'),
+                createRounds: on('createRounds'),
+                importFromJira: on('importFromJira'),
+                rollOverUnscored: on('rollOverUnscored'),
+                distribute: on('distribute'),
+                remind: on('remind'),
+                close: on('close'),
+                finalise: on('finalise'),
+                writeBack: on('writeBack'),
+                finaliseDelayHours: Number(form.get('finaliseDelayHours')),
+              },
+              'Automation',
+            );
+          }}
+        >
+          <label className="check strong">
+            <input type="checkbox" name="enabled" defaultChecked={config.automation.enabled} />
+            <span>
+              <strong>Run the cycle automatically</strong>
+              <span className="hint">
+                Master switch. With this off, everything below is ignored and every step stays manual.
+              </span>
+            </span>
+          </label>
+
+          <div className="switches">
+            {(
+              [
+                ['createRounds', 'Create next week’s round', 'On the distribution day, so one always exists to fill.'],
+                ['importFromJira', 'Fill it from the JIRA queue', 'Imports whatever is sitting in the configured queue.'],
+                [
+                  'rollOverUnscored',
+                  'Roll over tickets that missed the minimum',
+                  'Carries forward anything that finalised on too few responses.',
+                ],
+                ['distribute', 'Open it and email the committee', 'At the opening time on the round.'],
+                ['remind', 'Chase non-responders', 'At the reminder hours set in Cadence.'],
+                ['close', 'Close scoring at the cut-off', 'Nobody can score after this.'],
+                ['finalise', 'Finalise and freeze the results', 'Opens the anonymised feedback view.'],
+                ['writeBack', 'Write the scores to JIRA', 'And transition the ticket, if that is switched on under JIRA.'],
+              ] as const
+            ).map(([name, label, hint]) => (
+              <label className="check" key={name}>
+                <input type="checkbox" name={name} defaultChecked={config.automation[name]} />
+                <span>
+                  {label}
+                  <span className="hint">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div className="field" style={{ maxWidth: 280 }}>
+            <label htmlFor="finaliseDelayHours">Wait before finalising (hours)</label>
+            <input
+              id="finaliseDelayHours"
+              name="finaliseDelayHours"
+              type="number"
+              min={0}
+              max={72}
+              step={1}
+              defaultValue={config.automation.finaliseDelayHours}
+            />
+            <p className="hint">
+              Grace after the cut-off. A late submission still counts inside it, and you get a look before the results
+              are frozen and sent to JIRA.
+            </p>
+          </div>
+
+          <button type="submit">Save automation</button>
+        </form>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>Cadence</h2>
         <p className="hint">
-          Distribution and reminders are scheduled around these, not hard-coded weekdays.
+          Distribution and reminders are scheduled around these, not hard-coded weekdays. Times are read as wall-clock
+          time in the timezone below.
         </p>
         <form
           onSubmit={(event) => {

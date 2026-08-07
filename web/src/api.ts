@@ -90,7 +90,27 @@ export interface Round {
   notes: string;
   distributionSentAt: string | null;
   finalisedAt: string | null;
+  /** Start of the scoring window. Null = the round waits for a person. */
+  opensAt: string | null;
+  automationPaused: boolean;
   ticketCount: number;
+}
+
+export interface WriteBackEntry {
+  jiraId: string;
+  businessScore: number | null;
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  /** Why it was skipped or how it failed. The useful half of the answer. */
+  reason?: string;
+  transitionedTo?: string;
+}
+
+export interface AutomationStatus {
+  /** What the app will do to this round next, in plain English. */
+  next: string;
+  paused: boolean;
+  enabled: boolean;
+  log: Array<{ action: string; ranAt: string; outcome: string; detail: string }>;
 }
 
 export interface Submission {
@@ -166,6 +186,18 @@ export interface AppConfig {
     applyCategoryWeights: boolean;
     effort: { mode: string; backendFieldId: string; frontendFieldId: string };
     closureReasons: string[];
+  };
+  automation: {
+    enabled: boolean;
+    createRounds: boolean;
+    importFromJira: boolean;
+    rollOverUnscored: boolean;
+    distribute: boolean;
+    remind: boolean;
+    close: boolean;
+    finalise: boolean;
+    finaliseDelayHours: number;
+    writeBack: boolean;
   };
   cadence: {
     distributionDayOfWeek: number;
@@ -290,11 +322,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ escalation, memberIds }),
     }),
-  writeBack: (id: string, force = false) =>
-    request<{ entries: Array<{ jiraId: string; businessScore: number | null; status: string; reason?: string }> }>(
-      `/api/rounds/${id}/writeback`,
-      { method: 'POST', body: JSON.stringify({ force }) },
+  automationStatus: (id: string) => request<AutomationStatus>(`/api/rounds/${id}/automation`),
+  runAutomation: () =>
+    request<{ ranAt: string; steps: Array<{ weekLabel: string; action: string; outcome: string }>; skipped?: string }>(
+      '/api/automation/run',
+      { method: 'POST', body: '{}' },
     ),
+  setRoundAutomation: (id: string, automationPaused: boolean) =>
+    request<{ round: Round }>(`/api/rounds/${id}`, { method: 'PUT', body: JSON.stringify({ automationPaused }) }),
+  writeBack: (id: string, options: { force?: boolean; ignoreMinSubmissions?: boolean } = {}) =>
+    request<{ entries: WriteBackEntry[] }>(`/api/rounds/${id}/writeback`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    }),
   emails: (id: string) =>
     request<{ emails: Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }> }>(
       `/api/rounds/${id}/emails`,

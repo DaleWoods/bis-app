@@ -114,6 +114,42 @@ export interface CadenceConfig {
   timezone: string;
 }
 
+/**
+ * The weekly cycle, run by the app instead of by a person (§11, §12.2).
+ *
+ * Every step is separately switchable, because trust is earned one step at a
+ * time: a coordinator will happily let the app create a round and chase
+ * non-responders long before they let it write to JIRA unattended. Nothing here
+ * removes a button - the manual controls keep working, and doing a step by hand
+ * simply means automation finds it already done.
+ */
+export interface AutomationConfig {
+  /** Master switch. Off until a coordinator turns it on. */
+  enabled: boolean;
+  /** Create next week's round, so one always exists to fill. */
+  createRounds: boolean;
+  /** Fill a newly created round from the JIRA queue. */
+  importFromJira: boolean;
+  /** Carry forward tickets that missed the minimum-responses gate. */
+  rollOverUnscored: boolean;
+  /** Open the round and email the committee at the scheduled time. */
+  distribute: boolean;
+  /** Chase non-responders at the configured hours before cut-off. */
+  remind: boolean;
+  /** Close scoring at the cut-off. */
+  close: boolean;
+  /** Finalise, freezing the results and opening the feedback view. */
+  finalise: boolean;
+  /**
+   * Grace between the cut-off and finalising. A late submission still counts if
+   * it lands inside it, and a coordinator has time to look before results are
+   * frozen and written to JIRA.
+   */
+  finaliseDelayHours: number;
+  /** Write the business scores back to JIRA once the round is finalised. */
+  writeBack: boolean;
+}
+
 export interface JiraConfig {
   /** JQL that defines the Business Scoring queue (§12.1). */
   queueJql: string;
@@ -136,6 +172,7 @@ export interface PackConfig {
 export interface AppConfig {
   scoring: ScoringConfig;
   cadence: CadenceConfig;
+  automation: AutomationConfig;
   jira: JiraConfig;
   pack: PackConfig;
 }
@@ -166,6 +203,24 @@ export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   timezone: 'Europe/London',
 };
 
+/**
+ * Off, entirely. Automation emails the whole committee and writes to JIRA, so
+ * switching it on is a decision someone makes deliberately in Settings - never
+ * something that starts happening because the app was deployed.
+ */
+export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
+  enabled: false,
+  createRounds: true,
+  importFromJira: true,
+  rollOverUnscored: true,
+  distribute: true,
+  remind: true,
+  close: true,
+  finalise: true,
+  finaliseDelayHours: 2,
+  writeBack: true,
+};
+
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   // The requirements quoted the status as "WOSG: Business Scoring"; on the live
   // site it is just "Business Scoring". Editable in Settings either way.
@@ -188,6 +243,7 @@ export const DEFAULT_PACK_CONFIG: PackConfig = {
 export const DEFAULT_APP_CONFIG: AppConfig = {
   scoring: DEFAULT_SCORING_CONFIG,
   cadence: DEFAULT_CADENCE_CONFIG,
+  automation: DEFAULT_AUTOMATION_CONFIG,
   jira: DEFAULT_JIRA_CONFIG,
   pack: DEFAULT_PACK_CONFIG,
 };

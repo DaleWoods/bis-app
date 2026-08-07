@@ -12,6 +12,10 @@ export interface Round {
   stream: Stream;
   notes: string;
   distributionSentAt: string | null;
+  /** Start of the scoring window. Null = opens when someone opens it. */
+  opensAt: string | null;
+  /** Automation leaves this round alone while true. */
+  automationPaused: boolean;
   openedAt: string | null;
   closedAt: string | null;
   finalisedAt: string | null;
@@ -28,6 +32,8 @@ interface RoundRow {
   stream: string;
   notes: string;
   distribution_sent_at: string | null;
+  opens_at: string | null;
+  automation_paused: number | null;
   opened_at: string | null;
   closed_at: string | null;
   finalised_at: string | null;
@@ -45,6 +51,8 @@ function map(row: RoundRow): Round {
     stream: (row.stream as Stream) ?? 'ECOM',
     notes: row.notes,
     distributionSentAt: row.distribution_sent_at,
+    opensAt: row.opens_at ?? null,
+    automationPaused: Number(row.automation_paused ?? 0) === 1,
     openedAt: row.opened_at,
     closedAt: row.closed_at,
     finalisedAt: row.finalised_at,
@@ -74,14 +82,14 @@ export async function getActiveRound(db: Db): Promise<Round | undefined> {
 
 export async function createRound(
   db: Db,
-  input: { weekLabel: string; cutOffAt: string; stream?: Stream; notes?: string; createdBy?: string },
+  input: { weekLabel: string; cutOffAt: string; opensAt?: string | null; stream?: Stream; notes?: string; createdBy?: string },
 ): Promise<Round> {
   const id = newId();
   const now = nowIso();
   await db.run(
-    `INSERT INTO rounds (id, week_label, cut_off_at, status, stream, notes, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?)`,
-    [id, input.weekLabel, input.cutOffAt, input.stream ?? 'ECOM', input.notes ?? '', input.createdBy ?? null, now, now],
+    `INSERT INTO rounds (id, week_label, cut_off_at, opens_at, status, stream, notes, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?)`,
+    [id, input.weekLabel, input.cutOffAt, input.opensAt ?? null, input.stream ?? 'ECOM', input.notes ?? '', input.createdBy ?? null, now, now],
   );
   return (await getRound(db, id)) as Round;
 }
@@ -89,7 +97,7 @@ export async function createRound(
 export async function updateRound(
   db: Db,
   id: string,
-  input: { weekLabel?: string; cutOffAt?: string; notes?: string; stream?: Stream },
+  input: { weekLabel?: string; cutOffAt?: string; opensAt?: string | null; notes?: string; stream?: Stream; automationPaused?: boolean },
 ): Promise<Round | undefined> {
   const sets: string[] = [];
   const params: Array<string | number | null> = [];
@@ -109,6 +117,14 @@ export async function updateRound(
     sets.push('stream = ?');
     params.push(input.stream);
   }
+  if (input.opensAt !== undefined) {
+    sets.push('opens_at = ?');
+    params.push(input.opensAt);
+  }
+  if (input.automationPaused !== undefined) {
+    sets.push('automation_paused = ?');
+    params.push(input.automationPaused ? 1 : 0);
+  }
   if (!sets.length) return getRound(db, id);
   sets.push('updated_at = ?');
   params.push(nowIso(), id);
@@ -116,11 +132,23 @@ export async function updateRound(
   return getRound(db, id);
 }
 
+/**
+ * A finalised round can now be reopened. It used to be a dead end, on the
+ * reasoning that finalised results are frozen - but results being frozen is
+ * exactly why someone needs a way back when a round finalises with the wrong
+ * scores in it, and once automation finalises rounds unattended that stopped
+ * being hypothetical.
+ *
+ * Reopening is a two-step climb (FINALISED -> CLOSED -> OPEN) rather than one
+ * button, and the caller says what it costs: the snapshot is rewritten on the
+ * next finalise, and anything already written to JIRA stays there until a fresh
+ * write-back replaces it.
+ */
 const ALLOWED_TRANSITIONS: Record<RoundStatus, RoundStatus[]> = {
   DRAFT: ['OPEN'],
   OPEN: ['CLOSED'],
   CLOSED: ['OPEN', 'FINALISED'],
-  FINALISED: [],
+  FINALISED: ['CLOSED'],
 };
 
 export function canTransition(from: RoundStatus, to: RoundStatus): boolean {
@@ -136,6 +164,18 @@ export async function setRoundStatus(db: Db, id: string, status: RoundStatus): P
   }
 
   const now = nowIso();
+
+  // Coming back from FINALISED, clear the stamp and let the automated tail of
+  // the cycle run again. Without this the round would still read as finalised,
+  // and the automation log would refuse to close, finalise or write back a
+  // second time - reopening would leave it stuck.
+  if (round.status === 'FINALISED') {
+    await db.run('UPDATE rounds SET finalised_at = NULL WHERE id = ?', [id]);
+    await db.run("DELETE FROM round_automation_log WHERE round_id = ? AND action IN ('close', 'finalise', 'writeback')", [
+      id,
+    ]);
+  }
+
   const column =
     status === 'OPEN' ? 'opened_at' : status === 'CLOSED' ? 'closed_at' : status === 'FINALISED' ? 'finalised_at' : null;
   if (column) {

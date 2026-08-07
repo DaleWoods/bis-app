@@ -110,6 +110,34 @@ Three things worth being clear about:
 - **It falls back, it does not fail.** A bad key, an outage or a response that will not parse
   degrades that ticket to the heading parser and logs why. An import never dies on it.
 
+### Letting it run itself
+
+**Settings → Run the round automatically.** Off until you switch it on, and every step is separate,
+so you can let the app create and chase a round long before you let it write to JIRA:
+
+| Step | What it does |
+|---|---|
+| Create next week's round | On the distribution day, so one always exists to fill |
+| Fill it from the JIRA queue | Imports whatever is in the configured queue |
+| Roll over unscored tickets | Carries forward anything that finalised on too few responses |
+| Open and distribute | At the round's opening time, emails the committee |
+| Chase non-responders | At the reminder hours set under Cadence |
+| Close at the cut-off | Nobody can score after this |
+| Finalise | After a grace period, freezing results and opening the feedback view |
+| Write to JIRA | The business scores, and the transition if that is switched on |
+
+**Nothing here removes a button.** Doing a step yourself just means automation finds it already done
+— closing a round early is not an error. And there is always a way out:
+
+- **Pause automation for this round** freezes the cycle for one round without switching it off.
+- **Reopen for scoring** brings a finalised round back, including one the app finalised. Results are
+  recalculated when you finalise it again; anything already in JIRA stays until you write back again.
+- **Write the skipped scores anyway** overrides the minimum-responses gate for a round that will
+  never reach quorum.
+
+The round page always says what will happen next and shows what the app has already done, so the
+cycle is never a surprise. `SCHEDULER_ENABLED=false` stops an instance ticking at all.
+
 ### Sample data
 
 The instance starts clean, as agreed. If you want a pre-filled round for a walkthrough — one whose

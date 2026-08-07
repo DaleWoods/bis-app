@@ -176,6 +176,17 @@ services:
       - key: AI_DRAFT_ENABLED
         value: "true"
 
+      # --- Automation ------------------------------------------------------
+      # The app can run the weekly cycle itself - create the round, distribute
+      # it, chase, close, finalise, write to JIRA. It is switched on in
+      # Settings, not here, and every step is separate and off until you say so.
+      #
+      # This only stops the instance ticking at all. The honest use for it is
+      # running more than one instance, where exactly one should drive the
+      # cycle. On a single service, leave it alone.
+      - key: SCHEDULER_ENABLED
+        value: "true"
+
       # --- Sample data ---------------------------------------------------
       # The instance starts clean, as agreed (§12.5). To pre-fill a sample round
       # for a walkthrough, add SEED_ON_BOOT=demo in the Render dashboard, deploy
