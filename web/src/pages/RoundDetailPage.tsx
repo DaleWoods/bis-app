@@ -38,6 +38,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [csv, setCsv] = useState('');
   const [jql, setJql] = useState('');
   const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphSendEnabled: boolean } | null>(null);
+  /** From Settings, so the spread numbers on screen can say what they are measured against. */
+  const [discussionThreshold, setDiscussionThreshold] = useState(16);
   const [automation, setAutomation] = useState<AutomationStatus | null>(null);
   const [showAutomationLog, setShowAutomationLog] = useState(false);
   const [writeBackEntries, setWriteBackEntries] = useState<WriteBackEntry[]>([]);
@@ -51,7 +53,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
       // what a button will actually do before pressing it.
       api
         .config()
-        .then(({ integrations }) => setIntegrations(integrations))
+        .then(({ integrations, config }) => {
+          setIntegrations(integrations);
+          setDiscussionThreshold(config.scoring.stdDevDiscussionThreshold);
+        })
         .catch(() => setIntegrations(null));
       api
         .emails(roundId)
@@ -121,6 +126,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
 
   const scored = results.filter((r) => r.aggregate.responsesCount > 0).length;
   const readyForEstimation = results.filter((r) => r.aggregate.sendForEstimation).length;
+  const needDiscussion = results.filter((r) => r.aggregate.discussionRequired);
 
   return (
     <>
@@ -131,6 +137,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span> · Cut-off{' '}
             {formatDateTime(round.cutOffAt)} · {tickets.length} tickets · {scored} with responses · {readyForEstimation}{' '}
             ready to send for estimation
+            {needDiscussion.length ? (
+              <>
+                {' · '}
+                <span className="badge warn">
+                  {needDiscussion.length} need{needDiscussion.length === 1 ? 's' : ''} discussion
+                </span>
+              </>
+            ) : null}
             {round.distributionSentAt ? (
               <>
                 {' · '}
@@ -558,7 +572,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 <span className="metric">
                   <b>{result?.businessScore ?? '—'}</b> score
                 </span>
-                <span className="metric">
+                <span className={`metric${result?.discussionRequired ? ' over' : ''}`}>
                   <b>{result?.stdDev === null || result?.stdDev === undefined ? '—' : result.stdDev.toFixed(1)}</b> spread
                 </span>
                 <span className="metric">
@@ -567,10 +581,30 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 <span className="metric">
                   <b>{result?.priorityRatio === null || result?.priorityRatio === undefined ? '—' : result.priorityRatio.toFixed(2)}</b> ratio
                 </span>
+                {/*
+                  Its own badge, not just a tint on the status label. The §10.3
+                  status gate puts "Awaiting RA effort" ahead of "Pending
+                  discussion", so a ticket the committee flatly disagreed on
+                  showed no sign of it until RA had estimated it — and
+                  disagreement about value has nothing to do with effort.
+                */}
+                {result?.discussionRequired ? (
+                  <span className="badge warn" title={`Spread ${result.stdDev?.toFixed(1)} is over the threshold of ${discussionThreshold}`}>
+                    Discussion needed
+                  </span>
+                ) : null}
                 {result?.sendForEstimation ? <span className="badge high">Send for Est</span> : null}
                 {result?.clarificationRequested ? <span className="badge">Unsure ×{result.excludedCounts.UNSURE}</span> : null}
                 {result?.parkRequested ? <span className="badge warn">Park</span> : null}
               </div>
+
+              {result?.discussionRequired ? (
+                <p className="hint" style={{ margin: '0.4rem 0 0' }}>
+                  The committee is split on this one — scores ranged {Math.min(...result.totalsDistribution)} to{' '}
+                  {Math.max(...result.totalsDistribution)} out of 70, a spread of {result.stdDev?.toFixed(1)} against a
+                  threshold of {discussionThreshold}. It will not go for estimation until it has been talked through.
+                </p>
+              ) : null}
 
               <p className="hint" style={{ margin: '0.4rem 0 0' }}>
                 {gaps.length ? `Card still needs: ${gaps.join(', ')}` : 'Card complete'} · Backend{' '}

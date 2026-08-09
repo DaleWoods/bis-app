@@ -135,6 +135,32 @@ describe('§10.2 per ticket aggregation', () => {
     expect(wide.discussionRequired).toBe(true);
   });
 
+  it('flags two flatly opposed scorers, and holds the ticket back from estimation', () => {
+    // The reported case: two committee members, one scoring 1 out of 70 and the
+    // other 70 out of 70. A disagreement that wide is exactly what the
+    // threshold exists to catch.
+    const config16: ScoringConfig = { ...config, stdDevDiscussionThreshold: 16, minSubmissions: 2 };
+    const result = aggregateTicket({ submissions: [submission(1), submission(70)], categories, effort: 16 }, config16);
+
+    expect(result.stdDev).toBeCloseTo(48.79, 2);
+    expect(result.discussionRequired).toBe(true);
+    expect(result.sendForEstimation).toBe(false);
+    expect(result.statusLabel).toBe(STATUS_LABELS.PENDING_DISCUSSION);
+  });
+
+  it('still flags the disagreement when RA has not estimated the ticket', () => {
+    // §10.3 puts "Awaiting RA effort" ahead of "Pending discussion" in the
+    // status gate, so the label on its own hides the split. discussionRequired
+    // has to stay true regardless — the round page shows it as its own badge,
+    // which is what was missing when this was reported.
+    const config16: ScoringConfig = { ...config, stdDevDiscussionThreshold: 16, minSubmissions: 2 };
+    const result = aggregateTicket({ submissions: [submission(1), submission(70)], categories, effort: null }, config16);
+
+    expect(result.discussionRequired).toBe(true);
+    expect(result.sendForEstimation).toBe(false);
+    expect(result.statusLabel).toBe(STATUS_LABELS.AWAITING_EFFORT);
+  });
+
   it('leaves std_dev null (and discussion off) for a single response', () => {
     const result = aggregate([40], 10);
     expect(result.stdDev).toBeNull();

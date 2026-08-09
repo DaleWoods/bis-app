@@ -165,6 +165,10 @@ export function SettingsPage({ member }: { member: Member }) {
             <div className="grow field">
               <label htmlFor="stdDevDiscussionThreshold">Discussion threshold (std dev &gt;)</label>
               <input id="stdDevDiscussionThreshold" name="stdDevDiscussionThreshold" type="number" step="0.1" defaultValue={config.scoring.stdDevDiscussionThreshold} />
+              <p className="hint">
+                How far apart the committee’s totals (out of 70) can be before a ticket is flagged for a meeting.
+                Above this it is marked “Discussion needed” and held back from estimation.
+              </p>
             </div>
             <div className="grow field">
               <label htmlFor="priorityHigh">High priority ratio ≥</label>

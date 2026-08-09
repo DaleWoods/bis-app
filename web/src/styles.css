@@ -809,3 +809,14 @@ th.plain {
   font-size: 0.95rem;
   color: inherit;
 }
+
+/*
+ * A spread past the discussion threshold. Reading as an ordinary number was
+ * how a ticket the committee flatly disagreed on passed unnoticed.
+ */
+.metric.over b {
+  color: var(--danger);
+}
+.metric.over {
+  color: var(--danger);
+}
