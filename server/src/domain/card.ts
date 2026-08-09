@@ -86,7 +86,8 @@ export function labelsFor(kind: string | null | undefined): SectionLabels {
   return LABELS[(kind ?? '') as CardKind] ?? LABELS.PROBLEM;
 }
 
-export const CARD_KINDS: CardKind[] = ['PROBLEM', 'IMPROVEMENT', 'FEATURE'];
+/** `as const` so zod can build an enum from it without restating the values. */
+export const CARD_KINDS = ['PROBLEM', 'IMPROVEMENT', 'FEATURE'] as const satisfies readonly CardKind[];
 
 /**
  * A guess from the JIRA issue type, used when nothing better is available.

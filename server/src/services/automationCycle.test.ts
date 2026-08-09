@@ -206,3 +206,23 @@ describe('creating rounds', () => {
     expect(await listRounds(db)).toHaveLength(1);
   });
 });
+
+describe('a round finalised by hand', () => {
+  it('still gets its scores written to JIRA by automation', async () => {
+    // Finalising yourself is an override of one step, not an instruction to
+    // stop automating the rest. Write-back used to hang off the finalise step,
+    // so doing it by hand quietly cancelled the JIRA push.
+    await automation();
+    const round = await aRound();
+    await runDueAutomation(db, new Date('2026-08-06T08:05:00Z'));
+
+    await setRoundStatus(db, round.id, 'CLOSED');
+    await setRoundStatus(db, round.id, 'FINALISED');
+
+    await runDueAutomation(db, new Date('2026-08-11T20:00:00Z'));
+
+    const actions = (await listAutomationLog(db, round.id)).map((e) => e.action);
+    expect(actions).toContain('writeback');
+    expect(actions).not.toContain('finalise');
+  });
+});

@@ -183,29 +183,38 @@ export async function runDueAutomation(db: Db, now: Date = new Date()): Promise<
 
   if (!config.automation.enabled) return { ranAt: nowIso(), steps, skipped: 'Automation is switched off' };
 
-  await maybeCreateNextRound(db, config, now, steps);
+  const rounds = await listRounds(db);
+  const created = await maybeCreateNextRound(db, config, rounds, now, steps);
 
-  for (const round of await listRounds(db)) {
+  // Finalised rounds are still visited, because write-back is a step in its own
+  // right: a coordinator who finalises by hand should still get the scores
+  // pushed to JIRA. The claim row stops it running twice, so revisiting a
+  // settled round costs one indexed lookup.
+  for (const round of created ? [created, ...rounds] : rounds) {
     if (round.automationPaused) continue;
-    if (round.status === 'FINALISED') continue;
     await runRound(db, round, config, now, steps);
   }
 
   return { ranAt: nowIso(), steps };
 }
 
-async function maybeCreateNextRound(db: Db, config: AppConfig, now: Date, steps: AutomationStep[]): Promise<void> {
-  if (!config.automation.createRounds) return;
+async function maybeCreateNextRound(
+  db: Db,
+  config: AppConfig,
+  rounds: Round[],
+  now: Date,
+  steps: AutomationStep[],
+): Promise<Round | null> {
+  if (!config.automation.createRounds) return null;
 
   // One round in flight at a time. A round that has not yet reached its cut-off
   // is the round people are working on, so there is nothing to create.
-  const rounds = await listRounds(db);
   const live = rounds.find((r) => r.status !== 'FINALISED' && new Date(r.cutOffAt).getTime() > now.getTime());
-  if (live) return;
+  if (live) return null;
 
   const { opensAt, cutOffAt } = nextRoundWindow(config.cadence, now);
   const weekLabel = weekLabelFor(opensAt);
-  if (rounds.some((r) => r.weekLabel === weekLabel)) return;
+  if (rounds.some((r) => r.weekLabel === weekLabel)) return null;
 
   const round = await createRound(db, {
     weekLabel,
@@ -236,6 +245,8 @@ async function maybeCreateNextRound(db: Db, config: AppConfig, now: Date, steps:
   if (detail.length) {
     steps.push({ roundId: round.id, weekLabel, action: 'fill', outcome: detail.join('; ') });
   }
+
+  return round;
 }
 
 /**
@@ -373,12 +384,19 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
           automated: true,
         });
         push('finalise', outcome);
-
-        if (automation.writeBack) await runWriteBack(db, finalised, push);
       } catch (err) {
         await failed(db, round, 'finalise', err, push);
       }
+      await reload();
     }
+  }
+
+  // --- Write back ---------------------------------------------------------
+  // Deliberately keyed on the round being finalised rather than on automation
+  // having been the one to finalise it. Finalising by hand is a manual
+  // override of one step, not an instruction to stop automating the rest.
+  if (automation.writeBack && state.status === 'FINALISED') {
+    await runWriteBack(db, state, push);
   }
 }
 

@@ -10,7 +10,7 @@ import { deleteTicket, getTicket, listTickets, upsertTicket } from '../services/
 import { getAppConfig } from '../services/configService.js';
 import { parseCsvObjects } from '../util/csv.js';
 import { fetchAttachment } from '../integrations/jira.js';
-import { draftIsEmpty } from '../domain/card.js';
+import { CARD_KINDS, draftIsEmpty } from '../domain/card.js';
 import { draftCardFor, draftToTicketFields, sourceFromTicket } from '../services/cardDraftService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
@@ -25,7 +25,7 @@ router.get(
   }),
 );
 
-const ticketSchema = z.object({
+export const ticketSchema = z.object({
   jiraId: z.string().min(1),
   title: z.string().min(1),
   type: z.string().optional(),
@@ -38,11 +38,18 @@ const ticketSchema = z.object({
   siteAffected: z.string().optional(),
   originalTestingEnvironment: z.string().optional(),
   rawDescription: z.string().optional(),
+  // Every coordinator-authored card field has to be listed here: zod strips
+  // keys it does not know about, so anything missing is silently discarded on
+  // save rather than rejected. cardKind, impactFacts and screenshotCaption were
+  // added to the card and not to this schema, and were being thrown away.
+  cardKind: z.enum(CARD_KINDS).or(z.literal('')).optional(),
   execSummary: z.string().optional(),
   panelCurrent: z.string().optional(),
   panelImpacts: z.string().optional(),
   panelFuture: z.string().optional(),
   panelBenefits: z.string().optional(),
+  impactFacts: z.string().optional(),
+  screenshotCaption: z.string().optional(),
   screenshotUrl: z.string().optional(),
   screenshotAttachmentId: z.string().optional(),
   originalRequestor: z.string().optional(),
@@ -170,9 +177,28 @@ router.post(
 /**
  * Stream a JIRA image attachment. Committee members can see it - it is part of
  * the card they are scoring - but the JIRA credentials never leave the server.
+ *
+ * Screenshots are megabytes each and the TTL was only ever checked on read, so
+ * an entry nobody asked for again stayed in memory for the life of the process.
+ * Capped and swept now: the instance has 512MB and shares it with pack
+ * generation.
  */
 const screenshotCache = new Map<string, { buffer: Buffer; contentType: string; at: number }>();
 const SCREENSHOT_TTL_MS = 10 * 60 * 1000;
+const SCREENSHOT_CACHE_MAX = 40;
+
+function cacheScreenshot(id: string, entry: { buffer: Buffer; contentType: string; at: number }): void {
+  for (const [key, value] of screenshotCache) {
+    if (entry.at - value.at >= SCREENSHOT_TTL_MS) screenshotCache.delete(key);
+  }
+  // Map iterates in insertion order, so the first key is the oldest.
+  while (screenshotCache.size >= SCREENSHOT_CACHE_MAX) {
+    const oldest = screenshotCache.keys().next();
+    if (oldest.done) break;
+    screenshotCache.delete(oldest.value);
+  }
+  screenshotCache.set(id, entry);
+}
 
 router.get(
   '/tickets/:id/screenshot',
@@ -202,7 +228,7 @@ router.get(
     }
 
     const { buffer, contentType } = await fetchAttachment(attachment.id);
-    screenshotCache.set(attachment.id, { buffer, contentType, at: Date.now() });
+    cacheScreenshot(attachment.id, { buffer, contentType, at: Date.now() });
     res.setHeader('content-type', contentType);
     res.setHeader('cache-control', 'private, max-age=600');
     res.send(buffer);

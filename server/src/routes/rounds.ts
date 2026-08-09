@@ -315,16 +315,25 @@ async function packInput(roundId: string) {
 
   // Embed JIRA screenshots as data URIs. One unreachable image must never stop
   // the pack being generated, so each failure is skipped.
+  //
+  // Fetched a few at a time rather than one after another: a thirty-ticket
+  // round was thirty sequential round-trips to JIRA, which is long enough for
+  // the browser to give up on the download.
   const screenshots: Record<string, string> = {};
-  for (const ticket of tickets) {
-    if (!ticket.screenshotAttachmentId) continue;
-    try {
-      const { buffer, contentType } = await fetchAttachment(ticket.screenshotAttachmentId);
-      screenshots[ticket.id] = `data:${contentType};base64,${buffer.toString('base64')}`;
-    } catch {
-      // no screenshot for this ticket
+  const withImages = tickets.filter((ticket) => ticket.screenshotAttachmentId);
+  let next = 0;
+  const fetchWorker = async (): Promise<void> => {
+    while (next < withImages.length) {
+      const ticket = withImages[next++];
+      try {
+        const { buffer, contentType } = await fetchAttachment(ticket.screenshotAttachmentId);
+        screenshots[ticket.id] = `data:${contentType};base64,${buffer.toString('base64')}`;
+      } catch {
+        // no screenshot for this ticket
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, withImages.length) }, fetchWorker));
 
   return { db, round, tickets, categories, config: config.pack, screenshots };
 }

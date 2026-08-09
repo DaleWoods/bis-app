@@ -1,6 +1,13 @@
 import { Db } from '../db/index.js';
 import { SubmissionInput } from '../domain/scoring.js';
-import { RELEVANCE_VALUES, Relevance, ScoringConfig, canScore } from '../domain/types.js';
+import {
+  RELEVANCE_REQUIRING_REASON,
+  RELEVANCE_REQUESTOR_ONLY,
+  RELEVANCE_VALUES,
+  Relevance,
+  ScoringConfig,
+  canScore,
+} from '../domain/types.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { listCategories } from './configService.js';
@@ -92,15 +99,6 @@ export async function listMemberSubmissions(db: Db, roundId: string, memberId: s
   return attachScores(db, rows);
 }
 
-export async function listTicketSubmissions(db: Db, roundId: string, ticketId: string): Promise<Submission[]> {
-  const rows = await db.all<SubmissionRow>(
-    `SELECT s.*, m.name AS member_name FROM submissions s JOIN members m ON m.id = s.member_id
-     WHERE s.round_id = ? AND s.ticket_id = ?`,
-    [roundId, ticketId],
-  );
-  return attachScores(db, rows);
-}
-
 /** Shape the §10 calculation consumes. */
 export function toScoringInput(submission: Submission): SubmissionInput {
   return {
@@ -162,14 +160,17 @@ export async function saveSubmission(
   }
 
   // §8: only the original requestor may say a ticket isn't relevant today.
-  if (payload.relevance === 'NO_NOT_RELEVANT_TODAY') {
+  // Driven by the constant rather than a literal, so adding an answer to the
+  // list in domain/types.ts is enough - these rules were already declared there
+  // and enforced separately here, which is how the two drift apart.
+  if (RELEVANCE_REQUESTOR_ONLY.includes(payload.relevance)) {
     const requestor = (ticket.originalRequestor ?? '').trim().toLowerCase();
     if (!requestor || requestor !== member.email.trim().toLowerCase()) {
       throw new HttpishError(403, "Only the original requestor can answer \"This ticket isn't relevant today\"");
     }
   }
 
-  const needsReason = payload.relevance === 'NO_CLOSE' || payload.relevance === 'NO_NOT_RELEVANT_TODAY';
+  const needsReason = RELEVANCE_REQUIRING_REASON.includes(payload.relevance);
   if (needsReason && !(payload.closureReason ?? '').trim()) {
     throw new HttpishError(400, 'A reason is required for this answer');
   }

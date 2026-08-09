@@ -23,16 +23,6 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
-/** Used by the Settings screen's "Send a test email" button. */
-export async function verifyConnection(): Promise<{ ok: boolean; error?: string }> {
-  try {
-    await getTransporter().verify();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: explain(err) };
-  }
-}
-
 /**
  * Node's network errors name the syscall, not the mistake. Translate the ones
  * a misconfiguration actually produces into something a coordinator can act on.
@@ -76,9 +66,4 @@ export async function sendViaSmtp(message: MailMessage): Promise<MailOutcome> {
   } catch (err) {
     return { status: 'FAILED', error: explain(err) };
   }
-}
-
-/** Reset between config changes, so new credentials take effect immediately. */
-export function resetTransport(): void {
-  transporter = null;
 }
