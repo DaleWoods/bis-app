@@ -946,3 +946,39 @@ th.plain {
 .metric.over {
   color: var(--danger);
 }
+
+/* --- User guide -------------------------------------------------------- */
+
+/*
+ * Prose, so it gets a reading measure rather than the full dashboard width.
+ * Tables and the contents list stay full width inside it.
+ */
+.guide-section p,
+.guide-section li {
+  max-width: 68ch;
+}
+.guide-section ul,
+.guide-section ol {
+  padding-left: 1.2rem;
+}
+.guide-section li {
+  margin-bottom: 0.4rem;
+}
+.guide-section table {
+  margin-top: 0.5rem;
+}
+.guide-toc ul {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+}
+.guide-toc a {
+  color: var(--navy);
+}
+/* The header is not sticky, but an anchor jump still reads better with room. */
+.guide-section {
+  scroll-margin-top: 1rem;
+}
