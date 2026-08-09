@@ -36,10 +36,10 @@ export const RELEVANCE_LABELS: Record<Relevance, string> = {
   NO_NOT_RELEVANT_TODAY: "No – This ticket isn't relevant today",
 };
 
-/** Answers that require a reason for closure / parking (§8). */
+/** §8: answers that must carry a reason. Read by submissionService. */
 export const RELEVANCE_REQUIRING_REASON: Relevance[] = ['NO_CLOSE', 'NO_NOT_RELEVANT_TODAY'];
 
-/** Only the original requestor may say "isn't relevant today" (§8). */
+/** §8: only the ticket's original requestor may give this answer. */
 export const RELEVANCE_REQUESTOR_ONLY: Relevance[] = ['NO_NOT_RELEVANT_TODAY'];
 
 export type PriorityBand = 'HIGH' | 'MEDIUM' | 'LOW';

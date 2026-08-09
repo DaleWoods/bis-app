@@ -127,7 +127,8 @@ function getClient(): Anthropic {
   return client;
 }
 
-/** Reset after a config change so a new key takes effect without a restart. */
+/** Drops the memoised client. A test seam: the key comes from the
+ *  environment, so a running instance never changes it. */
 export function resetAiClient(): void {
   client = null;
 }

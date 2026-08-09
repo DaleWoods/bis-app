@@ -8,7 +8,15 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Baseline schema plus any incremental files in `migrations/`.
- * Every statement is idempotent, so running this on boot is safe.
+ *
+ * A file runs once: `schema_migrations` records what has been applied, which is
+ * what makes running this on every boot safe. The statements themselves are not
+ * all idempotent - an incremental file uses bare `ALTER TABLE ADD COLUMN`,
+ * which fails on a second run - so each file is applied inside a transaction
+ * along with the row that records it. Either the whole file lands and is
+ * marked, or none of it does and the next boot retries it cleanly. Without that
+ * a file that failed half way through could never be applied again: the retry
+ * would die on the statement that had already succeeded.
  */
 export async function migrate(db: Db): Promise<string[]> {
   const applied: string[] = [];
@@ -34,8 +42,10 @@ export async function migrate(db: Db): Promise<string[]> {
   for (const file of files) {
     const existing = await db.get<{ name: string }>('SELECT name FROM schema_migrations WHERE name = ?', [file.name]);
     if (existing) continue;
-    await db.exec(file.sql);
-    await db.run('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)', [file.name, nowIso()]);
+    await db.tx(async (tx) => {
+      await tx.exec(file.sql);
+      await tx.run('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)', [file.name, nowIso()]);
+    });
     applied.push(file.name);
   }
 

@@ -7,7 +7,7 @@ import { nowIso } from '../util/time.js';
 import { AuditActor, audit } from './auditService.js';
 import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound } from './roundService.js';
-import { computeRoundResults } from './resultService.js';
+import { roundResults } from './resultService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
 import { draftCardsFor, draftToTicketFields } from './cardDraftService.js';
 
@@ -119,7 +119,9 @@ export async function writeBackRound(
     );
   }
 
-  const results = await computeRoundResults(db, round, { config: config.scoring });
+  // Frozen once the round is finalised, so what goes to JIRA is the number
+  // the committee actually landed on, not a recalculation of it.
+  const results = await roundResults(db, round, { config: config.scoring });
   const entries: WriteBackEntry[] = [];
 
   for (const { ticket, aggregate } of results) {

@@ -24,6 +24,22 @@ function getTransporter(): Transporter {
 }
 
 /**
+ * Check the connection and credentials without sending anything.
+ *
+ * Used by the Settings screen's "Send a test email" button, so a refused login
+ * reads differently from a refused recipient - they need completely different
+ * fixes and both used to surface as "send failed".
+ */
+export async function verifyConnection(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getTransporter().verify();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: explain(err) };
+  }
+}
+
+/**
  * Node's network errors name the syscall, not the mistake. Translate the ones
  * a misconfiguration actually produces into something a coordinator can act on.
  */

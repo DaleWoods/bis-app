@@ -47,40 +47,55 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
     Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
   >([]);
 
-  const load = useCallback(async () => {
-    try {
+  /**
+   * The four requests the page needs, in flight together and all awaited.
+   *
+   * They used to be fired without awaiting, so switching rounds quickly left
+   * the previous round's replies to land in this round's state. `cancelled`
+   * closes that: a load whose round is no longer on screen resolves and is
+   * discarded.
+   */
+  const load = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
       // Integration status drives the notices below, so the coordinator knows
       // what a button will actually do before pressing it.
-      api
-        .config()
-        .then(({ integrations, config }) => {
-          setIntegrations(integrations);
-          setDiscussionThreshold(config.scoring.stdDevDiscussionThreshold);
-        })
-        .catch(() => setIntegrations(null));
-      api
-        .emails(roundId)
-        .then(({ emails }) => setEmails(emails))
-        .catch(() => setEmails([]));
-      api
-        .automationStatus(roundId)
-        .then(setAutomation)
-        .catch(() => setAutomation(null));
-      const data = await api.round(roundId);
-      setRound(data.round);
-      setTickets(data.tickets);
-      setCategories(data.categories);
-      setProgress(data.progress ?? []);
-      setResults(data.results ?? []);
-      setSubmissions(data.submissions ?? []);
+      const [config, emailLog, automationStatus, data] = await Promise.all([
+        api.config().catch(() => null),
+        api.emails(roundId).catch(() => null),
+        api.automationStatus(roundId).catch(() => null),
+        api.round(roundId).then(
+          (value) => ({ ok: true as const, value }),
+          (err: unknown) => ({ ok: false as const, err }),
+        ),
+      ]);
+      if (!isCurrent()) return;
+
+      setIntegrations(config?.integrations ?? null);
+      if (config) setDiscussionThreshold(config.config.scoring.stdDevDiscussionThreshold);
+      setEmails(emailLog?.emails ?? []);
+      setAutomation(automationStatus ?? null);
+
+      if (!data.ok) {
+        setError(data.err instanceof Error ? data.err.message : 'Could not load the round');
+        return;
+      }
+      setRound(data.value.round);
+      setTickets(data.value.tickets);
+      setCategories(data.value.categories);
+      setProgress(data.value.progress ?? []);
+      setResults(data.value.results ?? []);
+      setSubmissions(data.value.submissions ?? []);
       setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load the round');
-    }
-  }, [roundId]);
+    },
+    [roundId],
+  );
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    load(() => !cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   async function run(label: string, action: () => Promise<string>) {

@@ -128,3 +128,38 @@ describe('describeNext', () => {
     expect(describeNext(round({ status: 'FINALISED' }), on, now)).toMatch(/Nothing further is automated/);
   });
 });
+
+/**
+ * The cadence is configured in a named timezone, so it has to be *shown* in
+ * that timezone too. It used to be formatted with the server's clock, which on
+ * Render is UTC - so a coordinator who set 09:00 was told 08:00 for the half of
+ * the year Britain is on BST.
+ */
+describe('cadence times are shown in the configured timezone', () => {
+  const cadence = {
+    ...DEFAULT_CADENCE_CONFIG,
+    distributionDayOfWeek: 1,
+    distributionHour: 9,
+    cutOffDayOfWeek: 4,
+    cutOffHour: 17,
+    timezone: 'Europe/London',
+  };
+  const automation = { ...DEFAULT_AUTOMATION_CONFIG, enabled: true, distribute: true };
+
+  it('says 09:00 when the cadence says 09:00, over BST', () => {
+    const from = new Date('2026-07-01T00:00:00Z');
+    const { opensAt } = nextRoundWindow(cadence, from);
+    // 09:00 in London is 08:00Z in July - the calculation was always right.
+    expect(opensAt.toISOString()).toBe('2026-07-06T08:00:00.000Z');
+
+    const draft = round({ status: 'DRAFT', cutOffAt: '2026-07-09T16:00:00.000Z', opensAt: opensAt.toISOString() });
+
+    expect(describeNext(draft, automation, from, cadence.timezone)).toContain('09:00');
+  });
+
+  it('labels the week by the London date, not the UTC one', () => {
+    // 00:30 on Monday in London is 23:30 on Sunday in UTC.
+    const mondayEarly = new Date('2026-07-06T23:30:00Z');
+    expect(weekLabelFor(mondayEarly, 'Europe/London')).toBe('Week commencing 07 Jul 2026');
+  });
+});

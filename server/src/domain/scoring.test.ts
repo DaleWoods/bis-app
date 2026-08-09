@@ -319,3 +319,27 @@ describe('§10.4 effort mapping', () => {
     expect(resolveEffort({ backendPokerScore: 13, frontendPokerScore: null, manualEffort: null }, config)).toBe(13);
   });
 });
+
+/**
+ * "To Close?" outranks everything below it in the §10.3 status gate, so a
+ * ticket the committee wants closed must not also be flagged ready for
+ * estimation - that flag is what transitions the issue in JIRA when
+ * transitionOnFinalise is on, so the badge and the action disagreed.
+ */
+describe('a ticket the committee wants closed', () => {
+  it('is not sent for estimation, however well it scored', () => {
+    const result = aggregate([70, 70, 70, 70, 70], 5, [submission(0, { relevance: 'NO_CLOSE' })]);
+
+    expect(result.toClose).toBe(true);
+    expect(result.minSubmissionsMet).toBe(true);
+    expect(result.discussionRequired).toBe(false);
+    expect(result.sendForEstimation).toBe(false);
+    expect(result.statusLabel).toBe(STATUS_LABELS.TO_CLOSE);
+  });
+
+  it('still goes for estimation once nobody is asking to close it', () => {
+    const result = aggregate([70, 70, 70, 70, 70], 5);
+    expect(result.toClose).toBe(false);
+    expect(result.sendForEstimation).toBe(true);
+  });
+});

@@ -7,6 +7,7 @@ import { deactivateCategory, getAppConfig, listCategories, restoreDefaultCategor
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
 import { suggestFieldIds } from '../integrations/jira.js';
 import { providerLabel, sendMail } from '../integrations/mail.js';
+import { verifyConnection } from '../integrations/smtp.js';
 import { resetOperationalData } from '../services/adminService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 import { env } from '../config/env.js';
@@ -79,6 +80,17 @@ router.post(
         error: 'No email provider configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS and EMAIL_FROM.',
       });
       return;
+    }
+
+    // Check the connection and credentials before sending. A refused login and
+    // a refused recipient both surface as "send failed" otherwise, and they
+    // need completely different fixes.
+    if (env.email.provider === 'smtp') {
+      const check = await verifyConnection();
+      if (!check.ok) {
+        res.status(502).json({ error: check.error, provider: providerLabel() });
+        return;
+      }
     }
 
     const outcome = await sendMail({

@@ -8,7 +8,7 @@ import { getAppConfig } from './configService.js';
 import { sendDistribution, sendReminders } from './emailService.js';
 import { importQueue, writeBackRound } from './jiraService.js';
 import { listActiveScorers } from './memberService.js';
-import { computeRoundResults, snapshotRoundResults } from './resultService.js';
+import { roundResults, snapshotRoundResults } from './resultService.js';
 import {
   Round,
   addTicketToRound,
@@ -166,9 +166,22 @@ export function nextRoundWindow(cadence: CadenceConfig, from: Date = new Date())
   return { opensAt, cutOffAt };
 }
 
-/** "Week commencing 07 Aug 2026", matching what a coordinator would type. */
-export function weekLabelFor(date: Date): string {
-  return `Week commencing ${date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+/**
+ * "Week commencing 07 Aug 2026", matching what a coordinator would type.
+ *
+ * Formatted in the cadence timezone rather than the server's. A Monday-morning
+ * opening in British Summer Time is Sunday evening in UTC - which is what
+ * Render runs on - so the server clock would otherwise label the round with the
+ * wrong week.
+ */
+export function weekLabelFor(date: Date, timezone = 'Europe/London'): string {
+  const label = date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: timezone,
+  });
+  return `Week commencing ${label}`;
 }
 
 // --- The cycle -------------------------------------------------------------
@@ -213,7 +226,7 @@ async function maybeCreateNextRound(
   if (live) return null;
 
   const { opensAt, cutOffAt } = nextRoundWindow(config.cadence, now);
-  const weekLabel = weekLabelFor(opensAt);
+  const weekLabel = weekLabelFor(opensAt, config.cadence.timezone);
   if (rounds.some((r) => r.weekLabel === weekLabel)) return null;
 
   const round = await createRound(db, {
@@ -257,7 +270,7 @@ async function rollOverUnscored(db: Db, rounds: Round[], target: Round, config: 
   const previous = rounds.filter((r) => r.status === 'FINALISED').sort((a, b) => b.cutOffAt.localeCompare(a.cutOffAt))[0];
   if (!previous) return 0;
 
-  const results = await computeRoundResults(db, previous, { config: config.scoring });
+  const results = await roundResults(db, previous, { config: config.scoring });
   let carried = 0;
   for (const { ticket, aggregate } of results) {
     if (aggregate.minSubmissionsMet || aggregate.toClose) continue;
@@ -305,8 +318,11 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
           const opened = await setRoundStatus(db, round.id, 'OPEN');
           const members = await listActiveScorers(db);
           const results = await sendDistribution(db, opened, tickets, members);
-          await markDistributed(db, round.id);
           const sent = results.filter((r) => r.status === 'SENT').length;
+          // Only a real send counts as distribution. With email off the
+          // messages are composed and logged, and the round should not claim
+          // the committee has been told.
+          if (sent > 0) await markDistributed(db, round.id);
           const outcome = `Opened and emailed ${sent} of ${results.length} member(s)`;
           await record(db, round.id, 'distribute', outcome);
           await audit(db, AUTOMATION_ACTOR, 'round.distribute', 'round', round.id, { sent, automated: true });
@@ -449,12 +465,28 @@ async function failed(
  * What automation will do to this round next, in the coordinator's words. Shown
  * on the round page so the cycle is never a surprise.
  */
-export function describeNext(round: Round, automation: AutomationConfig, now: Date = new Date()): string {
+export function describeNext(
+  round: Round,
+  automation: AutomationConfig,
+  now: Date = new Date(),
+  timezone = 'Europe/London',
+): string {
   if (!automation.enabled) return 'Automation is off — run each step yourself from Round actions.';
   if (round.automationPaused) return 'Automation is paused for this round. Every step is yours to run.';
 
   const cutOff = new Date(round.cutOffAt);
-  const when = (date: Date) => date.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // In the cadence timezone, so a coordinator who set 09:00 is told 09:00.
+  // Without this the times are rendered in the server's zone, which on Render
+  // is UTC - an hour out from the configured cadence for half the year.
+  const when = (date: Date) =>
+    date.toLocaleString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    });
 
   if (round.status === 'DRAFT') {
     if (!automation.distribute) return 'Opening and distributing is switched off — do it from Round actions.';

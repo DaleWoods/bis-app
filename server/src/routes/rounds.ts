@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
+import { env } from '../config/env.js';
 import { requireAuth, requireCoordinator } from '../auth/middleware.js';
 import { STREAMS, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { getAppConfig, listCategories } from '../services/configService.js';
 import { listEmailLog, sendDistribution, sendReminders } from '../services/emailService.js';
 import { listActiveScorers, getMember } from '../services/memberService.js';
-import { buildFeedbackView, computeRoundResults, resultsToCsv, snapshotRoundResults } from '../services/resultService.js';
+import { buildFeedbackView, resultsToCsv, roundResults, snapshotRoundResults } from '../services/resultService.js';
 import {
   addTicketToRound,
   createRound,
@@ -87,7 +88,7 @@ router.get(
     if (isCoordinator(req.member!.role)) {
       const scorers = await listActiveScorers(db);
       payload.progress = await roundProgress(db, round.id, scorers, tickets.length);
-      payload.results = await computeRoundResults(db, round);
+      payload.results = await roundResults(db, round);
       payload.submissions = await listRoundSubmissions(db, round.id);
     }
     res.json(payload);
@@ -143,7 +144,7 @@ router.get(
     }
     const config = await getAppConfig(db);
     res.json({
-      next: describeNext(round, config.automation),
+      next: describeNext(round, config.automation, new Date(), config.cadence.timezone),
       paused: round.automationPaused,
       enabled: config.automation.enabled,
       log: await listAutomationLog(db, round.id),
@@ -262,7 +263,7 @@ router.get(
       res.status(403).json({ error: 'Use the feedback view for round results' });
       return;
     }
-    res.json({ round, results: await computeRoundResults(db, round) });
+    res.json({ round, results: await roundResults(db, round) });
   }),
 );
 
@@ -338,6 +339,15 @@ async function packInput(roundId: string) {
   return { db, round, tickets, categories, config: config.pack, screenshots };
 }
 
+/**
+ * A pack holds the same ticket content the round page does, so it answers to
+ * the same rule: a draft round is the coordinator's working area until it is
+ * distributed. Without this the deck was a way round the 403 on GET /rounds/:id.
+ */
+function packVisible(req: Parameters<typeof requireAuth>[0], round: { status: string }): boolean {
+  return isCoordinator(req.member!.role) || round.status !== 'DRAFT';
+}
+
 router.get(
   '/rounds/:id/pack.pptx',
   requireAuth,
@@ -345,6 +355,10 @@ router.get(
     const input = await packInput(req.params.id);
     if (!input) {
       res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    if (!packVisible(req, input.round)) {
+      res.status(403).json({ error: 'This round has not been distributed yet' });
       return;
     }
     const buffer = await buildPptx(input);
@@ -362,6 +376,10 @@ router.get(
     const input = await packInput(req.params.id);
     if (!input) {
       res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    if (!packVisible(req, input.round)) {
+      res.status(403).json({ error: 'This round has not been distributed yet' });
       return;
     }
     const buffer = await buildPdf(input);
@@ -393,7 +411,9 @@ router.post(
     if ((open ?? true) && round.status === 'DRAFT') round = await setRoundStatus(db, round.id, 'OPEN');
 
     let attachment;
-    if (attachPack) {
+    // Building the deck takes real time, and an attachment on a message that
+    // will only be logged is work nobody sees.
+    if (attachPack && env.email.canSend) {
       const input = await packInput(round.id);
       if (input) {
         const buffer = await buildPptx(input);
@@ -407,7 +427,10 @@ router.post(
 
     const recipients = await listActiveScorers(db);
     const results = await sendDistribution(db, round, tickets, recipients, attachment);
-    await markDistributed(db, round.id);
+    // Only stamp the round as distributed if something actually went out. With
+    // email switched off every result is SUPPRESSED, and stamping it anyway put
+    // a "Distributed" badge on a round nobody had been told about.
+    if (results.some((r) => r.status === 'SENT')) await markDistributed(db, round.id);
     await audit(db, actorOf(req), 'round.distribute', 'round', round.id, {
       recipients: recipients.length,
       sent: results.filter((r) => r.status === 'SENT').length,

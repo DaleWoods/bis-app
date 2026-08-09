@@ -56,7 +56,10 @@ export interface TicketAggregate {
   priorityRatio: number | null;
   priorityBand: PriorityBand | null;
   statusLabel: StatusLabel;
-  /** ≥ MIN_SUBMISSIONS valid submissions and no discussion required (§10.3). */
+  /**
+   * ≥ MIN_SUBMISSIONS valid submissions, no discussion required, and nobody
+   * asking for it to be closed (§10.3).
+   */
   sendForEstimation: boolean;
   minSubmissionsMet: boolean;
   categoryAverages: CategoryAggregate[];
@@ -194,7 +197,11 @@ export function aggregateTicket(input: AggregateInput, config: ScoringConfig): T
       { responsesCount, toClose, effortPresent, discussionRequired, priorityRatio },
       config,
     ),
-    sendForEstimation: minSubmissionsMet && !discussionRequired,
+    // "To Close?" outranks everything below it in the §10.3 status gate, so a
+    // ticket the committee wants closed must not also be marked ready for
+    // estimation - with transitionOnFinalise on, that flag is what moves the
+    // issue on in JIRA, and the badge and the action disagreed.
+    sendForEstimation: minSubmissionsMet && !discussionRequired && !toClose,
     minSubmissionsMet,
     categoryAverages,
     totalsDistribution: [...totals].sort((a, b) => a - b),

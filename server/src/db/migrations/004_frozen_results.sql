@@ -1,0 +1,15 @@
+-- Finalising a round has always written a snapshot to ticket_results, and
+-- nothing ever read it back: every consumer recomputed from live submissions.
+-- So a "frozen" round was not frozen at all - excluding a submission, editing a
+-- poker score or changing a threshold in Settings silently changed a finalised
+-- round's numbers, including what a later JIRA write-back sent.
+--
+-- The individual columns cannot rebuild the whole aggregate on their own (they
+-- have no submissionsCount, no minSubmissionsMet, no per-relevance counts), so
+-- the aggregate is stored whole. The columns stay as they are: they are what
+-- makes a snapshot readable in SQL.
+--
+-- Rows written before this column existed have '' and are treated as no
+-- snapshot at all, which falls back to live computation - the previous
+-- behaviour, for the rounds that were finalised under it.
+ALTER TABLE ticket_results ADD COLUMN aggregate_json TEXT NOT NULL DEFAULT '';

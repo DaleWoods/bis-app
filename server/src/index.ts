@@ -7,6 +7,7 @@ import { assertProductionSafety, env } from './config/env.js';
 import { closeDb, getDb } from './db/index.js';
 import { migrate } from './db/migrate.js';
 import { attachMember } from './auth/middleware.js';
+import { rateLimit, securityHeaders } from './auth/hardening.js';
 import { ensureDefaultConfig, ensureSeedCategories } from './services/configService.js';
 import { seedBase, seedDemo } from './db/seed.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
@@ -60,9 +61,12 @@ export async function createApp() {
   }
 
   const app = express();
-  app.set('trust proxy', 1); // Azure App Service sits behind a reverse proxy
+  // Naming the framework and its version only helps somebody choosing an exploit.
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1); // Render terminates TLS at its edge proxy
   app.use(express.json({ limit: '4mb' }));
   app.use(cookieParser());
+  app.use(securityHeaders);
   app.use(
     cors({
       origin: env.publicWebOrigin,
@@ -73,7 +77,9 @@ export async function createApp() {
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, db: db.dialect, auth: env.auth.mode }));
 
-  app.use('/auth', authRoutes);
+  // Sign-in is the front door, and in name/email mode it is the whole lock.
+  // Everything else is behind a session, so the throttle goes here only.
+  app.use('/auth', rateLimit({ windowMs: 60_000, max: 20 }), authRoutes);
   app.use('/api', memberRoutes);
   app.use('/api', configRoutes);
   app.use('/api', ticketRoutes);

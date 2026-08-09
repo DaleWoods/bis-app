@@ -66,10 +66,14 @@ function map(row: SubmissionRow, scores: Record<string, number>): Submission {
 
 async function attachScores(db: Db, rows: SubmissionRow[]): Promise<Submission[]> {
   if (!rows.length) return [];
+  // Scoped to the submissions being mapped. It used to select every score in
+  // the round, so one committee member opening their own scoring page pulled
+  // back the whole committee's answers to throw most of them away.
+  const placeholders = rows.map(() => '?').join(', ');
   const scoreRows = await db.all<{ submission_id: string; category_id: string; score: number }>(
-    `SELECT ss.submission_id, ss.category_id, ss.score FROM submission_scores ss
-     JOIN submissions s ON s.id = ss.submission_id WHERE s.round_id = ?`,
-    [rows[0].round_id],
+    `SELECT submission_id, category_id, score FROM submission_scores
+     WHERE submission_id IN (${placeholders})`,
+    rows.map((row) => row.id),
   );
   const byId = new Map<string, Record<string, number>>();
   for (const score of scoreRows) {

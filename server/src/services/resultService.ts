@@ -57,8 +57,9 @@ export async function snapshotRoundResults(db: Db, round: Round): Promise<Ticket
       await tx.run(
         `INSERT INTO ticket_results (
           round_id, ticket_id, responses_count, business_score, std_dev, discussion_required, to_close,
-          effort, priority_ratio, priority_band, status_label, send_for_estimation, category_averages, computed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          effort, priority_ratio, priority_band, status_label, send_for_estimation, category_averages,
+          aggregate_json, computed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           round.id,
           ticket.id,
@@ -78,12 +79,72 @@ export async function snapshotRoundResults(db: Db, round: Round): Promise<Ticket
             excludedCounts: aggregate.excludedCounts,
             businessScoreRaw: aggregate.businessScoreRaw,
           }),
+          // The columns above are what makes a snapshot readable in SQL; this
+          // is what makes it replayable. Reconstructing an aggregate from the
+          // columns alone is not possible - they carry no submissionsCount and
+          // no minSubmissionsMet.
+          JSON.stringify(aggregate),
           computedAt,
         ],
       );
     }
   });
   return results;
+}
+
+/**
+ * The frozen results, or null if this round has none.
+ *
+ * Null covers two cases that behave identically: a round that was never
+ * finalised, and one finalised before the snapshot was stored whole (rows
+ * written before migration 004). Both fall back to live computation.
+ */
+export async function readSnapshot(db: Db, round: Round): Promise<TicketResult[] | null> {
+  const rows = await db.all<{ ticket_id: string; aggregate_json: string }>(
+    'SELECT ticket_id, aggregate_json FROM ticket_results WHERE round_id = ?',
+    [round.id],
+  );
+  if (!rows.length) return null;
+
+  const frozen = new Map<string, TicketAggregate>();
+  for (const row of rows) {
+    if (!row.aggregate_json) continue;
+    try {
+      frozen.set(row.ticket_id, JSON.parse(row.aggregate_json) as TicketAggregate);
+    } catch {
+      // A snapshot we cannot read is not a snapshot.
+    }
+  }
+  if (!frozen.size) return null;
+
+  // Joined to the tickets as they are now: what is frozen is the scoring, not
+  // the card content. A ticket added to the round after it was finalised has no
+  // frozen aggregate and is left out rather than shown with invented numbers.
+  const tickets = await listRoundTickets(db, round.id);
+  return tickets.flatMap((ticket) => {
+    const aggregate = frozen.get(ticket.id);
+    return aggregate ? [{ ticket, aggregate }] : [];
+  });
+}
+
+/**
+ * The results to show and act on: frozen once the round is finalised, live
+ * before that.
+ *
+ * Every consumer goes through here. Recomputing a finalised round is what let
+ * its numbers drift after the fact - excluding a submission or moving a
+ * threshold would quietly rewrite a result that had already gone to JIRA.
+ */
+export async function roundResults(
+  db: Db,
+  round: Round,
+  options: { config?: ScoringConfig; categories?: CategoryDef[] } = {},
+): Promise<TicketResult[]> {
+  if (round.status === 'FINALISED') {
+    const snapshot = await readSnapshot(db, round);
+    if (snapshot) return snapshot;
+  }
+  return computeRoundResults(db, round, options);
 }
 
 /**
@@ -109,7 +170,7 @@ export interface FeedbackTicket {
 }
 
 export async function buildFeedbackView(db: Db, round: Round): Promise<FeedbackTicket[]> {
-  const results = await computeRoundResults(db, round);
+  const results = await roundResults(db, round);
   const submissions = await listRoundSubmissions(db, round.id);
 
   const notesByTicket = new Map<string, string[]>();
@@ -149,7 +210,7 @@ function csvCell(value: unknown): string {
 /** §17: results export to CSV, independent of JIRA write-back. */
 export async function resultsToCsv(db: Db, round: Round): Promise<string> {
   const categories = await listCategories(db);
-  const results = await computeRoundResults(db, round);
+  const results = await roundResults(db, round);
 
   const header = [
     'Round',

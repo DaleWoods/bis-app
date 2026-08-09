@@ -65,7 +65,16 @@ describe('the automated cycle', () => {
     await runDueAutomation(db, new Date('2026-08-06T08:01:00Z'));
     const opened = await getRound(db, round.id);
     expect(opened?.status).toBe('OPEN');
-    expect(opened?.distributionSentAt).not.toBeNull();
+
+    // Opened, but NOT stamped as distributed: no email provider is configured
+    // here, so every message was composed and suppressed. Stamping it anyway
+    // put a "Distributed" badge on a round the committee had never been told
+    // about, and flipped the button to "Re-send to committee".
+    expect(opened?.distributionSentAt).toBeNull();
+
+    // The step still ran, and still says what it did.
+    const log = await listAutomationLog(db, round.id);
+    expect(log.find((entry) => entry.action === 'distribute')?.outcome).toContain('Opened and emailed 0');
   });
 
   it('closes at the cut-off and finalises after the grace period', async () => {
