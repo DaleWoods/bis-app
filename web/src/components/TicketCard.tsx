@@ -12,6 +12,12 @@ import { cardLines, labelsFor } from '../card';
  * The complaint was that the deck told nobody what a ticket actually was. The
  * answer is structure and a captioned screenshot, not more prose - every field
  * is still clipped to a length a committee member will read.
+ *
+ * On colour: one accent per card, taken from the kind of ticket. The three
+ * sections used to be red, amber and green in fixed order, which read as
+ * severity to everyone who saw it and encoded nothing - every card carried the
+ * same traffic light. The thing that actually varies between cards is whether
+ * this is a fault, a clumsy journey or a gap, so that is what is coloured.
  */
 
 function Bullets({ text }: { text: string }) {
@@ -53,30 +59,50 @@ export function TicketCard({ ticket, children }: { ticket: Ticket; children?: Re
     ? `/api/tickets/${ticket.id}/screenshot`
     : ticket.screenshotUrl || '';
 
-  const metadata: Array<[string, string]> = [
+  // The drafter puts what it could quantify into the impact chips, and those
+  // labels overlap with the metadata strip. Showing "Affects" twice on one card
+  // is the sort of thing that makes a screen look unconsidered, so the strip
+  // yields to the chips rather than repeating them.
+  const claimed = new Set(
+    facts.map((fact) => fact.slice(0, Math.max(fact.indexOf(':'), 0)).trim().toLowerCase()).filter(Boolean),
+  );
+  const metadata = ([
     ['Raised by', ticket.stakeholder],
     ['Since', formatDate(ticket.createdDate)],
     ['Affects', ticket.affects || ticket.siteAffected],
     ['Workaround', ticket.workaround || 'None'],
-  ];
+  ] as Array<[string, string]>).filter(
+    ([label, value]) => value && value !== '—' && !claimed.has(label.toLowerCase()),
+  );
 
   return (
-    <article className="ticket-card" aria-labelledby={`ticket-${ticket.id}`}>
+    <article
+      className="ticket-card"
+      data-kind={ticket.cardKind || 'PROBLEM'}
+      aria-labelledby={`ticket-${ticket.id}`}
+    >
       <header>
-        <h3 id={`ticket-${ticket.id}`}>
-          <span className="jira-id">{ticket.jiraId}</span> {ticket.title}
-        </h3>
-        <span className="badge kind">{labels.kind}</span>
+        <div className="head-line">
+          <span className="jira-id">{ticket.jiraId}</span>
+          <span className="badge kind">{labels.kind}</span>
+        </div>
+        <h3 id={`ticket-${ticket.id}`}>{ticket.title}</h3>
       </header>
 
       <div className="body">
         {ticket.execSummary ? <p className="nutshell">{ticket.execSummary}</p> : null}
 
-        <div className="card-columns">
+        {/* Without a screenshot the aside is a column of chips beside a void,
+            so the layout drops to one column and the figures run along the
+            foot instead. */}
+        <div className={`card-columns${screenshot ? '' : ' no-shot'}`}>
           <div className="narrative">
-            {sections.map((section) => (
+            {sections.map((section, index) => (
               <section className="panel" key={section.label}>
                 <h4>
+                  <span className="panel-step" aria-hidden="true">
+                    {index + 1}
+                  </span>
                   {section.label}
                   <span className="panel-hint">{section.hint}</span>
                 </h4>
@@ -85,16 +111,18 @@ export function TicketCard({ ticket, children }: { ticket: Ticket; children?: Re
             ))}
           </div>
 
-          {screenshot || facts.length ? (
+          {screenshot ? (
             <aside className="card-aside">
-              {screenshot ? (
-                <figure className="shot">
-                  <a href={screenshot} target="_blank" rel="noreferrer">
-                    <img src={screenshot} alt={ticket.screenshotCaption || `Screenshot for ${ticket.jiraId}`} loading="lazy" />
-                  </a>
-                  <figcaption>{ticket.screenshotCaption || 'Tap to enlarge'}</figcaption>
-                </figure>
-              ) : null}
+              <figure className="shot">
+                <a href={screenshot} target="_blank" rel="noreferrer">
+                  <img
+                    src={screenshot}
+                    alt={ticket.screenshotCaption || `Screenshot for ${ticket.jiraId}`}
+                    loading="lazy"
+                  />
+                </a>
+                <figcaption>{ticket.screenshotCaption || 'Tap to enlarge'}</figcaption>
+              </figure>
 
               {facts.length ? (
                 <div className="facts">
@@ -108,21 +136,32 @@ export function TicketCard({ ticket, children }: { ticket: Ticket; children?: Re
           ) : null}
         </div>
 
+        {!screenshot && facts.length ? (
+          <div className="facts facts-strip">
+            <h4>The numbers</h4>
+            <div className="facts-row">
+              {facts.map((fact, index) => (
+                <Chip fact={fact} key={index} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {ticket.panelBenefits ? (
           <p className="benefit">
             <span className="benefit-lead">{labels.benefits}</span> {ticket.panelBenefits}
           </p>
         ) : null}
 
-        <div className="chips">
-          {metadata
-            .filter(([, value]) => value && value !== '—')
-            .map(([label, value]) => (
+        {metadata.length ? (
+          <div className="chips">
+            {metadata.map(([label, value]) => (
               <span className="chip" key={label}>
                 <span className="chip-label">{label}</span> {value}
               </span>
             ))}
-        </div>
+          </div>
+        ) : null}
 
         {children}
       </div>

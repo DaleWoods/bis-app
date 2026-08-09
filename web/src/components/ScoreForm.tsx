@@ -19,6 +19,14 @@ interface Props {
   }) => Promise<void>;
 }
 
+/** How far along its own scale a score sits, for the slider's filled track. */
+function fillPercent(category: Category, value: number): number {
+  const span = category.scaleMax - category.scaleMin;
+  if (span <= 0) return 0;
+  const clamped = Math.min(Math.max(value, category.scaleMin), category.scaleMax);
+  return ((clamped - category.scaleMin) / span) * 100;
+}
+
 /**
  * The native in-app scoring form that replaces the Microsoft Form: the §8
  * relevance question first, then 0–10 for each category (§6), plus notes.
@@ -119,20 +127,33 @@ export function ScoreForm({
                   <label htmlFor={inputId} className="cat-name">
                     {category.name}
                     <span className="cat-desc">{category.description}</span>
-                    <span className="cat-desc">
-                      {category.scaleMin} = {category.zeroLabel} · {category.scaleMax} = {category.maxLabel}
-                    </span>
                   </label>
-                  <input
-                    id={inputId}
-                    type="range"
-                    min={category.scaleMin}
-                    max={category.scaleMax}
-                    step={1}
-                    value={scores[category.id] ?? 0}
-                    onChange={(event) => setScores({ ...scores, [category.id]: Number(event.target.value) })}
-                    aria-describedby={`${inputId}-out`}
-                  />
+                  {/* The ends of the scale belong at the ends of the slider.
+                      They used to be a third line of small print under every
+                      category name, seven times per ticket. */}
+                  <div className="score-slider">
+                    <input
+                      id={inputId}
+                      type="range"
+                      min={category.scaleMin}
+                      max={category.scaleMax}
+                      step={1}
+                      value={scores[category.id] ?? 0}
+                      /*
+                       * The filled part of the track is how a row of sliders
+                       * can be read at a glance. WebKit gives no equivalent of
+                       * Firefox's ::-moz-range-progress, so the proportion is
+                       * handed to CSS and painted as a gradient.
+                       */
+                      style={{ '--fill': `${fillPercent(category, scores[category.id] ?? 0)}%` } as React.CSSProperties}
+                      onChange={(event) => setScores({ ...scores, [category.id]: Number(event.target.value) })}
+                      aria-describedby={`${inputId}-out`}
+                    />
+                    <div className="scale-ends" aria-hidden="true">
+                      <span>{category.zeroLabel}</span>
+                      <span>{category.maxLabel}</span>
+                    </div>
+                  </div>
                   <output id={`${inputId}-out`} htmlFor={inputId}>
                     {scores[category.id] ?? 0}
                   </output>

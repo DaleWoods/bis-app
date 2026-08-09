@@ -265,8 +265,17 @@ th.num {
   border-color: var(--high);
 }
 
-/* --- Ticket card: the §7 slide, rendered in-app ------------------------ */
+/* --- Ticket card: the §7 slide, rendered in-app ------------------------
+ *
+ * One accent per card, taken from the kind of ticket. The three sections were
+ * red / amber / green in fixed order, which every reader took for severity and
+ * which encoded nothing - the same traffic light on every card. What actually
+ * differs between cards is whether this is a fault, a clumsy journey or a gap,
+ * so that is what carries the colour, and the sections are uniform and quiet.
+ */
 .ticket-card {
+  --accent: #b3261e;
+  --accent-soft: #fdf0ef;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -274,53 +283,74 @@ th.num {
   margin-bottom: 1.5rem;
   box-shadow: 0 1px 2px rgba(16, 34, 51, 0.05), 0 6px 18px rgba(16, 34, 51, 0.06);
 }
+.ticket-card[data-kind='IMPROVEMENT'] {
+  --accent: #9a6b00;
+  --accent-soft: #fdf6e6;
+}
+.ticket-card[data-kind='FEATURE'] {
+  --accent: #1f6f8b;
+  --accent-soft: #eef6f9;
+}
+
 .ticket-card > header {
-  background: linear-gradient(135deg, var(--navy) 0%, #2a6ea8 100%);
-  color: #fff;
-  padding: 0.85rem 1.1rem;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0.9rem 1.1rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+}
+.ticket-card > header .head-line {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 .ticket-card > header h3 {
   margin: 0;
-  font-size: 1.08rem;
+  font-size: 1.15rem;
   line-height: 1.35;
   letter-spacing: -0.01em;
-}
-.ticket-card > header .badge {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #fff;
-}
-.ticket-card .body {
-  padding: 1.1rem;
+  color: var(--ink);
 }
 .ticket-card > header .jira-id {
-  font-size: 0.78rem;
-  opacity: 0.75;
-  letter-spacing: 0.04em;
-  margin-right: 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
 }
 .ticket-card > header .badge.kind {
   white-space: nowrap;
   text-transform: uppercase;
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.ticket-card .body {
+  padding: 1.1rem;
 }
 
 /*
  * Narrative on the left, picture and figures on the right - the same split as
  * the slide, so the deck and the app read as one document. The picture gets a
  * third of the width because a captioned screenshot explains a broken carousel
- * faster than any three bullets can.
+ * faster than any three bullets can. With no picture there is nothing to put
+ * beside the narrative, so it goes full width instead of leaving a void.
  */
 .card-columns {
   display: grid;
   grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+}
+.card-columns.no-shot {
+  grid-template-columns: minmax(0, 1fr);
 }
 .card-columns:last-child {
   margin-bottom: 0;
@@ -332,7 +362,7 @@ th.num {
 }
 .narrative {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 .card-aside {
   display: grid;
@@ -347,16 +377,25 @@ th.num {
 }
 .facts h4 {
   margin: 0 0 0.1rem;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--navy);
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.facts-strip {
+  margin-top: 0.85rem;
+}
+.facts-strip .facts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 .fact {
   background: var(--panel-alt);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.3rem 0.55rem;
+  padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
   color: #33465a;
 }
@@ -369,9 +408,9 @@ th.num {
 /* "If we fix it, …" - the payoff line along the foot of the card. */
 .benefit {
   margin: 0.9rem 0 0.8rem;
-  padding: 0.55rem 0.8rem;
-  background: var(--panel-alt);
-  border-left: 3px solid #1a7f4b;
+  padding: 0.6rem 0.85rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
   border-radius: 0 8px 8px 0;
   font-size: 0.95rem;
   color: #14243a;
@@ -379,20 +418,18 @@ th.num {
 .benefit-lead {
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.72rem;
-  letter-spacing: 0.07em;
-  color: #1a7f4b;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--accent);
   margin-right: 0.4rem;
 }
 
 /* The one line a scorer must read. */
 .nutshell {
-  font-size: 1.12rem;
-  line-height: 1.5;
-  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  line-height: 1.55;
+  margin: 0 0 0.9rem;
   color: #14243a;
-  border-left: 3px solid var(--navy);
-  padding-left: 0.75rem;
 }
 
 .chips {
@@ -401,7 +438,7 @@ th.num {
   gap: 0.35rem;
 }
 .chip {
-  background: var(--panel-alt);
+  background: transparent;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.1rem 0.6rem;
@@ -437,39 +474,48 @@ th.num {
   font-style: italic;
 }
 
-/* Each section is colour-coded so the three are distinguishable at a glance,
-   and reads as a step through the story: what is happening -> who it hurts ->
-   what done looks like. */
+/*
+ * The three sections read as one step after another - what is happening, who
+ * it hurts, what done looks like - so they are numbered rather than coloured,
+ * and share one quiet treatment. Label and hint sit on a single line: the hint
+ * is three words and used to cost a whole row of its own on every section of
+ * every card.
+ */
 .panel {
   border: 1px solid var(--line);
-  border-top: 3px solid var(--panel-accent, var(--navy));
   border-radius: 10px;
-  overflow: hidden;
   background: #fff;
-  display: flex;
-  flex-direction: column;
-}
-.panel:nth-child(1) {
-  --panel-accent: #b3261e;
-}
-.panel:nth-child(2) {
-  --panel-accent: #9a6b00;
-}
-.panel:nth-child(3) {
-  --panel-accent: #1a7f4b;
+  padding: 0.6rem 0.75rem 0.65rem;
 }
 .panel h4 {
-  margin: 0;
+  margin: 0 0 0.3rem;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   background: transparent;
-  color: var(--panel-accent, var(--navy));
+  color: var(--ink);
   font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.55rem 0.7rem 0.2rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  padding: 0;
   text-align: left;
 }
+.panel-step {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
 .panel-hint {
-  display: block;
   font-weight: 400;
   font-size: 0.75rem;
   text-transform: none;
@@ -478,22 +524,23 @@ th.num {
 }
 .panel p {
   margin: 0;
-  padding: 0.45rem 0.7rem 0.7rem;
-  font-size: 0.9rem;
+  padding: 0;
+  font-size: 0.92rem;
 }
 .panel ul {
   margin: 0;
-  padding: 0.45rem 0.7rem 0.7rem 1.5rem;
-  font-size: 0.9rem;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.92rem;
 }
 .panel li {
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
 }
 .panel li:last-child {
   margin-bottom: 0;
 }
 .panel-empty {
   color: var(--muted);
+  font-style: italic;
 }
 .metadata {
   margin-top: 0.9rem;
@@ -536,15 +583,18 @@ legend {
 }
 .score-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.15rem;
 }
 .score-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 2fr) 3.5rem;
-  gap: 0.75rem;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 2fr) 3rem;
+  gap: 0.9rem;
   align-items: center;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px dashed var(--line);
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.score-row:last-child {
+  border-bottom: none;
 }
 @media (max-width: 720px) {
   .score-row {
@@ -559,18 +609,94 @@ legend {
   color: var(--muted);
   font-size: 0.82rem;
   display: block;
+  line-height: 1.35;
 }
+
+.score-slider {
+  display: grid;
+  gap: 0.15rem;
+}
+/* The ends of the scale, sized so they inform without competing. */
+.scale-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.scale-ends span:last-child {
+  text-align: right;
+}
+
+/*
+ * The slider is the one control on this page, and the browser default is a
+ * blue that belongs to no part of this app. Track and thumb are styled to the
+ * brand, with a thumb big enough to be a comfortable target.
+ */
 .score-row input[type='range'] {
   width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  height: 1.35rem;
+  margin: 0;
+  cursor: pointer;
 }
+.score-row input[type='range']::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--navy) 0 var(--fill, 0%),
+    #dbe3ec var(--fill, 0%) 100%
+  );
+}
+.score-row input[type='range']::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: #dbe3ec;
+}
+.score-row input[type='range']::-moz-range-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--navy);
+}
+.score-row input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--navy);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
+  margin-top: -0.35rem;
+}
+.score-row input[type='range']::-moz-range-thumb {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--navy);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
+}
+.score-row input[type='range']:disabled::-webkit-slider-thumb {
+  background: var(--muted);
+}
+.score-row input[type='range']:disabled::-moz-range-thumb {
+  background: var(--muted);
+}
+
 .score-row output {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  font-size: 1rem;
   text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.25rem 0;
-  background: #fff;
+  padding: 0.3rem 0;
+  background: var(--panel-alt);
+  color: var(--navy);
 }
 .total-line {
   font-weight: 700;
