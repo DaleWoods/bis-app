@@ -24,6 +24,13 @@ Two habits keep it honest:
 - **Derive from the code where you can.** The guide already reads `CARD_KINDS`
   and `labelsFor()` so the section labels cannot drift. Prefer that to retyping
   a list that will fall out of step.
+- **Never type a configurable number into the prose.** The category count, the
+  marks they run to, the minimum responses and the disagreement threshold are
+  all editable in Settings, so "the seven categories" or "above 16" is a
+  sentence that goes wrong the first time somebody edits them. The guide reads
+  them from `api.scoringModel()` — which every signed-in member can call, unlike
+  `api.config()`, which is coordinator-only and would show the committee the
+  shipped defaults. Thread new ones through the same way.
 
 The guide shows the scoring half to everyone and the running-it half only to
 coordinators. Put new content in whichever half its reader belongs to.

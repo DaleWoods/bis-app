@@ -1,4 +1,5 @@
-import { isCoordinator, type Member } from '../api';
+import { useEffect, useState } from 'react';
+import { api, isCoordinator, type Member, type ScoringModel } from '../api';
 import { Link } from '../router';
 import { CARD_KINDS, KIND_HINTS, labelsFor } from '../card';
 
@@ -13,6 +14,13 @@ import { CARD_KINDS, KIND_HINTS, labelsFor } from '../card';
  * KEEPING THIS HONEST: this page is part of the feature, not a description of
  * it. Any change to how the app behaves belongs here in the same commit, or the
  * guide quietly becomes a list of things that used to be true.
+ *
+ * Two things do that work rather than relying on anybody remembering. The
+ * section labels come from CARD_KINDS and labelsFor(). The categories, the
+ * marks they run to and the thresholds come from the scoring model at render
+ * time - they are editable data, so a sentence saying "the seven categories"
+ * or "above 16" is a sentence that goes wrong the first time somebody opens
+ * Settings. Never type one in; read it from `model`.
  */
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -28,6 +36,24 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 export function GuidePage({ member }: { member: Member }) {
   const coordinator = isCoordinator(member.role);
+  const [model, setModel] = useState<ScoringModel | null>(null);
+
+  // The scoring model, not the full configuration: every signed-in member can
+  // read it, and the configuration endpoint is coordinator-only - reading the
+  // numbers from there would have shown the committee the shipped defaults
+  // rather than this instance's settings.
+  useEffect(() => {
+    api
+      .scoringModel()
+      .then(setModel)
+      .catch(() => setModel(null));
+  }, []);
+
+  const categories = model?.categories.length ?? 7;
+  const maxMark = model?.categories[0]?.scaleMax ?? 10;
+  const maxTotal = model?.categories.reduce((sum, c) => sum + c.scaleMax, 0) ?? 70;
+  const minSubmissions = model?.thresholds.minSubmissions;
+  const spread = model?.thresholds.stdDevDiscussionThreshold;
 
   const contents: Array<[string, string]> = [
     ['scoring', 'Scoring a ticket'],
@@ -71,9 +97,10 @@ export function GuidePage({ member }: { member: Member }) {
           three short sections, usually a screenshot, and the numbers behind it.
         </p>
         <p>
-          For each ticket, answer the relevance question first, then — if you answered yes — give it a mark out of 10 in
-          each of the seven categories. <strong>0 means not affected at all; 10 means heavily affected.</strong> The
-          seven marks add up to a total out of 70.
+          For each ticket, answer the relevance question first, then — if you answered yes — give it a mark out of{' '}
+          {maxMark} in each of the {categories} categories.{' '}
+          <strong>0 means not affected at all; {maxMark} means heavily affected.</strong> The {categories} marks add up
+          to a total out of {maxTotal}.
         </p>
         <ul>
           <li>Score from your own team's point of view. You are not trying to guess the overall answer.</li>
@@ -106,7 +133,7 @@ export function GuidePage({ member }: { member: Member }) {
                   Yes
                 </th>
                 <td>The ticket is relevant and you can judge it.</td>
-                <td>Your seven scores count toward the ticket's business score.</td>
+                <td>Your {categories} scores count toward the ticket's business score.</td>
               </tr>
               <tr>
                 <th scope="row" className="plain">
@@ -139,15 +166,16 @@ export function GuidePage({ member }: { member: Member }) {
       </Section>
 
       <Section id="what-happens" title="What happens to your scores">
-        <p>Once the round closes, each ticket's seven-category totals are combined:</p>
+        <p>Once the round closes, each ticket's totals are combined:</p>
         <ul>
           <li>
             <strong>Business score</strong> — the average of everyone's totals who answered “Yes”, rounded to a whole
             number.
           </li>
           <li>
-            <strong>Spread</strong> — how far apart the answers were. A wide spread means the committee disagreed, and
-            the ticket is flagged <strong>Discussion needed</strong> and held back until it has been talked through.
+            <strong>Spread</strong> — how far apart the answers were. A wide spread
+            {spread === undefined ? '' : ` (above ${spread}, currently)`} means the committee disagreed, and the ticket
+            is flagged <strong>Discussion needed</strong> and held back until it has been talked through.
           </li>
           <li>
             <strong>Priority ratio</strong> — the business score divided by the development effort. That ratio, not the
@@ -156,8 +184,9 @@ export function GuidePage({ member }: { member: Member }) {
           </li>
         </ul>
         <p>
-          A ticket needs a minimum number of responses before it counts at all. Below that it rolls over to the next
-          round rather than being decided by two people.
+          A ticket needs a minimum number of responses{minSubmissions === undefined ? '' : ` — ${minSubmissions} at
+          the moment`}{' '}
+          before it counts at all. Below that it rolls over to the next round rather than being decided by two people.
         </p>
         <p>
           After the round is finalised you can see the anonymised results — everyone's spread, the averages per
@@ -378,7 +407,7 @@ export function GuidePage({ member }: { member: Member }) {
                 meeting.
               </li>
               <li>
-                <strong>Categories</strong> — the seven are data, not code. Reword, reorder or retire them. Unticking
+                <strong>Categories</strong> — the {categories} are data, not code. Reword, reorder or retire them. Unticking
                 “Active” removes one from everybody's form. There is a “Restore the seven default categories” button if
                 you go too far.
               </li>
@@ -436,7 +465,7 @@ export function GuidePage({ member }: { member: Member }) {
                     <th scope="row" className="plain">
                       The scoring form is empty
                     </th>
-                    <td>All seven categories have been deactivated in Settings. Restore the defaults.</td>
+                    <td>Every category has been deactivated in Settings. Restore the defaults.</td>
                   </tr>
                   <tr>
                     <th scope="row" className="plain">
