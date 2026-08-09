@@ -99,6 +99,24 @@ export function ScorePage({ member, roundId }: Props) {
   const done = submissions.length;
   const outstanding = Math.max(tickets.length - done, 0);
 
+  // An empty round is not a finished one. "0 of 0 — all done, thank you" read
+  // as "you have nothing left to do" when it actually meant the coordinator had
+  // not put the tickets in yet.
+  if (!tickets.length) {
+    return (
+      <>
+        <h1>{round.weekLabel}</h1>
+        <p className="lede">
+          Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>.
+        </p>
+        <div className="notice" role="status">
+          <strong>Nothing to score yet.</strong> This round has no tickets in it — the coordinator is still putting it
+          together. You will get an email when it is ready, and nothing is outstanding from you in the meantime.
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <h1>{round.weekLabel}</h1>
@@ -108,7 +126,8 @@ export function ScorePage({ member, roundId }: Props) {
       </p>
 
       <div className="notice" role="status">
-        You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong> tickets
+        You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong>{' '}
+        {tickets.length === 1 ? 'ticket' : 'tickets'}
         {outstanding > 0 ? ` — ${outstanding} to go.` : ' — all done, thank you.'}
       </div>
 
