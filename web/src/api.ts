@@ -1,4 +1,9 @@
-export type Role = 'ADMIN' | 'COORDINATOR' | 'COMMITTEE' | 'VIEWER';
+/**
+ * Two roles: ADMIN runs the process, COMMITTEE scores. Mirrors
+ * server/src/domain/types.ts; see docs/decisions.md D7.
+ */
+export const ROLES = ['ADMIN', 'COMMITTEE'] as const;
+export type Role = (typeof ROLES)[number];
 export type RoundStatus = 'DRAFT' | 'OPEN' | 'CLOSED' | 'FINALISED';
 export type Relevance = 'YES' | 'UNSURE' | 'NO_CLOSE' | 'NO_NOT_RELEVANT_TODAY';
 
@@ -428,7 +433,7 @@ export const api = {
 };
 
 export function isCoordinator(role: Role | undefined): boolean {
-  return role === 'ADMIN' || role === 'COORDINATOR';
+  return role === 'ADMIN';
 }
 
 /** Only committee members score; coordinators run the round, viewers read it. */

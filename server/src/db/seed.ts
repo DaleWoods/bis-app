@@ -19,13 +19,12 @@ import { nowIso } from '../util/time.js';
  */
 
 const COMMITTEE = [
-  { name: 'Nikita', email: 'nikita@example.com', team: 'Ecommerce', role: 'COORDINATOR' as const },
+  { name: 'Nikita', email: 'nikita@example.com', team: 'Ecommerce', role: 'ADMIN' as const },
   { name: 'Dale', email: 'dale@example.com', team: 'Test & Quality', role: 'ADMIN' as const },
   { name: 'Matt', email: 'matt@example.com', team: 'UX', role: 'COMMITTEE' as const },
   { name: 'James', email: 'james@example.com', team: 'Digital Marketing', role: 'COMMITTEE' as const },
   { name: 'Saj', email: 'saj@example.com', team: 'Merch – Watches', role: 'COMMITTEE' as const },
   { name: 'Priya', email: 'priya@example.com', team: 'Merch – Jewellery', role: 'COMMITTEE' as const },
-  { name: 'Leadership', email: 'leadership@example.com', team: 'Board', role: 'VIEWER' as const },
 ];
 
 export async function seedBase(db: Db): Promise<void> {
@@ -161,7 +160,7 @@ export async function seedDemo(db: Db): Promise<string> {
   ];
 
   const scorers = await db.all<{ id: string }>(
-    "SELECT id FROM members WHERE active = 1 AND role IN ('COMMITTEE', 'COORDINATOR', 'ADMIN') ORDER BY name ASC",
+    "SELECT id FROM members WHERE active = 1 AND role IN ('COMMITTEE', 'ADMIN') ORDER BY name ASC",
   );
 
   for (const [index, demo] of demoTickets.entries()) {

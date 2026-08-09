@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS members (
   name          TEXT NOT NULL,
   email         TEXT NOT NULL UNIQUE,
   team          TEXT NOT NULL DEFAULT '',
-  role          TEXT NOT NULL DEFAULT 'COMMITTEE',   -- ADMIN | COORDINATOR | COMMITTEE | VIEWER
+  role          TEXT NOT NULL DEFAULT 'COMMITTEE',   -- ADMIN (runs it) | COMMITTEE (scores). See migrations/005.
   active        INTEGER NOT NULL DEFAULT 1,
   entra_oid     TEXT,
   last_login_at TEXT,

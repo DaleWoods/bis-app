@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type AppConfig, type Category, type Member, type Role } from '../api';
+import { ROLES, api, type AppConfig, type Category, type Member, type Role } from '../api';
 
 /**
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
@@ -28,6 +28,16 @@ function dmarcMismatch(from: string | undefined, host: string | undefined): bool
   return Boolean(expected) && host.toLowerCase() !== expected;
 }
 
+type MemberSortKey = 'name' | 'email' | 'team' | 'role' | 'active';
+
+const MEMBER_COLUMNS: Array<[MemberSortKey, string]> = [
+  ['name', 'Name'],
+  ['email', 'Email'],
+  ['team', 'Team'],
+  ['role', 'Role'],
+  ['active', 'Active'],
+];
+
 export function SettingsPage({ member }: { member: Member }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -49,6 +59,7 @@ export function SettingsPage({ member }: { member: Member }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [newMember, setNewMember] = useState({ name: '', email: '', team: '', role: 'COMMITTEE' as Role });
+  const [sort, setSort] = useState<{ key: MemberSortKey; ascending: boolean }>({ key: 'name', ascending: true });
   const [resetPhrase, setResetPhrase] = useState('');
   const [resetting, setResetting] = useState(false);
 
@@ -70,6 +81,25 @@ export function SettingsPage({ member }: { member: Member }) {
 
   if (error && !config) return <p className="status error">{error}</p>;
   if (!config) return <p>Loading…</p>;
+
+  /** Same column twice flips the direction; a new column starts ascending. */
+  function sortBy(key: MemberSortKey) {
+    setSort((current) => (current.key === key ? { key, ascending: !current.ascending } : { key, ascending: true }));
+  }
+
+  const sortedMembers = [...members].sort((a, b) => {
+    const direction = sort.ascending ? 1 : -1;
+    if (sort.key === 'active') {
+      // Booleans have no useful collation, so order by state and then by name -
+      // otherwise the inactive block arrives in whatever order the API sent.
+      if (a.active !== b.active) return (a.active ? -1 : 1) * direction;
+      return a.name.localeCompare(b.name, 'en-GB');
+    }
+    const compared = a[sort.key].localeCompare(b[sort.key], 'en-GB', { sensitivity: 'base' });
+    // Ties fall back to name so the order is stable and predictable: sorting by
+    // role should not shuffle people about within a role.
+    return (compared || a.name.localeCompare(b.name, 'en-GB')) * direction;
+  });
 
   async function saveMemberField(input: Parameters<typeof api.saveMember>[0]) {
     setMessage('');
@@ -634,18 +664,23 @@ EMAIL_REPLY_TO=<where replies should go>`}
             <caption className="visually-hidden">Committee members</caption>
             <thead>
               <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Team</th>
-                <th scope="col">Role</th>
-                <th scope="col">Active</th>
+                {MEMBER_COLUMNS.map(([key, label]) => (
+                  <th scope="col" key={key} aria-sort={sort.key === key ? (sort.ascending ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="sort" onClick={() => sortBy(key)}>
+                      {label}
+                      <span aria-hidden="true" className={`arrow${sort.key === key ? ' on' : ''}`}>
+                        {sort.key === key && !sort.ascending ? '↓' : '↑'}
+                      </span>
+                    </button>
+                  </th>
+                ))}
                 <th scope="col">
                   <span className="visually-hidden">Delete</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {members.map((member) => (
+              {sortedMembers.map((member) => (
                 <tr key={member.id}>
                   <td>
                     <input
@@ -692,7 +727,7 @@ EMAIL_REPLY_TO=<where replies should go>`}
                         await load();
                       }}
                     >
-                      {(['ADMIN', 'COORDINATOR', 'COMMITTEE', 'VIEWER'] as Role[]).map((role) => (
+                      {ROLES.map((role) => (
                         <option key={role} value={role}>
                           {role}
                         </option>
@@ -756,7 +791,7 @@ EMAIL_REPLY_TO=<where replies should go>`}
           <div className="grow field">
             <label htmlFor="m-role">Role</label>
             <select id="m-role" value={newMember.role} onChange={(e) => setNewMember({ ...newMember, role: e.target.value as Role })}>
-              {(['ADMIN', 'COORDINATOR', 'COMMITTEE', 'VIEWER'] as Role[]).map((role) => (
+              {ROLES.map((role) => (
                 <option key={role} value={role}>
                   {role}
                 </option>

@@ -982,3 +982,35 @@ th.plain {
 .guide-section {
   scroll-margin-top: 1rem;
 }
+
+/* A sortable column header. A button, so it is reachable by keyboard and
+   announced as pressable; styled to still read as a table heading. */
+th button.sort {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+th button.sort:hover {
+  color: var(--navy);
+}
+th button.sort:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+th button.sort .arrow {
+  opacity: 0;
+  font-size: 0.9em;
+}
+th button.sort:hover .arrow {
+  opacity: 0.45;
+}
+th button.sort .arrow.on {
+  opacity: 1;
+  color: var(--navy);
+}

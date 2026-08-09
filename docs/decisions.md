@@ -61,7 +61,7 @@ cross-functional panel, not by the people administering the process.
 
 **What changes**
 
-- A `COORDINATOR`/`ADMIN`/`VIEWER` submission is refused server-side, not merely hidden.
+- An `ADMIN` submission is refused server-side, not merely hidden.
 - Distribution, reminders and the progress table cover active committee members only, so a
   coordinator is no longer chased for scores they cannot give.
 - Coordinators land on the rounds dashboard; the Score tab is not shown to them. They can still read
@@ -216,3 +216,28 @@ the confirmation dialog says so.
   not a scheduling product.
 - **A round with no tickets is never distributed.** It waits rather than emailing the committee an
   empty deck, and goes out on the next tick once a ticket lands.
+
+---
+
+## D7 — Two roles, not four
+
+**Requirement:** §4 lists `ADMIN`, `COORDINATOR`, `COMMITTEE` and `VIEWER`.
+
+**Decision:** `ADMIN` and `COMMITTEE` only. Admin runs the process; committee scores.
+
+**Rationale:** `COORDINATOR` and `ADMIN` had identical permissions — `isCoordinator()` returned true
+for both and nothing anywhere told them apart — so the distinction was a question every new member
+had to be answered without changing what anyone could do. `VIEWER` was never used. Two roles that
+mean something beat four that have to be explained.
+
+**Migration (`005_two_roles.sql`):**
+
+- `COORDINATOR` → `ADMIN`. No change in what they can do.
+- `VIEWER` → `COMMITTEE`, **deactivated**. A viewer could not score; making them an active committee
+  member would quietly enrol them in the maths — emailed, chased, and counted toward the
+  minimum-responses gate every ticket has to clear. Deactivating keeps the old behaviour (no
+  scoring) and leaves a coordinator one click from including them if that was the intent. Nothing is
+  deleted.
+
+**Reversing it** means putting the values back in `ROLES` and giving them behaviour that differs from
+`ADMIN`'s — which is the work that was never done the first time.

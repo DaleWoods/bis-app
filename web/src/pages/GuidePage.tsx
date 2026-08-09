@@ -107,7 +107,7 @@ export function GuidePage({ member }: { member: Member }) {
           <li>
             You can change your answers as often as you like until the cut-off. Nothing is final until the round closes.
           </li>
-          <li>Nobody else — including the coordinator — sees who gave what while the round is open.</li>
+          <li>Nobody else — including whoever is running the round — sees who gave what while the round is open.</li>
           <li>There is no "save all" button. Each ticket saves on its own as you go.</li>
         </ul>
         <p className="hint">
@@ -416,8 +416,9 @@ export function GuidePage({ member }: { member: Member }) {
                 timezone set there, so they hold across the clocks changing. Automation works from these.
               </li>
               <li>
-                <strong>Committee</strong> — who can sign in and score. Coordinators and admins run the process and do
-                not score, which keeps the two jobs apart.
+                <strong>Committee</strong> — who can sign in, and which of the two roles they have.{' '}
+                <strong>Committee</strong> members score; <strong>Admins</strong> run the process and deliberately do
+                not score, which keeps the two jobs apart. Click any column heading to sort the list.
               </li>
               <li>
                 <strong>Start afresh</strong> — deletes every round, ticket and score. It asks you to type the phrase

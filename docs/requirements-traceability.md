@@ -17,7 +17,8 @@ Non-goals (RA estimation tooling, AI summaries, cross-round trends, native mobil
 
 ## §4 Users & roles
 
-Four roles: `ADMIN`, `COORDINATOR`, `COMMITTEE`, `VIEWER`. Enforced by `requireRole` /
+Two roles: `ADMIN` (runs the process) and `COMMITTEE` (scores) — a departure from the four the
+requirements list, recorded as D7 in docs/decisions.md. Enforced by `requireRole` /
 `requireCoordinator` middleware on every route. The signed-in member's role is re-read from the
 database on each request, so revoking or downgrading someone takes effect immediately rather than
 when their session token expires.

@@ -1,16 +1,25 @@
-/** Roles (§4). RBAC is enforced server-side on every route. */
-export const ROLES = ['ADMIN', 'COORDINATOR', 'COMMITTEE', 'VIEWER'] as const;
+/**
+ * Two roles (§4 departure - see docs/decisions.md D7). The requirements list
+ * four; in practice ADMIN and COORDINATOR did exactly the same thing, and
+ * nobody was ever a VIEWER. Two roles that mean something beat four that have
+ * to be explained.
+ *
+ * ADMIN runs the process. COMMITTEE scores. RBAC is enforced server-side on
+ * every route.
+ */
+export const ROLES = ['ADMIN', 'COMMITTEE'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Named for what it guards - the coordinator's side of the app - not for a role. */
 export function isCoordinator(role: Role): boolean {
-  return role === 'ADMIN' || role === 'COORDINATOR';
+  return role === 'ADMIN';
 }
 
 /**
- * Only committee members score. Coordinators run the process and can see every
+ * Only committee members score. Whoever runs the process can see every
  * submission, so letting them also score muddles the two jobs - and §2's whole
- * point is that scoring is done by a cross-functional panel, not the people
- * administering it. Viewers are read-only.
+ * point is that scoring is done by a cross-functional panel, not by the people
+ * administering it.
  */
 export function canScore(role: Role): boolean {
   return role === 'COMMITTEE';
