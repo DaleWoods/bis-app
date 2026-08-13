@@ -94,8 +94,14 @@ export function GuidePage({ member }: { member: Member }) {
 
       <Section id="scoring" title="Scoring a ticket">
         <p>
-          Open <strong>Score</strong>. You will see every ticket in the round that is open, each as a card: a headline,
-          three short sections, usually a screenshot, and the numbers behind it.
+          Open <strong>Score</strong>. You will see every ticket in the round that is open, each as a card that answers
+          four questions in the same order every time: what this is, what it is costing us, what we would do about it,
+          and what changes once it is live — plus, usually, a captioned screenshot and the figures behind it.
+        </p>
+        <p>
+          The cards are written for you, not for the team that raised the ticket. If one still leaves you guessing,
+          that is worth saying in the notes box rather than scoring around — the answer to a card nobody understood is
+          a better card, and the notes are how that gets back to whoever is running the round.
         </p>
         <p>
           For each ticket, answer the relevance question first, then — if you answered yes — give it a mark out of{' '}
@@ -260,14 +266,20 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
             <p>
               <strong>Redraft from ticket</strong> writes the whole card for you. With an Anthropic API key configured
-              it reads the entire ticket — description, every comment, labels, priority, linked issues — and writes it
-              in business language, picking the most explanatory screenshot and captioning it. Without a key it falls
-              back to matching headings in the description, which finds much less. Either way the draft is yours to
-              check before it goes anywhere.
+              it reads the whole ticket — description, every comment in order, labels, priority, components, linked
+              issues — works out for itself what the ticket actually is, and writes it as four answers in business
+              language, picking the most explanatory screenshot and captioning it. It does not go looking for headings
+              to copy; most tickets do not have them, and the real story is usually in a comment weeks after the
+              description. A second pass then reads the card back the way a committee member would, cold, and fixes
+              anything that only makes sense to somebody who had read the ticket. Without a key it falls back to
+              matching headings, which finds much less.
             </p>
             <p>
-              The card asks a different question depending on what kind of ticket it is, and takes its colour from the
-              same choice — so the kind is readable across a room before anyone has read a word:
+              <strong>Every card answers the same four questions in the same order</strong>, which is what makes thirty
+              of them readable in one sitting: what is this, what is it costing us, what would we do about it, and what
+              changes once it is live. The wording of the first three follows the kind of ticket — a fault, a clumsy
+              journey and a gap answer them differently — and the card takes its colour from the same choice, so the
+              kind is readable across a room before anyone has read a word:
             </p>
             <div className="table-scroll">
               <table>
@@ -276,7 +288,7 @@ export function GuidePage({ member }: { member: Member }) {
                   <tr>
                     <th scope="col">Kind</th>
                     <th scope="col">Use it when</th>
-                    <th scope="col">The three sections become</th>
+                    <th scope="col">The first three questions become</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -301,7 +313,9 @@ export function GuidePage({ member }: { member: Member }) {
             <ul>
               <li>
                 <strong>The headline.</strong> One or two plain sentences saying what this is and why a commercial
-                reader should care. No jargon, no ticket numbers.
+                reader should care. No jargon, no ticket numbers. This is the heading on the card and on the slide —
+                the JIRA title sits underneath it in small grey text, because a title written for the team that raised
+                the ticket undoes the translation the rest of the card just did.
               </li>
               <li>
                 <strong>A screenshot with a caption.</strong> A picture of a broken page explains it faster than three
@@ -316,9 +330,17 @@ export function GuidePage({ member }: { member: Member }) {
                 The character counters under each box are the budget, not a suggestion.
               </li>
             </ul>
+            <p>
+              Each ticket on the round page says either <strong>Card reads well</strong> or{' '}
+              <strong>Check this card</strong> followed by what is wrong with it — a question left unanswered, no
+              figures, a picture with no caption, a headline that is only the ticket title reworded, or wording that
+              still reads technical. Those checks are mechanical, so they catch the obvious failures and nothing else;
+              a card can pass all of them and still be vague. They matter most when the round is running itself, because
+              then a weak card goes out to the committee and gets scored with nobody having read it first.
+            </p>
             <p className="hint">
-              Each ticket says “Card still needs: …” until every part is filled in. The pack — PPTX or PDF — is
-              generated from exactly these fields, so what you see in the app is what the committee gets.
+              The pack — PPTX or PDF — is generated from exactly these fields, so what you see in the app is what the
+              committee gets.
             </p>
           </Section>
 

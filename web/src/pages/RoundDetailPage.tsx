@@ -13,6 +13,7 @@ import {
   type TicketResult,
   type WriteBackEntry,
 } from '../api';
+import { cardWarnings } from '../card';
 import { Link } from '../router';
 import { DiscussionPanel } from '../components/DiscussionPanel';
 import { TicketEditor } from './TicketEditor';
@@ -561,14 +562,17 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
 
       {tickets.map((ticket) => {
         const result = results.find((r) => r.ticket.id === ticket.id)?.aggregate;
-        const gaps = [
-          !ticket.execSummary && 'summary',
-          !ticket.panelCurrent && 'Current',
-          !ticket.panelImpacts && 'Impacts',
-          !ticket.panelFuture && 'Future',
-          !ticket.panelBenefits && 'Benefits',
-          !ticket.screenshotAttachmentId && !ticket.screenshotUrl && 'screenshot',
-        ].filter(Boolean) as string[];
+        /*
+          The card is all a committee member gets, and once the round runs
+          itself nobody is necessarily reading them before they go out. So the
+          checks that can be made mechanically are made here, in the words a
+          coordinator would use, rather than leaving a weak card to be found by
+          the committee scoring it.
+        */
+        const gaps = cardWarnings({
+          ...ticket,
+          hasUnusedImage: ticket.attachments.some((a) => a.isImage),
+        });
 
         const isEditing = editing === ticket.id;
 
@@ -635,8 +639,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 </p>
               ) : null}
 
-              <p className="hint" style={{ margin: '0.4rem 0 0' }}>
-                {gaps.length ? `Card still needs: ${gaps.join(', ')}` : 'Card complete'} · Backend{' '}
+              <p className={`hint${gaps.length ? ' card-gaps' : ''}`} style={{ margin: '0.4rem 0 0' }}>
+                {gaps.length ? `Check this card — ${gaps.join('; ')}` : 'Card reads well'} · Backend{' '}
                 {ticket.backendPokerScore ?? '—'} · Frontend {ticket.frontendPokerScore ?? '—'} · Manual effort{' '}
                 {ticket.manualEffort ?? '—'}
               </p>

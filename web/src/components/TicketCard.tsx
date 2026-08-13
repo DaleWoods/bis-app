@@ -81,16 +81,25 @@ export function TicketCard({ ticket, children }: { ticket: Ticket; children?: Re
       data-kind={ticket.cardKind || 'PROBLEM'}
       aria-labelledby={`ticket-${ticket.id}`}
     >
+      {/*
+        The drafted headline is the heading, not the JIRA title.
+
+        The title is developer shorthand - "Aurora banner carousel component, no
+        rotation delay" - and putting it in bold at the top of the card undid
+        the translation everything below it had done: the first thing a buyer
+        read was the one line written for somebody else. It is still here,
+        small, because a coordinator cross-referencing JIRA needs it.
+      */}
       <header>
         <div className="head-line">
           <span className="jira-id">{ticket.jiraId}</span>
           <span className="badge kind">{labels.kind}</span>
         </div>
-        <h3 id={`ticket-${ticket.id}`}>{ticket.title}</h3>
+        <h3 id={`ticket-${ticket.id}`}>{ticket.execSummary || ticket.title}</h3>
+        {ticket.execSummary ? <p className="raw-title">{ticket.title}</p> : null}
       </header>
 
       <div className="body">
-        {ticket.execSummary ? <p className="nutshell">{ticket.execSummary}</p> : null}
 
         {/* Without a screenshot the aside is a column of chips beside a void,
             so the layout drops to one column and the figures run along the

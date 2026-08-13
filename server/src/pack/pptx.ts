@@ -41,14 +41,20 @@ import { Ticket } from '../services/ticketService.js';
  * The slide is laid out for someone who has never seen the system and will not
  * ask a follow-up question:
  *
- *   ┌ header ─ id · kind chip · title ───────────────────────────────┐
- *   │ HEADLINE - the one sentence, set large                         │
+ *   ┌ header ─ id · kind chip ───────────────────────────────────────┐
+ *   │ HEADLINE - the plain-English sentence, set large                │
+ *   │ the JIRA title, small and grey                                  │
  *   ├ narrative (3 sections, labelled by kind) ─┬ screenshot ────────┤
- *   │ • what is going on                        │  [ image ]         │
- *   │ • who it hurts                            │  caption           │
- *   │ • what done looks like                    │  impact chips      │
- *   ├ "If we fix it, …" ─────────────────────────────────────────────┤
+ *   │ • what this is                            │  [ image ]         │
+ *   │ • what it costs us                        │  caption           │
+ *   │ • what we would do                        │  impact chips      │
+ *   ├ "Once it's live, …" ───────────────────────────────────────────┤
  *   └ metadata strip ────────────────────────────────────────────────┘
+ *
+ * The JIRA title is not the heading. It is written for the team that raised the
+ * ticket - "Aurora banner carousel component, no rotation delay" - and setting
+ * it large undoes the translation the rest of the slide just did. It stays,
+ * small, because somebody will want to look the ticket up.
  *
  * The picture gets a third of the slide because a screenshot with a caption
  * explains a broken carousel faster than any three bullets can.
@@ -158,7 +164,8 @@ export async function buildPptx(input: PackInput): Promise<Buffer> {
 function ticketSlide(slide: PptxSlide, ticket: Ticket, accent: string, screenshot: string): void {
   const labels = labelsFor(ticket.cardKind);
   const facts = cardLines(ticket.impactFacts, 4);
-  const hasImage = Boolean(screenshot || ticket.screenshotUrl);
+  // packInput() has already resolved every source of image to a data URI.
+  const hasImage = Boolean(screenshot);
   // The aside earns its width only when it has something in it. With neither a
   // picture nor a quantified fact, the narrative takes the whole slide rather
   // than sitting in a column beside white space.
@@ -194,13 +201,16 @@ function ticketSlide(slide: PptxSlide, ticket: Ticket, accent: string, screensho
 function header(slide: PptxSlide, ticket: Ticket, accent: string, kindLabel: string): void {
   slide.addShape('rect', { x: 0, y: 0, w: SLIDE_W, h: 0.82, fill: { color: accent } });
 
-  slide.addText(
-    [
-      { text: ticket.jiraId, options: { bold: true, color: 'FFFFFF', fontSize: 12 } },
-      { text: `   ${ticket.title}`, options: { color: 'FFFFFF', fontSize: 17, bold: true } },
-    ],
-    { x: MARGIN, y: 0.08, w: CONTENT_W - 1.75, h: 0.66, valign: 'middle' },
-  );
+  slide.addText(ticket.jiraId, {
+    x: MARGIN,
+    y: 0.08,
+    w: CONTENT_W - 1.75,
+    h: 0.66,
+    bold: true,
+    color: 'FFFFFF',
+    fontSize: 13,
+    valign: 'middle',
+  });
 
   // The kind chip tells a scorer in one word whether they are looking at
   // something broken or something we cannot do yet. They score differently.
@@ -230,11 +240,35 @@ function header(slide: PptxSlide, ticket: Ticket, accent: string, kindLabel: str
 /** Returns the y the rest of the slide starts at. */
 function headline(slide: PptxSlide, ticket: Ticket, geometry: Geometry): number {
   const text = trim(ticket.execSummary, 260);
-  if (!text) return 1.02;
+  if (!text) {
+    // With nothing drafted the JIRA title is all there is, so it has to serve
+    // as the heading rather than leaving the slide without one.
+    slide.addText(trim(ticket.title, 160), {
+      x: MARGIN,
+      y: 0.98,
+      w: geometry.narrativeW,
+      h: 0.5,
+      fontSize: 13.5,
+      bold: true,
+      color: INK,
+      valign: 'top',
+    });
+    return 1.52;
+  }
+
+  slide.addText(trim(ticket.title, 120), {
+    x: MARGIN,
+    y: 0.92,
+    w: geometry.narrativeW,
+    h: 0.2,
+    fontSize: 8,
+    color: MUTED,
+    valign: 'top',
+  });
 
   slide.addText(text, {
     x: MARGIN,
-    y: 0.98,
+    y: 1.12,
     w: geometry.narrativeW,
     h: 0.62,
     fontSize: 13.5,
@@ -243,7 +277,10 @@ function headline(slide: PptxSlide, ticket: Ticket, geometry: Geometry): number 
     valign: 'top',
     lineSpacingMultiple: 1.05,
   });
-  return 1.68;
+  // The small title above the headline costs the body 0.14" of height; the
+  // sections are laid out from whatever this returns, so they simply start
+  // lower rather than overlapping it.
+  return 1.82;
 }
 
 /**
@@ -360,9 +397,11 @@ function aside(
   if (hasImage) {
     slide.addShape('rect', { x, y, w, h: imageHeight, fill: { color: PANEL_BG }, line: { color: PANEL_LINE } });
     try {
-      const image = screenshot ? { data: screenshot } : { path: ticket.screenshotUrl };
+      // Always a data URI - packInput() fetches pasted URLs too, because
+      // pptxgenjs fetching one itself takes the process down when the host
+      // does not resolve.
       slide.addImage({
-        ...image,
+        data: screenshot,
         x: x + 0.06,
         y: y + 0.06,
         w: w - 0.12,

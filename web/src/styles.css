@@ -307,10 +307,17 @@ th.num {
 }
 .ticket-card > header h3 {
   margin: 0;
-  font-size: 1.15rem;
-  line-height: 1.35;
+  font-size: 1.2rem;
+  line-height: 1.4;
   letter-spacing: -0.01em;
   color: var(--ink);
+}
+/* The JIRA title, kept for cross-referencing and deliberately quiet. */
+.ticket-card > header .raw-title {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
 }
 .ticket-card > header .jira-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1031,4 +1038,11 @@ th button.sort .arrow.on {
 }
 .discussion-item form {
   margin-top: 0.6rem;
+}
+
+/* A card the checks are not happy with. Amber, not red: it is a prompt to read
+   it, not a failure. */
+.hint.card-gaps {
+  color: var(--medium);
+  font-weight: 500;
 }

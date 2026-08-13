@@ -171,7 +171,16 @@ export const env = {
     model: process.env.ANTHROPIC_MODEL ?? 'claude-opus-5',
     /** Kill switch that leaves the key in place, for comparing the two drafters. */
     enabled: bool(process.env.AI_DRAFT_ENABLED, true),
-    timeoutMs: int(process.env.AI_TIMEOUT_MS, 60_000),
+    /**
+     * The second pass that reads the drafted card back as a committee member
+     * would and fixes what does not survive it. On by default: it is the
+     * difference between a card that is accurate and one that is understood,
+     * and the cards have to be trustworthy for the round to run unattended.
+     * Roughly doubles the drafting cost of an import - switch it off here if
+     * that ever matters more than the quality.
+     */
+    reviewEnabled: bool(process.env.AI_REVIEW_ENABLED, true),
+    timeoutMs: int(process.env.AI_TIMEOUT_MS, 120_000),
     get configured(): boolean {
       return Boolean(env.ai.apiKey) && env.ai.enabled;
     },

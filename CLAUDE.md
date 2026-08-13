@@ -62,8 +62,37 @@ coordinators. Put new content in whichever half its reader belongs to.
   exactly once.
 - **Both SQL dialects.** Everything runs on PostgreSQL and SQLite. Use `?`
   placeholders; the driver rewrites them.
+- **Nothing outside the app fetches a URL on the app's behalf.** `packInput()`
+  resolves every screenshot — JIRA attachment or pasted link — to a data URI
+  before either renderer sees it. Handing pptxgenjs a `path:` URL instead makes
+  *it* do the fetch while writing the file, and a host that does not resolve
+  emits an unhandled `error` event: not a rejected promise, not catchable around
+  the call, and it takes the whole process down. One ticket with a stale
+  screenshot link is enough.
 - **Comments explain why, not what.** The codebase is written to be read by
   someone deciding whether a change is safe.
+
+## The card is the product
+
+`domain/card.ts` defines the four questions every card answers — what is this,
+what is it costing us, what would we do, what changes once it is live — and the
+three renderers (in-app, PPTX, PDF) read the labels from it so they cannot
+drift. The committee scores what the card says, so a change here changes what
+gets built.
+
+- **The drafter's job is judgement, not summarising.** `integrations/anthropic.ts`
+  asks the model to work out what the ticket costs the business and say it in
+  words a buyer knows, which usually means saying something the ticket never
+  says outright. Read the SYSTEM prompt before changing the schema; the field
+  descriptions and the prompt have to agree.
+- **The JIRA title is never the heading.** It is written for the team that
+  raised the ticket, and setting it large undoes the translation everything
+  below it just did. Headline first, title small and grey.
+- **`cardWarnings()` is what makes unattended running safe.** A drafter that
+  quietly writes a weak card is worse than one that fails, because the weak card
+  goes out and gets scored anyway. Add a check there when a new way of being
+  wrong turns up — but only mechanical ones, and keep them conservative: a false
+  warning on every card teaches the coordinator to ignore all of them.
 
 ## Before you say it works
 

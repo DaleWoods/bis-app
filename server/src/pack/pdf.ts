@@ -84,20 +84,36 @@ function ticketPage(
 
   // --- Header ------------------------------------------------------------
   doc.rect(0, 0, doc.page.width, 52).fill(accent);
-  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9).text(ticket.jiraId, M, 16);
-  doc.fontSize(15).text(ticket.title, M + 62, 15, { width: width - 62 - 110, ellipsis: true, lineBreak: false });
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text(ticket.jiraId, M, 20);
 
   const chip = labels.kind.toUpperCase();
   const chipW = 100;
   doc.roundedRect(doc.page.width - M - chipW, 14, chipW, 22, 11).fill('#FFFFFF');
   doc.fillColor(accent).fontSize(8).text(chip, doc.page.width - M - chipW, 21, { width: chipW, align: 'center' });
 
-  // --- Headline ----------------------------------------------------------
-  let y = 68;
+  /*
+    --- Headline ----------------------------------------------------------
+
+    The drafted headline is the heading; the JIRA title sits above it, small and
+    grey. The title is written for the team that raised the ticket - "Aurora
+    banner carousel component, no rotation delay" - and setting it large undid
+    the translation the rest of the page had just done. It stays because
+    somebody will want to look the ticket up.
+  */
+  let y = 64;
   const headline = text(ticket.execSummary, 260);
   if (headline) {
+    doc.fillColor(MUTED).font('Helvetica').fontSize(7.5).text(text(ticket.title, 150), M, y, {
+      width: narrativeW,
+      ellipsis: true,
+      lineBreak: false,
+    });
+    y += 12;
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(12.5).text(headline, M, y, { width: narrativeW, lineGap: 1 });
     y = Math.max(y + 34, doc.y + 10);
+  } else {
+    doc.fillColor(INK).font('Helvetica-Bold').fontSize(12.5).text(text(ticket.title, 160), M, y, { width: narrativeW });
+    y = Math.max(y + 30, doc.y + 10);
   }
   const narrativeTop = y;
 

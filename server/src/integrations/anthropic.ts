@@ -9,14 +9,24 @@ import { type DraftSource, clip, tidy } from '../domain/cardDraft.js';
  *
  * The deterministic drafter in domain/cardDraft.ts reads headings. That works
  * when a ticket is written in sections and produces nothing useful when it is
- * not - and most tickets are not. This reads everything the ticket has:
- * description, comments, priority, labels, components, linked issues and the
- * names of the images attached to it.
+ * not - and most tickets are not. This reads the ticket the way an analyst
+ * would: description, every comment, priority, labels, components, linked
+ * issues, and the names of the images attached to it.
  *
- * Comments matter more than they look. A description says "carousel does not
- * rotate"; the comment three weeks later says "trading have had to pull the
- * second and third promotions from the homepage since March". The second one is
- * what a committee scores on.
+ * The job is not summarising. A committee member scoring thirty of these has
+ * four questions and no way to ask a fifth, so the drafter has to work out the
+ * answers - which often means saying something the ticket never says outright.
+ * "Carousel component has no rotation delay" has to come out as "only the first
+ * promotion on the homepage is ever seen". The second sentence is what gets
+ * scored; the first is what the ticket happens to say.
+ *
+ * Two passes, because one was not good enough. The analyst writes the card;
+ * a second call reads it back as the committee member would, cold, with no
+ * access to anything but the card and the ticket, and fixes what does not
+ * survive that reading. It is a different job rather than a "check your work"
+ * instruction, and it catches the two failures that matter: a sentence only
+ * somebody who had read the ticket could understand, and a claim the ticket
+ * does not support.
  *
  * Optional by design. With no API key the app falls back to the deterministic
  * drafter, so nothing here is on the critical path.
@@ -34,6 +44,11 @@ const DraftResponse = z.object({
   screenshotFilename: z.string(),
 });
 
+const ReviewResponse = DraftResponse.extend({
+  /** What the reviewer changed, in its own words. Logged, never shown on the card. */
+  fixed: z.array(z.string()),
+});
+
 const DRAFT_SCHEMA = {
   type: 'object',
   properties: {
@@ -41,81 +56,163 @@ const DRAFT_SCHEMA = {
       type: 'string',
       enum: CARD_KINDS,
       description:
-        'PROBLEM = something is broken or wrong today. IMPROVEMENT = it works but it is slow, clumsy or manual. FEATURE = we cannot do this at all yet.',
+        'PROBLEM = something is broken or wrong today. IMPROVEMENT = it works, but it is slow, clumsy or manual. FEATURE = we cannot do this at all yet.',
     },
     headline: {
       type: 'string',
       description:
-        'One or two plain sentences naming the thing and why a commercial reader should care. No jargon, no ticket numbers, no system names a buyer would not know.',
+        'The whole ticket in one or two plain sentences: what this is and why a commercial reader should care. This is the sentence somebody remembers when they vote. Never a rewording of the ticket title.',
     },
     current: {
       type: 'array',
       items: { type: 'string' },
-      description: 'PROBLEM: what goes wrong. IMPROVEMENT: how it works today. FEATURE: what we cannot do today.',
+      description:
+        'Question 1 - what is this, in plain English? PROBLEM: what actually happens, described so somebody who has never seen the screen can picture it. IMPROVEMENT: how the job gets done today, step by step. FEATURE: what we cannot do at all.',
     },
     impacts: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Who it hurts and how. Named teams, customers, order volumes - the business consequence, not the technical cause.',
+      description:
+        'Question 2 - what is it costing us right now? Money, orders, hours, customers, risk, reputation. Name the team or the customer it lands on. This is the section that decides the score, so it is the one worth getting right.',
     },
     future: {
       type: 'array',
       items: { type: 'string' },
-      description: 'What the world looks like once this is done. Concrete and observable, not "it will be fixed".',
+      description:
+        'Question 3 - what would we actually do about it, and what would it look like afterwards? Describe the change in terms of what the reader would see or do differently, not the implementation.',
     },
     benefit: {
       type: 'string',
-      description: 'One line completing "If we do this, …". The single strongest reason to prioritise it.',
+      description:
+        'Question 4 - what changes once it is live? One sentence, the single clearest gain, in the same units as question 2 where you can. Completes "Once it is live, …" without repeating those words.',
     },
     impactFacts: {
       type: 'array',
       items: { type: 'string' },
       description:
-        'Up to four short quantified facts drawn from the ticket, shown as chips. Shape them "label: value", e.g. "Affects: all mobile customers", "Frequency: every homepage visit", "Manual effort: ~20 orders a morning", "Open since: March". Only facts the ticket supports.',
+        'Up to four short quantified facts, shown as chips beside the picture. Shape them "Label: value" - "Affects: all mobile customers", "Frequency: every homepage visit", "Manual effort: ~20 orders a morning", "Open since: March". Only facts the ticket supports. An empty list is a perfectly good answer.',
     },
     screenshotCaption: {
       type: 'string',
       description:
-        'What the reader is looking at in the image and where to look, e.g. "The banner never advances past the first promotion". Empty string if the ticket has no images.',
+        'What the reader is looking at and where to look, e.g. "The banner never advances past the first promotion". Empty string if the ticket has no images.',
     },
     screenshotFilename: {
       type: 'string',
       description:
-        'Exact filename of the attached image that best explains this to someone who has never seen the system. Empty string if there are none or none help.',
+        'Exact filename of the attached image that best explains this to somebody who has never seen the system. Prefer one that shows the problem happening over a settings screen or a log. Empty string if there are none or none help.',
     },
   },
   required: ['kind', 'headline', 'current', 'impacts', 'future', 'benefit', 'impactFacts', 'screenshotCaption', 'screenshotFilename'],
   additionalProperties: false,
 } as const;
 
+const REVIEW_SCHEMA = {
+  ...DRAFT_SCHEMA,
+  properties: {
+    ...DRAFT_SCHEMA.properties,
+    fixed: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'One short line per thing you changed and why, e.g. "headline was the ticket title reworded". Empty if the card was already right - say nothing rather than inventing a change.',
+    },
+  },
+  required: [...DRAFT_SCHEMA.required, 'fixed'],
+} as const;
+
+/** The reader both passes are writing for. Stated once, used by both. */
+const AUDIENCE = [
+  'The readers are a business committee who score tickets for priority: buyers, merchandisers, operations,',
+  'finance, customer service. Most have never seen the system, none will read the ticket, and none can ask a',
+  'follow-up question. They read about thirty of these in a sitting, so a card that takes effort to understand',
+  'does not get understood - it gets a middling score and moves on.',
+].join('\n');
+
 const SYSTEM = [
-  'You turn software tickets into one-slide summaries for a business committee that scores them for priority.',
-  'The committee is commercial, not technical: buyers, merchandisers, operations, finance, customer service.',
-  'Most have never seen the system and will not ask a follow-up question - the slide is all they get.',
+  'You write the one-slide card a business committee scores a software ticket from.',
   '',
-  'Work like an analyst, not a summariser. Read the description, every comment, the labels, the priority, the',
-  'linked issues and the image filenames, and work out what this ticket actually is and what it costs the',
-  'business. The title is frequently thin or written in internal shorthand; the real story is usually further',
-  'down, and often in a comment rather than the description. Do not paraphrase the title back.',
+  AUDIENCE,
   '',
-  'Translate as you go. "Carousel component has no rotation delay" means the homepage banner never advances,',
-  'so only the first promotion is ever seen. Say the second thing. Expand or drop internal names, component',
-  'names and acronyms unless a buyer would know them.',
+  'HOW TO READ THE TICKET',
+  'Read all of it before writing anything: description, every comment in order, labels, priority, components,',
+  'linked issues, image filenames. Then work out, for yourself, what this ticket actually is. Do not go looking',
+  'for headings to lift - most tickets do not have them, and the ones that do are usually stale. The real story',
+  'is often in a comment weeks after the description: the description says the banner does not rotate, the',
+  'comment in March says trading have pulled two promotions off the homepage because of it. The comment is the',
+  'card.',
   '',
-  'Draw the business consequence the ticket implies even where nobody has written it down. A checkout defect',
-  'means lost orders. A manual workaround means somebody spends their morning on it. A promotion that never',
-  'shows means the campaign was paid for and not seen. Say so.',
+  'THE FOUR QUESTIONS',
+  'A committee member has four questions and nothing else. Answer them in this order and answer all four:',
+  '  1. What is this? In plain English, so somebody who has never seen the screen can picture it.',
+  '  2. What is it costing us right now? Money, orders, hours, customers, risk. Who it lands on.',
+  '  3. What would we do about it, and what would it look like afterwards?',
+  '  4. What changes once it is live? One line.',
+  'If the ticket does not answer one of them, say the most that the ticket does support - never pad, never guess.',
   '',
-  'Length - the standing complaint is that these slides are too wordy, so:',
+  'WRITE IT FOR SOMEBODY WHO HAS NEVER SEEN THE SYSTEM',
+  'Translate everything. A component name, a table name, a status code, an internal acronym, a screen name only',
+  'the team uses - all of it goes, replaced by what the reader would actually see or do. "The carousel component',
+  'has no rotation delay" becomes "the homepage banner never moves past the first promotion". "Orders fail with a',
+  'null customer id" becomes "some orders will not go through at checkout".',
+  'Keep names the reader genuinely knows: the brand, the site, the department, the customer-facing product.',
+  '',
+  'DRAW THE CONSEQUENCE THE TICKET IMPLIES',
+  'Tickets are written by people who already know why it matters, so they leave the why out. A checkout defect',
+  'means lost orders. A manual workaround means somebody spends their morning on it. A promotion that never shows',
+  'means the campaign was paid for and not seen. Say the second thing. This is judgement, not invention: it has',
+  'to follow from what the ticket says, and if it does not follow, leave it out.',
+  '',
+  'LENGTH - the standing complaint is that these are too wordy, and a wall of text gets skimmed:',
   `- Headline at most ${CARD_LIMITS.execSummary} characters. One or two sentences.`,
-  `- Each section at most ${CARD_LIMITS.bulletsPerPanel} bullets of at most ${CARD_LIMITS.bullet} characters. Fewer is better.`,
-  '- Bullets are fragments, not sentences. No trailing full stops, no sub-bullets.',
-  `- The benefit line is one sentence, at most ${CARD_LIMITS.benefit} characters.`,
+  `- Each section at most ${CARD_LIMITS.bulletsPerPanel} bullets of at most ${CARD_LIMITS.bullet} characters. Two good bullets beat three padded ones.`,
+  '- Bullets are fragments, not sentences. No trailing full stops, no sub-bullets, no bullet that restates another.',
+  `- The closing line is one sentence, at most ${CARD_LIMITS.benefit} characters.`,
   '',
-  'Never invent a figure, name, date, customer or system that is not in the ticket. Where the ticket gives',
-  'numbers, use them, in the impact facts especially. Where it does not, describe the effect without',
-  'quantifying it, and leave that chip out. An empty list beats filler: filler reads as content and survives',
-  'into the deck, whereas a gap prompts the coordinator to fill it in.',
+  'NEVER',
+  '- Reword the ticket title and call it a headline.',
+  '- Use a ticket number, a component name, a class or table name, an HTTP status, or an acronym a buyer would not know.',
+  '- Invent a figure, a name, a date, a customer or a system that is not in the ticket.',
+  '- Write filler to fill a section. An empty list beats filler: filler reads as content and survives into the deck,',
+  '  whereas a gap tells the coordinator to go and find the answer.',
+  '',
+  'WORKED EXAMPLE - the translation, not a template. Do not copy its shape, subject or phrasing.',
+  'Ticket: "ECOM-1213 Aurora banner carousel component, no rotation delay". Description names the component and the',
+  'missing config value. A comment from marketing three weeks later says the second and third slots have been sold',
+  'to two brands for the spring campaign and neither has been seen.',
+  '  Weak headline: "The Aurora banner carousel component has no rotation delay set."',
+  '  Good headline: "The homepage banner never moves past the first promotion, so two campaigns we have already',
+  '  been paid for are not being seen."',
+  '  Weak bullet under question 2: "rotation delay not configured"',
+  '  Good bullet under question 2: "two spring campaigns paid for and never shown"',
+].join('\n');
+
+const REVIEW_SYSTEM = [
+  'You are the committee member. A card has been written for you about a software ticket you have never seen,',
+  'and you have to score it. You get the ticket as well, which the real committee does not - use it only to',
+  'check the card, never to excuse it.',
+  '',
+  AUDIENCE,
+  '',
+  'Read the card cold and fix it. Return the corrected card - the whole card, not just the parts you changed.',
+  'If it is already right, return it unchanged and say so by returning an empty list of fixes. Do not manufacture',
+  'a change to look thorough, and do not rewrite good phrasing into your own.',
+  '',
+  'What to fix, in the order it matters:',
+  '1. Anything you cannot understand without having read the ticket. A component or system name, an acronym, a',
+  '   screen only the team would recognise, a sentence that assumes you know how the thing works. Rewrite it as',
+  '   what a reader would see or do.',
+  '2. Anything the ticket does not support. A figure, date, team, customer or consequence that is not there, or',
+  '   is stated more confidently than the ticket warrants. Cut it or soften it to what the ticket actually says.',
+  '3. A question that is not answered. The four are: what is this, what is it costing us, what would we do, what',
+  '   changes once it is live. If the ticket answers it and the card does not, answer it. If the ticket does not,',
+  '   leave it empty.',
+  '4. A headline that is the ticket title reworded, or that says what is broken without saying why anyone cares.',
+  '5. Padding. A bullet that restates another, a caveat nobody needs, a sentence that could lose half its words.',
+  '6. Over-length. Headline, bullets and the closing line all have limits, and the card is clipped if they are',
+  '   exceeded - so a sentence over the limit loses its ending rather than being shortened well.',
+  '',
+  'Do not add sections, do not add facts, and do not make the card longer than you found it.',
 ].join('\n');
 
 let client: Anthropic | null = null;
@@ -173,6 +270,64 @@ export function ticketPrompt(source: DraftSource): string {
   return lines.join('\n');
 }
 
+/** The drafted card, laid out the way the reviewer will read it on screen. */
+function cardPrompt(parsed: z.infer<typeof DraftResponse>): string {
+  return [
+    `Kind: ${parsed.kind}`,
+    `Headline: ${parsed.headline}`,
+    '',
+    '1. What is this?',
+    ...parsed.current.map((b) => `- ${b}`),
+    '',
+    '2. What is it costing us?',
+    ...parsed.impacts.map((b) => `- ${b}`),
+    '',
+    '3. What would we do about it?',
+    ...parsed.future.map((b) => `- ${b}`),
+    '',
+    `4. Once it is live: ${parsed.benefit}`,
+    '',
+    `Figures shown beside the picture: ${parsed.impactFacts.join(' | ') || '(none)'}`,
+    `Picture caption: ${parsed.screenshotCaption || '(no picture)'}`,
+    `Picture chosen: ${parsed.screenshotFilename || '(none)'}`,
+  ].join('\n');
+}
+
+/**
+ * One structured call. Streamed because a long ticket plus thinking can run
+ * past the SDK's non-streaming timeout, and a timeout here silently demotes
+ * the card to the heading parser.
+ */
+async function ask<T extends z.ZodTypeAny>(
+  system: string,
+  user: string,
+  schema: Record<string, unknown>,
+  shape: T,
+  effort: 'low' | 'medium' | 'high',
+): Promise<z.infer<T>> {
+  const stream = getClient().messages.stream({
+    model: env.ai.model,
+    max_tokens: 24000,
+    system,
+    // Reading a long ticket and working out what it costs the business is a
+    // reasoning task, not a formatting one.
+    thinking: { type: 'adaptive' },
+    output_config: { effort, format: { type: 'json_schema', schema } },
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const response = await stream.finalMessage();
+  if (response.stop_reason === 'refusal') throw new Error('The model declined to draft this card');
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+
+  if (!text.trim()) throw new Error('The model returned no card content');
+  return shape.parse(JSON.parse(text));
+}
+
 /** Bullets in, one clipped block out, matching the deterministic drafter's shape. */
 function panel(bullets: string[]): string {
   const cleaned = bullets
@@ -205,30 +360,7 @@ function resolvePick(filename: string, available: string[] | undefined): string 
   return (available ?? []).find((name) => name.toLowerCase() === wanted);
 }
 
-/**
- * Draft a card with the model. Throws on any failure - callers fall back to the
- * deterministic drafter rather than surfacing an error to the coordinator.
- */
-export async function draftCardWithAi(source: DraftSource): Promise<CardDraft> {
-  const response = await getClient().messages.create({
-    model: env.ai.model,
-    max_tokens: 8000,
-    system: SYSTEM,
-    // Reading a long ticket and judging what matters commercially is a
-    // reasoning task, not a formatting one, so this is worth medium effort.
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: DRAFT_SCHEMA } },
-    messages: [{ role: 'user', content: ticketPrompt(source) }],
-  });
-
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('');
-
-  if (!text.trim()) throw new Error('The model returned no card content');
-
-  const parsed = DraftResponse.parse(JSON.parse(text));
-
+function toDraft(parsed: z.infer<typeof DraftResponse>, source: DraftSource): CardDraft {
   return {
     kind: (parsed.kind as CardKind) ?? kindFromIssueType(source.type),
     execSummary: clip(oneLine(parsed.headline), CARD_LIMITS.execSummary),
@@ -245,4 +377,37 @@ export async function draftCardWithAi(source: DraftSource): Promise<CardDraft> {
     screenshotCaption: clip(oneLine(parsed.screenshotCaption), CARD_LIMITS.screenshotCaption),
     screenshotPick: resolvePick(parsed.screenshotFilename, source.imageFilenames),
   };
+}
+
+/**
+ * Draft a card with the model. Throws on any failure - callers fall back to the
+ * deterministic drafter rather than surfacing an error to the coordinator.
+ */
+export async function draftCardWithAi(source: DraftSource): Promise<CardDraft> {
+  const ticket = ticketPrompt(source);
+  const drafted = await ask(SYSTEM, ticket, DRAFT_SCHEMA, DraftResponse, 'high');
+
+  if (!env.ai.reviewEnabled) return toDraft(drafted, source);
+
+  // A failed review is not a failed card. The draft is already usable, and
+  // losing it to a second network call would be a worse outcome than shipping
+  // it unreviewed.
+  try {
+    const reviewed = await ask(
+      REVIEW_SYSTEM,
+      [`--- The card ---`, cardPrompt(drafted), '', '--- The ticket it came from ---', ticket].join('\n'),
+      REVIEW_SCHEMA,
+      ReviewResponse,
+      'medium',
+    );
+    if (reviewed.fixed.length) {
+      console.log(`[bis] card review for ${source.jiraId}: ${reviewed.fixed.join('; ')}`);
+    }
+    return toDraft(reviewed, source);
+  } catch (err) {
+    console.warn(
+      `[bis] card review failed for ${source.jiraId}, keeping the first draft: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return toDraft(drafted, source);
+  }
 }

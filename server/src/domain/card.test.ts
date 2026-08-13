@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { CARD_KINDS, cardLines, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
+import { CARD_KINDS, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
 import { sectionHeights } from '../pack/pptx.js';
 
 describe('labelsFor', () => {
   it('asks a different question of each kind of ticket', () => {
-    expect(labelsFor('PROBLEM').current.label).toBe("What's going wrong");
+    expect(labelsFor('PROBLEM').current.label).toBe("What's happening");
     expect(labelsFor('IMPROVEMENT').current.label).toBe('How it works today');
     expect(labelsFor('FEATURE').current.label).toBe("What we can't do today");
   });
 
-  it('leads the benefit line with a phrase that fits the kind', () => {
-    expect(labelsFor('PROBLEM').benefits).toBe('If we fix it');
-    expect(labelsFor('FEATURE').benefits).toBe('If we build it');
+  it('closes every card on what changes once it ships', () => {
+    // The same four questions in the same order on every card is what makes
+    // thirty of them readable in one sitting.
+    for (const kind of CARD_KINDS) expect(labelsFor(kind).benefits).toBe('Once it’s live');
   });
 
   it('falls back to the problem wording for an unset or unknown kind', () => {
@@ -88,5 +89,51 @@ describe('sectionHeights', () => {
   it('still reserves a row for an empty section, so its label is not orphaned', () => {
     const [height] = sectionHeights(sections(''), 5.65, 10);
     expect(height).toBeGreaterThan(0.4);
+  });
+});
+
+describe('cardWarnings', () => {
+  const good = {
+    title: 'Aurora banner carousel component - no rotation delay',
+    execSummary: 'The homepage banner never moves past the first promotion, so campaigns we paid for are not seen.',
+    panelCurrent: 'Banner stays on the first promotion',
+    panelImpacts: 'Two spring campaigns paid for and never shown',
+    panelFuture: 'Banner moves on every few seconds',
+    panelBenefits: 'Every promotion we pay for is actually seen.',
+    impactFacts: 'Affects: all customers\nOpen since: March',
+    screenshotCaption: 'The banner stays on slide one',
+    screenshotAttachmentId: 'att-1',
+  };
+
+  it('passes a card that answers all four questions in plain English', () => {
+    expect(cardWarnings(good)).toEqual([]);
+  });
+
+  it('catches a headline that is just the ticket title reworded', () => {
+    const warnings = cardWarnings({ ...good, execSummary: 'Aurora banner carousel component — no rotation delay!' });
+    expect(warnings).toContain('the headline just repeats the ticket title');
+  });
+
+  it('names the questions the card does not answer', () => {
+    const warnings = cardWarnings({ ...good, panelImpacts: '', panelBenefits: '   ' });
+    expect(warnings.some((w) => w.includes('what it costs') && w.includes("what changes once it's live"))).toBe(true);
+  });
+
+  it('catches wording only a developer would understand', () => {
+    // The whole point of the card is that a buyer can read it.
+    expect(cardWarnings({ ...good, panelCurrent: 'The carousel API returns a null payload' })).toContainEqual(
+      expect.stringContaining('reads technical'),
+    );
+  });
+
+  it('notices a picture with no caption, and a picture nobody used', () => {
+    expect(cardWarnings({ ...good, screenshotCaption: '' })).toContain('the picture has no caption');
+    expect(cardWarnings({ ...good, screenshotAttachmentId: '', hasUnusedImage: true })).toContain(
+      'the ticket has a picture the card is not using',
+    );
+  });
+
+  it('says when there are no figures to show', () => {
+    expect(cardWarnings({ ...good, impactFacts: '' })).toContain('no figures');
   });
 });
