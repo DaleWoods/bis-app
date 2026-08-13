@@ -64,6 +64,7 @@ export function GuidePage({ member }: { member: Member }) {
           ['week', 'Running the week'],
           ['cards', 'Writing a good card'],
           ['results', 'Reading the results'],
+          ['discussions', 'Tickets the committee split on'],
           ['jira', 'Getting scores into JIRA'],
           ['automation', 'Letting it run itself'],
           ['settings', 'Settings worth knowing about'],
@@ -175,7 +176,10 @@ export function GuidePage({ member }: { member: Member }) {
           <li>
             <strong>Spread</strong> — how far apart the answers were. A wide spread
             {spread === undefined ? '' : ` (above ${spread}, currently)`} means the committee disagreed, and the ticket
-            is flagged <strong>Discussion needed</strong> and held back until it has been talked through.
+            is flagged <strong>Discussion needed</strong>. Nothing is written to JIRA for it and it does not go for
+            estimation: whoever is running the round calls a meeting, and the meeting can agree a score, send the
+            ticket back to be scored again next round, or decide to close it. Whichever it is, you will see it on the
+            results for that round.
           </li>
           <li>
             <strong>Priority ratio</strong> — the business score divided by the development effort. That ratio, not the
@@ -190,7 +194,9 @@ export function GuidePage({ member }: { member: Member }) {
         </p>
         <p>
           After the round is finalised you can see the anonymised results — everyone's spread, the averages per
-          category, and where your own view sat — from the round on the <Link to="/rounds">Rounds</Link> page.
+          category, and where your own view sat. Get there from the round on the <Link to="/rounds">Rounds</Link> page,
+          or from the <Link to="/">Score</Link> page, which offers the last finalised round when there is nothing open
+          to score.
         </p>
         <p>
           Finalising <strong>freezes</strong> those numbers. They are stored as they stood at that moment, so a
@@ -209,7 +215,9 @@ export function GuidePage({ member }: { member: Member }) {
               </li>
               <li>
                 <strong>Put the tickets in.</strong> “Import from JIRA” pulls whatever is sitting in the configured
-                queue. You can also add one by hand or paste CSV.
+                queue. You can also add one by hand or paste CSV. A round only takes tickets while it is a draft or
+                open — once it is closed, adding one would give the committee something nobody can score, so it is
+                refused and you are pointed at the next round instead.
               </li>
               <li>
                 <strong>Check the cards.</strong> This is the part that decides whether the round is any good — see
@@ -231,6 +239,10 @@ export function GuidePage({ member }: { member: Member }) {
               <li>
                 <strong>Finalise.</strong> This freezes the results and opens the anonymised feedback view to the
                 committee.
+              </li>
+              <li>
+                <strong>Sort out the split tickets.</strong> Anything the committee did not agree on is held back —
+                see Tickets the committee split on.
               </li>
               <li>
                 <strong>Write the scores to JIRA.</strong>
@@ -316,7 +328,8 @@ export function GuidePage({ member }: { member: Member }) {
               <li>
                 <strong>Spread.</strong> Shown in red when it is over the discussion threshold, with a{' '}
                 <strong>Discussion needed</strong> badge and a line saying what the scores actually ranged between. That
-                ticket will not go for estimation until the committee has talked it through.
+                ticket goes on the Discussions list below, and nothing is written to JIRA for it until you record what
+                the meeting decided.
               </li>
               <li>
                 <strong>Awaiting WOSG Responses</strong> — fewer responses than the minimum. It rolls over.
@@ -342,10 +355,55 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
+          <Section id="discussions" title="Tickets the committee split on">
+            <p>
+              When the committee's totals for a ticket are further apart than the spread threshold, averaging them
+              produces a number nobody in the room agreed with. Those tickets collect on the{' '}
+              <strong>Discussions</strong> list on the round page, and they are held out of the JIRA write-back — with
+              no override, unlike the minimum-responses gate — until you record an outcome.
+            </p>
+            <p>
+              Book the meeting however you normally would. The list gives you what you need to run it: every total that
+              was given (unattributed, as always), the lowest and highest, the spread against the threshold, and any
+              notes or queries left with the scores. Then record one of three answers:
+            </p>
+            <ul>
+              <li>
+                <strong>Agreed a score.</strong> The committee talked and settled on a number. Type it in — or leave it
+                blank to accept the calculated average after all. That number, not the average, is what goes to JIRA,
+                and the ticket then moves on like any other.
+              </li>
+              <li>
+                <strong>Score it again next round.</strong> The ticket is added to whichever round is still taking
+                tickets, so the committee sees it again. Nothing is written to JIRA for it in this round. If there is no
+                such round yet, create the next one and it rolls over into it.
+              </li>
+              <li>
+                <strong>Close the ticket.</strong> Recorded as one not to do. No score is written and the ticket is not
+                moved on; closing it in JIRA is still done in JIRA.
+              </li>
+            </ul>
+            <p>
+              The note you write is shown to the whole committee on the feedback view for that round, so it is worth a
+              sentence on what was concluded. You can change an outcome afterwards; changing an agreed score makes the
+              next write-back send the new number rather than treating it as already written.
+            </p>
+            <p className="hint">
+              Recording a discussion never touches the frozen results. What the committee scored stays exactly as it was
+              given; the agreed number is stored alongside it as the decision it is.
+            </p>
+          </Section>
+
           <Section id="jira" title="Getting scores into JIRA">
             <p>
               <strong>Write scores to JIRA</strong> appears once a round is finalised. It writes each ticket's business
-              score to the configured field, and moves the ticket on if that is switched on under Settings → JIRA.
+              score to the configured field and then moves the ticket on — to <em>Ready for Estimation</em> by default,
+              or whatever transition you named under Settings → JIRA.
+            </p>
+            <p>
+              Only tickets that cleared every gate are moved: enough responses, nobody asking to close it, and no
+              discussion still outstanding. The two steps are separate, so if the score writes but the workflow refuses
+              the move, you are told exactly that rather than the whole ticket being reported as failed.
             </p>
             <p>
               Afterwards you get a row per ticket saying what happened and <em>why</em>. Most of the time “skipped” means
@@ -362,6 +420,10 @@ export function GuidePage({ member }: { member: Member }) {
               </li>
               <li>
                 <strong>Already written</strong> — the same score has gone across before. Running it twice is safe.
+              </li>
+              <li>
+                <strong>Held for discussion</strong> — the committee was split and the meeting has not been recorded
+                yet, or it ended in a re-score or a close. See Tickets the committee split on, above.
               </li>
             </ul>
             <p className="hint">
@@ -460,7 +522,38 @@ export function GuidePage({ member }: { member: Member }) {
                     <th scope="row" className="plain">
                       A committee member sees nothing to score
                     </th>
-                    <td>The round has no tickets yet, or it has not been distributed.</td>
+                    <td>
+                      The round has no tickets yet, or it has not been distributed. Between rounds there is genuinely
+                      nothing open, and the Score page says so — with a link to the last finalised round's results.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="plain">
+                      A ticket was skipped as “held for discussion”
+                    </th>
+                    <td>
+                      The committee was split on it and the meeting has not been recorded. Record the outcome under
+                      Discussions on the round page and run the write-back again.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="plain">
+                      The score reached JIRA but the ticket did not move
+                    </th>
+                    <td>
+                      The write-back row says which of the two it was. If the transition failed, the message is JIRA's
+                      own — usually the transition name in Settings → JIRA no longer matches the workflow. If it was
+                      never attempted, the ticket had not cleared every gate, or the switch is off in Settings.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="plain">
+                      “Import from JIRA” is refused
+                    </th>
+                    <td>
+                      The round is closed or finalised. Import into the next round — a closed round cannot be scored,
+                      and a finalised one cannot have tickets taken back out.
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row" className="plain">

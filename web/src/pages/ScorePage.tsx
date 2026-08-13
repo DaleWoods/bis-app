@@ -21,6 +21,8 @@ export function ScorePage({ member, roundId }: Props) {
   const [relevanceOptions, setRelevanceOptions] = useState<Array<{ value: Relevance; label: string }>>([]);
   const [closureReasons, setClosureReasons] = useState<string[]>([]);
   const [mayScore, setMayScore] = useState(true);
+  /** The round to look back at when there is nothing to score right now. */
+  const [lastFinalised, setLastFinalised] = useState<Round | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +37,7 @@ export function ScorePage({ member, roundId }: Props) {
         setRelevanceOptions(model.relevanceOptions);
         setClosureReasons(model.closureReasons);
         setRound(data.round);
+        setLastFinalised(('lastFinalised' in data ? data.lastFinalised : null) ?? null);
         setMayScore(data.canScore !== false);
         setScoringOpen(Boolean(data.scoringOpen));
         setTickets(data.tickets);
@@ -64,11 +67,21 @@ export function ScorePage({ member, roundId }: Props) {
             ? 'There is no open scoring round at the moment. You will get an email when the next round opens.'
             : 'There is no open scoring round at the moment.'}
         </div>
-        {!mayScore ? (
+        {/*
+          Without this, a member who signed in the day after a round was
+          finalised was told there was nothing open and left with nowhere to
+          go - not even to the results of the round they had just scored.
+        */}
+        {lastFinalised ? (
           <p>
-            <Link to="/rounds">Go to the rounds dashboard</Link>
+            The last round, <strong>{lastFinalised.weekLabel}</strong>, finished
+            {lastFinalised.finalisedAt ? ` on ${formatDateTime(lastFinalised.finalisedAt)}` : ''}.{' '}
+            <Link to={`/feedback/${lastFinalised.id}`}>See how the committee scored it</Link>.
           </p>
         ) : null}
+        <p>
+          <Link to="/rounds">Go to the rounds dashboard</Link>
+        </p>
       </>
     );
   }

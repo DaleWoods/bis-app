@@ -241,6 +241,46 @@ export interface FeedbackTicket {
   totalsDistribution: number[];
   excludedCounts: Record<string, number>;
   notes: string[];
+  /** What the meeting about a split ticket decided. Empty when there was no meeting. */
+  discussionOutcome: string;
+  discussionNote: string;
+  agreedScore: number | null;
+}
+
+export const DISCUSSION_OUTCOMES = ['AGREED', 'RESCORE', 'CLOSE'] as const;
+export type DiscussionOutcome = (typeof DISCUSSION_OUTCOMES)[number];
+
+export const DISCUSSION_OUTCOME_LABELS: Record<DiscussionOutcome, string> = {
+  AGREED: 'Agreed a score',
+  RESCORE: 'Score it again next round',
+  CLOSE: 'Close the ticket',
+};
+
+export interface Discussion {
+  roundId: string;
+  ticketId: string;
+  meetingAt: string | null;
+  outcome: DiscussionOutcome | '';
+  agreedScore: number | null;
+  note: string;
+  openedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string;
+}
+
+export interface DiscussionItem {
+  ticketId: string;
+  jiraId: string;
+  title: string;
+  responsesCount: number;
+  calculatedScore: number | null;
+  stdDev: number | null;
+  lowest: number | null;
+  highest: number | null;
+  totals: number[];
+  notes: string[];
+  discussion: Discussion | null;
+  blockingWriteBack: boolean;
 }
 
 export class ApiError extends Error {
@@ -274,6 +314,8 @@ export const api = {
   myRound: () =>
     request<{
       round: Round | null;
+      /** The round to look back at when there is nothing to score right now. */
+      lastFinalised?: Round | null;
       canScore: boolean;
       scoringOpen?: boolean;
       tickets: Ticket[];
@@ -350,6 +392,16 @@ export const api = {
       body: JSON.stringify({ archived }),
     }),
   feedback: (id: string) => request<{ round: Round; tickets: FeedbackTicket[] }>(`/api/rounds/${id}/feedback`),
+  discussions: (id: string) => request<{ round: Round; items: DiscussionItem[] }>(`/api/rounds/${id}/discussions`),
+  recordDiscussion: (
+    roundId: string,
+    ticketId: string,
+    payload: { outcome?: DiscussionOutcome | ''; agreedScore?: number | null; meetingAt?: string | null; note?: string },
+  ) =>
+    request<{ discussion: Discussion; rescoredInto: { id: string; weekLabel: string } | null; items: DiscussionItem[] }>(
+      `/api/rounds/${roundId}/discussions/${ticketId}`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
 
   tickets: () => request<{ tickets: Ticket[] }>('/api/tickets'),
   saveTicket: (input: Partial<Ticket> & { jiraId: string; title: string; roundId?: string }) =>

@@ -27,6 +27,7 @@ const { createRound, addTicketToRound, getRound, setRoundStatus } = await import
 const { upsertTicket, getTicket } = await import('./ticketService.js');
 const { saveMember } = await import('./memberService.js');
 const { saveSubmission } = await import('./submissionService.js');
+const { recordDiscussion } = await import('./discussionService.js');
 
 let db: Db;
 let roundId: string;
@@ -54,6 +55,33 @@ async function scoreIt(count: number, relevance: 'YES' | 'UNSURE' = 'YES') {
       ticket,
       member,
       payload: { relevance, scores: relevance === 'YES' ? scores : undefined },
+      config: config.scoring,
+    });
+  }
+}
+
+/**
+ * One member per entry, each giving every category that number - so [0, 10] is
+ * the 0/70 against 70/70 split that started all this.
+ */
+async function scoreEach(perCategory: number[]) {
+  const config = await getAppConfig(db);
+  const categories = await listCategories(db);
+  const round = (await getRound(db, roundId))!;
+  const ticket = (await getTicket(db, ticketId))!;
+
+  for (const [i, value] of perCategory.entries()) {
+    const member = await saveMember(db, {
+      name: `Split ${i}`,
+      email: `split${i}@example.com`,
+      team: 'Trading',
+      role: 'COMMITTEE',
+    });
+    await saveSubmission(db, {
+      round,
+      ticket,
+      member,
+      payload: { relevance: 'YES', scores: Object.fromEntries(categories.map((c) => [c.id, value])) },
       config: config.scoring,
     });
   }
@@ -151,5 +179,92 @@ describe('writeBackRound', () => {
     writeBusinessScore.mockRejectedValueOnce(new Error('timeout'));
     expect((await writeBackRound(db, ACTOR, round))[0].status).toBe('FAILED');
     expect((await writeBackRound(db, ACTOR, round))[0].status).toBe('SUCCESS');
+  });
+
+  it('moves the ticket on once the score is in JIRA', async () => {
+    await scoreIt(5);
+
+    const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
+    expect(entry.status).toBe('SUCCESS');
+    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', 'RA: Ready for Estimation');
+    expect(entry.transitionedTo).toBe('Ready for Estimation');
+  });
+
+  it('keeps the score written when the transition is the thing that fails', async () => {
+    await scoreIt(5);
+    transitionIssue.mockRejectedValue(new Error('Transition is not valid from this status'));
+
+    const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
+    // The score landed. Calling the whole ticket FAILED would send a
+    // coordinator chasing a score that is already there.
+    expect(entry.status).toBe('SUCCESS');
+    expect(entry.transitionedTo).toBe('');
+    expect(entry.reason).toContain('Transition is not valid');
+  });
+});
+
+/**
+ * Dale's test round: two members, 0/70 and 70/70. The average of those is not a
+ * number either of them agreed with, and the meeting about it might end in a
+ * re-score - so nothing goes to JIRA until the meeting is recorded.
+ */
+describe('a ticket the committee was split on', () => {
+  it('is held out of the write-back until the discussion is recorded', async () => {
+    await scoreEach([0, 10]);
+
+    const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!, { ignoreMinSubmissions: true });
+    expect(entry.status).toBe('SKIPPED');
+    expect(entry.reason).toContain('0 to 70');
+    expect(writeBusinessScore).not.toHaveBeenCalled();
+    expect(transitionIssue).not.toHaveBeenCalled();
+  });
+
+  it('writes the agreed score, not the average, once the meeting has happened', async () => {
+    await scoreEach([0, 10]);
+    const round = (await getRound(db, roundId))!;
+    await recordDiscussion(db, ACTOR, round, ticketId, { outcome: 'AGREED', agreedScore: 42 });
+
+    const [entry] = await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+    expect(entry.status).toBe('SUCCESS');
+    expect(entry.businessScore).toBe(42);
+    expect(writeBusinessScore).toHaveBeenCalledWith('ECOM-2463', 'customfield_101', 42);
+    // Agreeing a score is what makes it ready, so it moves on like any other.
+    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', 'RA: Ready for Estimation');
+  });
+
+  it('stays out of JIRA when the meeting sends it back to be scored again', async () => {
+    await scoreEach([0, 10]);
+    const round = (await getRound(db, roundId))!;
+    await recordDiscussion(db, ACTOR, round, ticketId, { outcome: 'RESCORE' });
+
+    const [entry] = await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+    expect(entry.status).toBe('SKIPPED');
+    expect(entry.reason).toMatch(/scored again/);
+    expect(writeBusinessScore).not.toHaveBeenCalled();
+  });
+
+  it('stays out of JIRA when the meeting decides to close it', async () => {
+    await scoreEach([0, 10]);
+    const round = (await getRound(db, roundId))!;
+    await recordDiscussion(db, ACTOR, round, ticketId, { outcome: 'CLOSE' });
+
+    const [entry] = await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+    expect(entry.status).toBe('SKIPPED');
+    expect(entry.reason).toMatch(/close/i);
+    expect(writeBusinessScore).not.toHaveBeenCalled();
+  });
+
+  it('rewrites JIRA when the agreed score is changed afterwards', async () => {
+    await scoreEach([0, 10]);
+    const round = (await getRound(db, roundId))!;
+
+    await recordDiscussion(db, ACTOR, round, ticketId, { outcome: 'AGREED', agreedScore: 42 });
+    await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+
+    await recordDiscussion(db, ACTOR, round, ticketId, { outcome: 'AGREED', agreedScore: 50 });
+    const [entry] = await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+
+    expect(entry.status).toBe('SUCCESS');
+    expect(writeBusinessScore).toHaveBeenLastCalledWith('ECOM-2463', 'customfield_101', 50);
   });
 });

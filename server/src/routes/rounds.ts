@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { env } from '../config/env.js';
 import { requireAuth, requireCoordinator } from '../auth/middleware.js';
-import { STREAMS, isCoordinator } from '../domain/types.js';
+import { DISCUSSION_OUTCOMES, STREAMS, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { getAppConfig, listCategories } from '../services/configService.js';
 import { listEmailLog, sendDistribution, sendReminders } from '../services/emailService.js';
@@ -23,6 +23,7 @@ import {
 } from '../services/roundService.js';
 import { listRoundSubmissions, roundProgress, setSubmissionArchived } from '../services/submissionService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
+import { discussionAgenda, listDiscussions, recordDiscussion } from '../services/discussionService.js';
 import { describeNext, listAutomationLog, runDueAutomation } from '../services/automationService.js';
 import { fetchAttachment } from '../integrations/jira.js';
 import { buildPptx } from '../pack/pptx.js';
@@ -285,6 +286,49 @@ router.get(
   }),
 );
 
+/**
+ * §10.4 discussions: the tickets the committee was split on, and what the
+ * meeting about them decided. Coordinator-only - it is the coordinator who
+ * calls the meeting and records the outcome. The committee sees the outcome on
+ * the feedback view once the round is finalised.
+ */
+router.get(
+  '/rounds/:id/discussions',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    res.json({ round, items: await discussionAgenda(db, round) });
+  }),
+);
+
+const discussionSchema = z.object({
+  meetingAt: z.string().nullable().optional(),
+  outcome: z.enum(DISCUSSION_OUTCOMES).or(z.literal('')).optional(),
+  agreedScore: z.number().nullable().optional(),
+  note: z.string().optional(),
+});
+
+router.post(
+  '/rounds/:id/discussions/:ticketId',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    const input = discussionSchema.parse(req.body ?? {});
+    const result = await recordDiscussion(db, actorOf(req), round, req.params.ticketId, input);
+    res.json({ ...result, items: await discussionAgenda(db, round) });
+  }),
+);
+
 /** §9 feedback view - visible to the whole committee once finalised, never attributed. */
 router.get(
   '/rounds/:id/feedback',
@@ -300,7 +344,7 @@ router.get(
       res.status(403).json({ error: 'The feedback view opens once the round is finalised' });
       return;
     }
-    res.json({ round, tickets: await buildFeedbackView(db, round) });
+    res.json({ round, tickets: await buildFeedbackView(db, round, await listDiscussions(db, round.id)) });
   }),
 );
 

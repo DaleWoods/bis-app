@@ -9,10 +9,12 @@ import {
   type AutomationStatus,
   type Submission,
   type Ticket,
+  type DiscussionItem,
   type TicketResult,
   type WriteBackEntry,
 } from '../api';
 import { Link } from '../router';
+import { DiscussionPanel } from '../components/DiscussionPanel';
 import { TicketEditor } from './TicketEditor';
 
 /**
@@ -43,6 +45,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [automation, setAutomation] = useState<AutomationStatus | null>(null);
   const [showAutomationLog, setShowAutomationLog] = useState(false);
   const [writeBackEntries, setWriteBackEntries] = useState<WriteBackEntry[]>([]);
+  /** §10.4: the tickets the committee split on, and what the meeting decided. */
+  const [discussions, setDiscussions] = useState<DiscussionItem[]>([]);
   const [emails, setEmails] = useState<
     Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
   >([]);
@@ -59,10 +63,11 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
     async (isCurrent: () => boolean = () => true) => {
       // Integration status drives the notices below, so the coordinator knows
       // what a button will actually do before pressing it.
-      const [config, emailLog, automationStatus, data] = await Promise.all([
+      const [config, emailLog, automationStatus, agenda, data] = await Promise.all([
         api.config().catch(() => null),
         api.emails(roundId).catch(() => null),
         api.automationStatus(roundId).catch(() => null),
+        api.discussions(roundId).catch(() => null),
         api.round(roundId).then(
           (value) => ({ ok: true as const, value }),
           (err: unknown) => ({ ok: false as const, err }),
@@ -74,6 +79,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
       if (config) setDiscussionThreshold(config.config.scoring.stdDevDiscussionThreshold);
       setEmails(emailLog?.emails ?? []);
       setAutomation(automationStatus ?? null);
+      setDiscussions(agenda?.items ?? []);
 
       if (!data.ok) {
         setError(data.err instanceof Error ? data.err.message : 'Could not load the round');
@@ -430,6 +436,13 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         </div>
       ) : null}
 
+      <DiscussionPanel
+        roundId={round.id}
+        items={discussions}
+        threshold={discussionThreshold}
+        onChanged={setDiscussions}
+      />
+
       <h2>Submission progress</h2>
       <div className="card table-scroll">
         <table>
@@ -617,7 +630,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 <p className="hint" style={{ margin: '0.4rem 0 0' }}>
                   The committee is split on this one — scores ranged {Math.min(...result.totalsDistribution)} to{' '}
                   {Math.max(...result.totalsDistribution)} out of 70, a spread of {result.stdDev?.toFixed(1)} against a
-                  threshold of {discussionThreshold}. It will not go for estimation until it has been talked through.
+                  threshold of {discussionThreshold}. It will not go for estimation, and nothing is written to JIRA for
+                  it, until the meeting about it is recorded under Discussions below.
                 </p>
               ) : null}
 

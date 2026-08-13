@@ -370,12 +370,17 @@ export function SettingsPage({ member }: { member: Member }) {
               <input id="businessScoreFieldId" name="businessScoreFieldId" type="text" defaultValue={config.jira.businessScoreFieldId} placeholder="customfield_XXXXX" />
             </div>
             <div className="grow field">
-              <label htmlFor="transitionName">Transition on finalise</label>
+              <label htmlFor="transitionName">Move the ticket on after writing the score</label>
               <input id="transitionName" name="transitionName" type="text" defaultValue={config.jira.transitionName} />
               <label htmlFor="transitionOnFinalise" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>
                 <input id="transitionOnFinalise" name="transitionOnFinalise" type="checkbox" defaultChecked={config.jira.transitionOnFinalise} />
-                Also transition the ticket (default: write the score only)
+                Run this transition when the score is written (on by default)
               </label>
+              <p className="hint">
+                The transition name exactly as the JIRA workflow spells it. Only tickets that cleared every gate are
+                moved — enough responses, nobody asking to close it, no discussion still outstanding. If the score
+                writes but the move fails, the write-back says so rather than calling the whole thing failed.
+              </p>
             </div>
           </div>
           <div className="row">

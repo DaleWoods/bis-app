@@ -5,7 +5,7 @@ import { requireAuth } from '../auth/middleware.js';
 import { RELEVANCE_VALUES, canScore, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
-import { getActiveRound, getRound, isScoringOpen, listRoundTickets } from '../services/roundService.js';
+import { getActiveRound, getRound, isScoringOpen, listRoundTickets, listRounds } from '../services/roundService.js';
 import { listMemberSubmissions, saveSubmission } from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
@@ -23,7 +23,27 @@ router.get(
     const db = await getDb();
     const round = await getActiveRound(db);
     if (!round) {
-      res.json({ round: null, tickets: [], submissions: [], categories: await listCategories(db), canScore: canScore(req.member!.role) });
+      /*
+        Nothing to score is not the same as nothing to see.
+
+        A committee member signing in the day after a round was finalised was
+        told "there is no open scoring round" and left there, with no way to
+        reach the anonymised feedback for the round they had just scored - that
+        link lives on the rounds dashboard, which is not where the app sends
+        them. So the last finalised round comes back with the empty answer, and
+        the scoring page offers it.
+      */
+      const lastFinalised = (await listRounds(db))
+        .filter((r) => r.status === 'FINALISED')
+        .sort((a, b) => (b.finalisedAt ?? b.cutOffAt).localeCompare(a.finalisedAt ?? a.cutOffAt))[0];
+      res.json({
+        round: null,
+        lastFinalised: lastFinalised ?? null,
+        tickets: [],
+        submissions: [],
+        categories: await listCategories(db),
+        canScore: canScore(req.member!.role),
+      });
       return;
     }
     res.json({

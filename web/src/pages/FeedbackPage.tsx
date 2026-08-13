@@ -47,9 +47,17 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           </div>
 
           <div className="row" style={{ marginTop: '0.75rem', gap: '1.5rem' }}>
+            {/*
+              When a meeting agreed a number, that number is the business score
+              - it is what goes to JIRA. Leading with the average the committee
+              was split over would contradict the note directly below it.
+            */}
             <p style={{ margin: 0 }}>
-              <strong style={{ fontSize: '1.6rem' }}>{ticket.businessScore ?? '—'}</strong>
+              <strong style={{ fontSize: '1.6rem' }}>{ticket.agreedScore ?? ticket.businessScore ?? '—'}</strong>
               <span className="hint"> / 70 business score</span>
+              {ticket.agreedScore !== null ? (
+                <span className="hint"> · agreed at the discussion, from an average of {ticket.businessScore}</span>
+              ) : null}
             </p>
             <p style={{ margin: 0 }}>
               Spread (std dev): <strong>{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</strong>
@@ -60,6 +68,29 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
               <strong>{ticket.priorityRatio === null ? '—' : ticket.priorityRatio.toFixed(2)}</strong>
             </p>
           </div>
+
+          {/*
+            §10.4: a split ticket is held back and talked through. The people
+            who gave those scores are the ones who should hear what came of it,
+            so the outcome of the meeting is shown here rather than staying in
+            the coordinator's half of the app.
+          */}
+          {ticket.discussionRequired ? (
+            <div className={`notice${ticket.discussionOutcome ? '' : ' warn'}`} style={{ marginTop: '0.75rem' }}>
+              {ticket.discussionOutcome ? (
+                <>
+                  <strong>Discussed: {ticket.discussionOutcome.toLowerCase()}.</strong>
+                  {ticket.agreedScore !== null ? ` The committee settled on ${ticket.agreedScore} out of 70.` : ''}
+                  {ticket.discussionNote ? ` ${ticket.discussionNote}` : ''}
+                </>
+              ) : (
+                <>
+                  <strong>Held for discussion.</strong> The scores for this one were too far apart to average, so it is
+                  waiting on a meeting. Nothing has been written to JIRA for it.
+                </>
+              )}
+            </div>
+          ) : null}
 
           <h3 style={{ marginTop: '1rem' }}>Category averages</h3>
           <div className="table-scroll">

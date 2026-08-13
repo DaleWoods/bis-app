@@ -1014,3 +1014,21 @@ th button.sort .arrow.on {
   opacity: 1;
   color: var(--navy);
 }
+
+/* §10.4 discussion agenda: one block per ticket the committee split on. */
+.discussion-item {
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+  margin-top: 0.9rem;
+}
+.discussion-item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.discussion-item h3 {
+  font-size: 1.02rem;
+  line-height: 1.35;
+}
+.discussion-item form {
+  margin-top: 0.6rem;
+}

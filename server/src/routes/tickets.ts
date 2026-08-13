@@ -5,7 +5,7 @@ import { requireAuth, requireCoordinator } from '../auth/middleware.js';
 import { STREAMS } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
 import { importQueue, refreshTicketFromJira } from '../services/jiraService.js';
-import { addTicketToRound, getRound } from '../services/roundService.js';
+import { addTicketToRound, assertRoundAcceptsTickets, getRound } from '../services/roundService.js';
 import { deleteTicket, getTicket, listTickets, upsertTicket } from '../services/ticketService.js';
 import { getAppConfig } from '../services/configService.js';
 import { parseCsvObjects } from '../util/csv.js';
@@ -110,6 +110,14 @@ router.post(
   asyncHandler(async (req, res) => {
     const { csv, roundId } = z.object({ csv: z.string().min(1), roundId: z.string().optional() }).parse(req.body ?? {});
     const db = await getDb();
+    if (roundId) {
+      const round = await getRound(db, roundId);
+      if (!round) {
+        res.status(404).json({ error: 'Round not found' });
+        return;
+      }
+      assertRoundAcceptsTickets(round);
+    }
     const rows = parseCsvObjects(csv);
 
     const imported = [];

@@ -44,6 +44,15 @@ coordinators. Put new content in whichever half its reader belongs to.
 - **Schema changes go in a migration**, never in `schema.sql`. The baseline is
   applied first and the migrations after it, so a column in both breaks a fresh
   database. See `db/migrations/`.
+- **Changing a default in `DEFAULT_*_CONFIG` does not reach an installation that
+  has already saved that section.** Config is stored whole, per section, and
+  merged over the defaults — so a saved section keeps the old value for good.
+  Changing a default that matters therefore needs a migration to patch the
+  stored JSON as well. `008_transition_on_finalise.sql` is the pattern: a
+  `REPLACE` on the exact literal `JSON.stringify` writes, leaving the rest of
+  the saved section alone. Same for seeded rows —
+  `006_commercial_impact_label.sql` corrects only the value that shipped wrong,
+  so a label somebody has since edited by hand survives.
 - **Zod strips what it does not declare.** Adding a field to a form means adding
   it to the route's schema too, or it is silently discarded on save. This has
   bitten once already — `routes/ticketSave.test.ts` guards it.

@@ -6,10 +6,11 @@ import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { AuditActor, audit } from './auditService.js';
 import { getAppConfig } from './configService.js';
-import { HttpishError, Round, addTicketToRound } from './roundService.js';
+import { HttpishError, Round, addTicketToRound, assertRoundAcceptsTickets, getRound } from './roundService.js';
 import { roundResults } from './resultService.js';
 import { Ticket, upsertTicket } from './ticketService.js';
 import { draftCardsFor, draftToTicketFields } from './cardDraftService.js';
+import { heldForDiscussion, listDiscussions } from './discussionService.js';
 
 export interface ImportResult {
   imported: Ticket[];
@@ -27,6 +28,16 @@ export async function importQueue(
   options: { roundId?: string; jql?: string; maxResults?: number } = {},
 ): Promise<ImportResult> {
   const config = await getAppConfig(db);
+
+  // Checked before JIRA is called rather than when the first ticket is added:
+  // a round that will not take tickets should say so straight away, not after
+  // pulling thirty issues and drafting thirty cards.
+  if (options.roundId) {
+    const round = await getRound(db, options.roundId);
+    if (!round) throw new HttpishError(404, 'Round not found');
+    assertRoundAcceptsTickets(round);
+  }
+
   const jql = options.jql?.trim() || config.jira.queueJql;
   const inputs = await jira.searchQueue(
     config.jira,
@@ -122,10 +133,15 @@ export async function writeBackRound(
   // Frozen once the round is finalised, so what goes to JIRA is the number
   // the committee actually landed on, not a recalculation of it.
   const results = await roundResults(db, round, { config: config.scoring });
+  const discussions = await listDiscussions(db, round.id);
   const entries: WriteBackEntry[] = [];
 
   for (const { ticket, aggregate } of results) {
-    const key = `${round.id}:${ticket.id}:${aggregate.businessScore ?? 'null'}`;
+    const discussion = discussions.get(ticket.id) ?? null;
+    // An agreed score replaces the average it was agreed instead of, and being
+    // part of the key means changing it after the fact writes again rather
+    // than being waved through as "already written".
+    const agreed = discussion?.outcome === 'AGREED' ? discussion.agreedScore : null;
 
     if (aggregate.businessScore === null) {
       entries.push({
@@ -138,6 +154,9 @@ export async function writeBackRound(
       });
       continue;
     }
+
+    const businessScore = agreed ?? aggregate.businessScore;
+    const key = `${round.id}:${ticket.id}:${businessScore}`;
     // The minimum-responses gate (§10) is a rule about confidence, not about
     // JIRA, so a coordinator can knowingly write past it - for a test ticket, or
     // a round the committee will never reach a quorum on.
@@ -150,6 +169,28 @@ export async function writeBackRound(
       });
       continue;
     }
+    /*
+      A ticket the committee was split on is held back until the discussion has
+      happened - and there is no override for it, unlike the responses gate.
+      The average of two people who scored it 1 and 70 is not a number anyone
+      in that meeting agreed with, and the meeting may well end in a re-score,
+      so writing it to JIRA first would put a figure in front of RA that the
+      committee is in the middle of retracting.
+    */
+    if (heldForDiscussion(aggregate.discussionRequired, discussion)) {
+      entries.push({
+        jiraId: ticket.jiraId,
+        businessScore: aggregate.businessScore,
+        status: 'SKIPPED',
+        reason:
+          discussion?.outcome === 'RESCORE'
+            ? 'The discussion sent this back to the committee to be scored again'
+            : discussion?.outcome === 'CLOSE'
+              ? 'The discussion decided to close this ticket, so there is no score to write'
+              : `Scores ranged ${Math.min(...aggregate.totalsDistribution)} to ${Math.max(...aggregate.totalsDistribution)} — held until the discussion is recorded on the Discussions tab`,
+      });
+      continue;
+    }
 
     const existing = await db.get<{ id: string; status: string; attempts: number }>(
       'SELECT id, status, attempts FROM jira_writebacks WHERE idempotency_key = ?',
@@ -158,7 +199,7 @@ export async function writeBackRound(
     if (existing?.status === 'SUCCESS' && !options.force) {
       entries.push({
         jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
+        businessScore,
         status: 'SKIPPED',
         reason: 'Already written with this score',
       });
@@ -179,31 +220,12 @@ export async function writeBackRound(
       await db.run(
         `INSERT INTO jira_writebacks (id, round_id, ticket_id, jira_id, business_score, idempotency_key, status, attempts, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
-        [id, round.id, ticket.id, ticket.jiraId, aggregate.businessScore, key, attempts, now, now],
+        [id, round.id, ticket.id, ticket.jiraId, businessScore, key, attempts, now, now],
       );
     }
 
     try {
-      await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, aggregate.businessScore);
-
-      let transitionedTo = '';
-      if (config.jira.transitionOnFinalise && aggregate.sendForEstimation) {
-        transitionedTo = await jira.transitionIssue(ticket.jiraId, config.jira.transitionName);
-      }
-
-      await db.run('UPDATE jira_writebacks SET status = ?, error = ?, transitioned_to = ?, updated_at = ? WHERE id = ?', [
-        'SUCCESS',
-        '',
-        transitionedTo,
-        nowIso(),
-        id,
-      ]);
-      await audit(db, actor, 'jira.writeback', 'ticket', ticket.id, {
-        jiraId: ticket.jiraId,
-        businessScore: aggregate.businessScore,
-        transitionedTo,
-      });
-      entries.push({ jiraId: ticket.jiraId, businessScore: aggregate.businessScore, status: 'SUCCESS', transitionedTo });
+      await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, businessScore);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await db.run('UPDATE jira_writebacks SET status = ?, error = ?, updated_at = ? WHERE id = ?', [
@@ -213,8 +235,65 @@ export async function writeBackRound(
         id,
       ]);
       await audit(db, actor, 'jira.writeback.failed', 'ticket', ticket.id, { jiraId: ticket.jiraId, error: message });
-      entries.push({ jiraId: ticket.jiraId, businessScore: aggregate.businessScore, status: 'FAILED', reason: message });
+      entries.push({ jiraId: ticket.jiraId, businessScore, status: 'FAILED', reason: message });
+      continue;
     }
+
+    /*
+      Moving the ticket on is a second, separate step.
+
+      It used to share the score's try block, so a workflow that would not
+      accept the transition - a missing permission, a name that no longer
+      matches - reported the whole ticket as FAILED even though the score was
+      sitting in JIRA. Re-running then wrote the same score again chasing an
+      error that had nothing to do with it.
+
+      What counts as ready is the §10.3 gate, plus the one thing the gate
+      cannot know: a split the committee has since talked through and agreed a
+      score for is ready, even though sendForEstimation still says it is not.
+    */
+    const readyForEstimation =
+      (aggregate.minSubmissionsMet || Boolean(options.ignoreMinSubmissions)) &&
+      !aggregate.toClose &&
+      (!aggregate.discussionRequired || agreed !== null);
+
+    let transitionedTo = '';
+    let transitionError = '';
+    if (config.jira.transitionOnFinalise && readyForEstimation) {
+      try {
+        transitionedTo = await jira.transitionIssue(ticket.jiraId, config.jira.transitionName);
+      } catch (err) {
+        transitionError = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    await db.run('UPDATE jira_writebacks SET status = ?, error = ?, transitioned_to = ?, updated_at = ? WHERE id = ?', [
+      'SUCCESS',
+      transitionError,
+      transitionedTo,
+      nowIso(),
+      id,
+    ]);
+    await audit(db, actor, 'jira.writeback', 'ticket', ticket.id, {
+      jiraId: ticket.jiraId,
+      businessScore,
+      agreedAtDiscussion: agreed !== null,
+      transitionedTo,
+      transitionError,
+    });
+    entries.push({
+      jiraId: ticket.jiraId,
+      businessScore,
+      status: 'SUCCESS',
+      transitionedTo,
+      reason: transitionError
+        ? `Score written, but the move to "${config.jira.transitionName}" failed: ${transitionError}`
+        : !config.jira.transitionOnFinalise
+          ? 'Score written. Moving the ticket on is switched off in Settings → JIRA.'
+          : !readyForEstimation
+            ? 'Score written. Not moved on — it has not cleared every gate yet.'
+            : undefined,
+    });
   }
 
   return entries;

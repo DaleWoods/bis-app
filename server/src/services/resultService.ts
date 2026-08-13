@@ -1,11 +1,14 @@
 import { Db } from '../db/index.js';
 import { TicketAggregate, aggregateTicket, resolveEffort } from '../domain/scoring.js';
-import { CategoryDef, PRIORITY_BAND_LABELS, ScoringConfig } from '../domain/types.js';
+import { CategoryDef, DISCUSSION_OUTCOME_LABELS, PRIORITY_BAND_LABELS, ScoringConfig } from '../domain/types.js';
 import { nowIso } from '../util/time.js';
 import { listCategories, getScoringConfig } from './configService.js';
 import { Round, listRoundTickets } from './roundService.js';
 import { listRoundSubmissions, toScoringInput } from './submissionService.js';
 import { Ticket } from './ticketService.js';
+// Type-only: discussionService reads results, so importing it for real here
+// would make the two modules import each other.
+import type { Discussion } from './discussionService.js';
 
 export interface TicketResult {
   ticket: Ticket;
@@ -167,9 +170,21 @@ export interface FeedbackTicket {
   totalsDistribution: number[];
   excludedCounts: Record<string, number>;
   notes: string[];
+  /**
+   * What the meeting about a split ticket decided, in words. Empty when the
+   * ticket was not split, or when the meeting has not happened yet. The
+   * committee gave those scores; they should be told what came of them.
+   */
+  discussionOutcome: string;
+  discussionNote: string;
+  agreedScore: number | null;
 }
 
-export async function buildFeedbackView(db: Db, round: Round): Promise<FeedbackTicket[]> {
+export async function buildFeedbackView(
+  db: Db,
+  round: Round,
+  discussions: Map<string, Discussion> = new Map(),
+): Promise<FeedbackTicket[]> {
   const results = await roundResults(db, round);
   const submissions = await listRoundSubmissions(db, round.id);
 
@@ -182,7 +197,9 @@ export async function buildFeedbackView(db: Db, round: Round): Promise<FeedbackT
     notesByTicket.set(submission.ticketId, bucket);
   }
 
-  return results.map(({ ticket, aggregate }) => ({
+  return results.map(({ ticket, aggregate }) => {
+    const discussion = discussions.get(ticket.id);
+    return {
     jiraId: ticket.jiraId,
     title: ticket.title,
     type: ticket.type,
@@ -198,7 +215,11 @@ export async function buildFeedbackView(db: Db, round: Round): Promise<FeedbackT
     totalsDistribution: aggregate.totalsDistribution,
     excludedCounts: aggregate.excludedCounts,
     notes: notesByTicket.get(ticket.id) ?? [],
-  }));
+    discussionOutcome: discussion?.outcome ? DISCUSSION_OUTCOME_LABELS[discussion.outcome] : '',
+    discussionNote: discussion?.note ?? '',
+    agreedScore: discussion?.outcome === 'AGREED' ? discussion.agreedScore : null,
+    };
+  });
 }
 
 function csvCell(value: unknown): string {

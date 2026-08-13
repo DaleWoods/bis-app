@@ -199,7 +199,32 @@ export async function listRoundTickets(db: Db, roundId: string): Promise<Ticket[
   return rows.map(mapTicket);
 }
 
+/**
+ * A round stops taking tickets once the committee has stopped scoring it.
+ *
+ * Adding one to a CLOSED round gives it a ticket nobody can score; adding one
+ * to a FINALISED round is worse, because removeTicketFromRound refuses to undo
+ * it - the ticket sits in a frozen round for good, unscored and unremovable.
+ * Both are refused here, so it does not matter which door the ticket came
+ * through: the JIRA import, the CSV import, or "add to round".
+ */
+export function assertRoundAcceptsTickets(round: Round): void {
+  if (round.status === 'FINALISED') {
+    throw new HttpishError(409, `${round.weekLabel} is finalised — its tickets and scores cannot be changed`);
+  }
+  if (round.status === 'CLOSED') {
+    throw new HttpishError(
+      409,
+      `${round.weekLabel} is closed, so nobody can score a ticket added to it. Reopen the round, or import into the next one.`,
+    );
+  }
+}
+
 export async function addTicketToRound(db: Db, roundId: string, ticketId: string, position?: number): Promise<void> {
+  const round = await getRound(db, roundId);
+  if (!round) throw new HttpishError(404, 'Round not found');
+  assertRoundAcceptsTickets(round);
+
   const existing = await db.get('SELECT ticket_id FROM round_tickets WHERE round_id = ? AND ticket_id = ?', [
     roundId,
     ticketId,

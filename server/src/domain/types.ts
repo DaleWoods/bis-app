@@ -59,6 +59,20 @@ export const PRIORITY_BAND_LABELS: Record<PriorityBand, string> = {
   LOW: 'Low priority',
 };
 
+/**
+ * §10.4: how a meeting about a ticket the committee was split on can end. An
+ * empty outcome means the meeting has not happened yet, which is what holds
+ * the ticket back from JIRA.
+ */
+export const DISCUSSION_OUTCOMES = ['AGREED', 'RESCORE', 'CLOSE'] as const;
+export type DiscussionOutcome = (typeof DISCUSSION_OUTCOMES)[number];
+
+export const DISCUSSION_OUTCOME_LABELS: Record<DiscussionOutcome, string> = {
+  AGREED: 'Agreed a score',
+  RESCORE: 'Score it again next round',
+  CLOSE: 'Close the ticket',
+};
+
 /** Status labels reproduce the spreadsheet's progress gate verbatim (§10.3). */
 export const STATUS_LABELS = {
   NONE: '',
@@ -238,7 +252,10 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   siteAffectedFieldId: '',
   originalTestingEnvironmentFieldId: '',
   ticketPhaseFieldId: '',
-  transitionOnFinalise: false,
+  // On by default: the round exists to get scored tickets to Ready for
+  // Estimation, and only tickets that cleared every gate - enough responses,
+  // nobody asking to close it, no unresolved disagreement - are ever moved.
+  transitionOnFinalise: true,
   transitionName: 'RA: Ready for Estimation',
 };
 
@@ -264,7 +281,7 @@ export const SEED_CATEGORIES: Array<Omit<CategoryDef, 'id'> & { id: string }> = 
     position: 1,
     name: 'Commercial Impact',
     description: 'Revenue generation or cost savings',
-    zeroLabel: 'N/A',
+    zeroLabel: 'Not Impacted',
     maxLabel: 'Highly Impacted',
     weight: 1,
     scaleMin: 0,
