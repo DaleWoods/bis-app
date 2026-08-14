@@ -375,6 +375,14 @@ export function GuidePage({ member }: { member: Member }) {
               “Who scored what” lists individual submissions, coordinators only. You can <strong>Exclude</strong> a
               submission to stop it counting without deleting it — useful when someone scores the wrong ticket.
             </p>
+            <p>
+              <strong>On a finalised round, excluding a score does not move the numbers on its own.</strong> Finalising
+              freezes the results so a figure that may already be in JIRA cannot drift, which means the row greys out
+              and the score and spread stay where they were. Press <strong>Recalculate results</strong> under Round
+              actions to say you meant it: the exclusion then counts, the spread moves, and a ticket that has become
+              too split to average is flagged for discussion and held out of the write-back like any other. It tells
+              you what changed, so you are not left comparing figures yourself.
+            </p>
           </Section>
 
           <Section id="discussions" title="Tickets the committee split on">
@@ -516,8 +524,8 @@ export function GuidePage({ member }: { member: Member }) {
               <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
                 or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
-                more than one round. You type the round’s own name to confirm, so a mis-click on a list of
-                similar-looking weeks cannot take the wrong one. Anything already written to JIRA stays in JIRA.
+                more than one round. One confirmation, naming the round. Anything already written to JIRA stays in
+                JIRA, and the audit log records what went.
               </li>
               <li>
                 <strong>Start afresh</strong> — deletes every round, ticket and score. It asks you to type the phrase
@@ -562,6 +570,15 @@ export function GuidePage({ member }: { member: Member }) {
                     <td>
                       The round has no tickets yet, or it has not been distributed. Between rounds there is genuinely
                       nothing open, and the Score page says so — with a link to the last finalised round's results.
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="plain">
+                      Excluding a score changed nothing
+                    </th>
+                    <td>
+                      The round is finalised, so its results are frozen. Press <strong>Recalculate results</strong>
+                      under Round actions — see Reading the results.
                     </td>
                   </tr>
                   <tr>

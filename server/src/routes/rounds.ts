@@ -193,6 +193,55 @@ router.post(
   }),
 );
 
+/**
+ * Re-freeze a finalised round from the submissions as they stand now.
+ *
+ * Finalising takes a snapshot, and everything afterwards reads it - which is
+ * what stops a result drifting once it has gone to JIRA. The cost is that
+ * excluding a submission on a finalised round changed nothing: the row greyed
+ * out, the score and the spread stayed exactly as they were, and nothing said
+ * why. This is the deliberate "yes, I meant that" - the exclusion counts, the
+ * spread moves, and a ticket that has become too split to average is flagged
+ * for discussion and held out of the write-back like any other.
+ */
+router.post(
+  '/rounds/:id/recalculate',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    if (round.status !== 'FINALISED') {
+      res.status(409).json({ error: 'Only a finalised round has frozen results to refresh' });
+      return;
+    }
+
+    const before = await roundResults(db, round);
+    const after = await snapshotRoundResults(db, round);
+
+    // What actually moved, so the coordinator is told rather than left to spot
+    // it - a newly split ticket is the whole reason to press this.
+    const wasDiscussion = new Set(before.filter((r) => r.aggregate.discussionRequired).map((r) => r.ticket.id));
+    const newlySplit = after
+      .filter((r) => r.aggregate.discussionRequired && !wasDiscussion.has(r.ticket.id))
+      .map((r) => r.ticket.jiraId);
+    const changed = after.filter((r) => {
+      const previous = before.find((b) => b.ticket.id === r.ticket.id);
+      return previous && previous.aggregate.businessScore !== r.aggregate.businessScore;
+    }).length;
+
+    await audit(db, actorOf(req), 'round.recalculate', 'round', round.id, {
+      tickets: after.length,
+      scoresChanged: changed,
+      newlySplit,
+    });
+    res.json({ round, results: after, scoresChanged: changed, newlySplit });
+  }),
+);
+
 router.post(
   '/rounds/:id/tickets',
   requireCoordinator,

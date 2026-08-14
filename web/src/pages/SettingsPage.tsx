@@ -62,10 +62,9 @@ export function SettingsPage({ member }: { member: Member }) {
   const [sort, setSort] = useState<{ key: MemberSortKey; ascending: boolean }>({ key: 'name', ascending: true });
   const [resetPhrase, setResetPhrase] = useState('');
   const [resetting, setResetting] = useState(false);
-  /** Deleting one round rather than all of them, confirmed by its own name. */
+  /** Deleting one round rather than all of them. */
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundToDelete, setRoundToDelete] = useState('');
-  const [roundPhrase, setRoundPhrase] = useState('');
   const [deletingRound, setDeletingRound] = useState(false);
   /** What the JIRA workflow actually offers, so the name is chosen not guessed. */
   const [transitions, setTransitions] = useState<Array<{ name: string; toStatus: string }> | null>(null);
@@ -882,81 +881,58 @@ EMAIL_REPLY_TO=<where replies should go>`}
             only thing being cleared.
           </p>
           {rounds.length ? (
-            <>
-              <div className="row">
-                <div className="grow field">
-                  <label htmlFor="round-to-delete">Round</label>
-                  <select
-                    id="round-to-delete"
-                    value={roundToDelete}
-                    onChange={(e) => {
-                      setRoundToDelete(e.target.value);
-                      // The typed name confirms one specific round, so it must
-                      // not survive a change of mind about which one.
-                      setRoundPhrase('');
-                    }}
-                  >
-                    <option value="">Choose a round…</option>
-                    {rounds.map((round) => (
-                      <option key={round.id} value={round.id}>
-                        {round.weekLabel} — {round.status}, {round.ticketCount ?? 0} tickets, cut-off{' '}
-                        {formatDateTime(round.cutOffAt)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grow field">
-                  <label htmlFor="round-confirm">Type the round’s name to confirm</label>
-                  <input
-                    id="round-confirm"
-                    type="text"
-                    value={roundPhrase}
-                    onChange={(e) => setRoundPhrase(e.target.value)}
-                    placeholder={rounds.find((r) => r.id === roundToDelete)?.weekLabel ?? 'Choose a round first'}
-                    disabled={!roundToDelete}
-                    autoComplete="off"
-                  />
-                </div>
-                <div style={{ alignSelf: 'end' }} className="field">
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={
-                      !roundToDelete ||
-                      deletingRound ||
-                      roundPhrase.trim() !== rounds.find((r) => r.id === roundToDelete)?.weekLabel
-                    }
-                    onClick={async () => {
-                      const round = rounds.find((r) => r.id === roundToDelete);
-                      if (!round) return;
-                      if (!window.confirm(`Delete ${round.weekLabel} and every score in it? This cannot be undone.`)) return;
-                      setDeletingRound(true);
-                      setMessage('');
-                      setError('');
-                      try {
-                        const { deleted } = await api.deleteRound(round.id, roundPhrase.trim());
-                        setMessage(
-                          `${deleted.weekLabel} deleted — ${deleted.tickets} ticket(s) unlinked, ${deleted.submissions} score(s) removed${
-                            deleted.writebacks
-                              ? `. ${deleted.writebacks} score(s) had already gone to JIRA and are still there.`
-                              : '.'
-                          }`,
-                        );
-                        setRoundToDelete('');
-                        setRoundPhrase('');
-                        await load();
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Could not delete the round');
-                      } finally {
-                        setDeletingRound(false);
-                      }
-                    }}
-                  >
-                    {deletingRound ? 'Deleting…' : 'Delete this round'}
-                  </button>
-                </div>
+            <div className="row">
+              <div className="grow field">
+                <label htmlFor="round-to-delete">Round</label>
+                <select id="round-to-delete" value={roundToDelete} onChange={(e) => setRoundToDelete(e.target.value)}>
+                  <option value="">Choose a round…</option>
+                  {rounds.map((round) => (
+                    <option key={round.id} value={round.id}>
+                      {round.weekLabel} — {round.status}, {round.ticketCount ?? 0} tickets, cut-off{' '}
+                      {formatDateTime(round.cutOffAt)}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </>
+              <div style={{ alignSelf: 'end' }} className="field">
+                {/*
+                  One confirm naming the round, and no phrase to type. Whoever
+                  runs the process knows which round they picked; the dialog is
+                  there to catch the mis-click, not to test their resolve.
+                */}
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={!roundToDelete || deletingRound}
+                  onClick={async () => {
+                    const round = rounds.find((r) => r.id === roundToDelete);
+                    if (!round) return;
+                    if (!window.confirm(`Delete ${round.weekLabel} and every score in it? This cannot be undone.`)) return;
+                    setDeletingRound(true);
+                    setMessage('');
+                    setError('');
+                    try {
+                      const { deleted } = await api.deleteRound(round.id);
+                      setMessage(
+                        `${deleted.weekLabel} deleted — ${deleted.tickets} ticket(s) unlinked, ${deleted.submissions} score(s) removed${
+                          deleted.writebacks
+                            ? `. ${deleted.writebacks} score(s) had already gone to JIRA and are still there.`
+                            : '.'
+                        }`,
+                      );
+                      setRoundToDelete('');
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Could not delete the round');
+                    } finally {
+                      setDeletingRound(false);
+                    }
+                  }}
+                >
+                  {deletingRound ? 'Deleting…' : 'Delete this round'}
+                </button>
+              </div>
+            </div>
           ) : (
             <p className="hint">There are no rounds to delete.</p>
           )}

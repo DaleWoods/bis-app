@@ -392,6 +392,11 @@ export const api = {
       body: JSON.stringify({ archived }),
     }),
   feedback: (id: string) => request<{ round: Round; tickets: FeedbackTicket[] }>(`/api/rounds/${id}/feedback`),
+  recalculateRound: (id: string) =>
+    request<{ round: Round; results: TicketResult[]; scoresChanged: number; newlySplit: string[] }>(
+      `/api/rounds/${id}/recalculate`,
+      { method: 'POST', body: '{}' },
+    ),
   discussions: (id: string) => request<{ round: Round; items: DiscussionItem[] }>(`/api/rounds/${id}/discussions`),
   recordDiscussion: (
     roundId: string,
@@ -482,10 +487,10 @@ export const api = {
       body: JSON.stringify({ confirm }),
     }),
 
-  deleteRound: (id: string, confirm: string) =>
+  deleteRound: (id: string) =>
     request<{ deleted: { weekLabel: string; tickets: number; submissions: number; writebacks: number } }>(
       `/api/admin/rounds/${id}/delete`,
-      { method: 'POST', body: JSON.stringify({ confirm }) },
+      { method: 'POST', body: '{}' },
     ),
 
   audit: (limit = 200) =>

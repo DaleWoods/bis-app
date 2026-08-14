@@ -312,8 +312,8 @@ router.post(
 
 /**
  * Delete one round rather than all of them - a test round, or one created
- * twice. Admin only and confirmed by its week label, so a mis-click on a list
- * of similar-looking weeks cannot take the wrong one.
+ * twice. Admin only, and that is the whole gate: whoever runs the process
+ * knows which round they picked, and the audit log records what went.
  *
  * The tickets survive; only the round and what was recorded against it go.
  */
@@ -321,16 +321,11 @@ router.post(
   '/admin/rounds/:id/delete',
   requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    const { confirm } = z.object({ confirm: z.string() }).parse(req.body ?? {});
     const db = await getDb();
 
     const round = await getRound(db, req.params.id);
     if (!round) {
       res.status(404).json({ error: 'Round not found' });
-      return;
-    }
-    if (confirm.trim() !== round.weekLabel) {
-      res.status(400).json({ error: `Type the round's name (${round.weekLabel}) to confirm` });
       return;
     }
 

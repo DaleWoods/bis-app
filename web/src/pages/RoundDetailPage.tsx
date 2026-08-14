@@ -301,6 +301,29 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 Write scores to JIRA
               </button>
               {/*
+                Finalising freezes the results, so excluding a submission
+                afterwards changes nothing until this is pressed. Without it the
+                row greyed out and the numbers sat still, with nothing saying
+                why.
+              */}
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                onClick={() =>
+                  run('recalculate', async () => {
+                    const { scoresChanged, newlySplit } = await api.recalculateRound(round.id);
+                    if (!scoresChanged && !newlySplit.length) return 'Recalculated — nothing changed.';
+                    return `Recalculated: ${scoresChanged} score(s) changed${
+                      newlySplit.length
+                        ? `, and ${newlySplit.join(', ')} ${newlySplit.length === 1 ? 'is' : 'are'} now too split to average — held for discussion.`
+                        : '.'
+                    }`;
+                  })
+                }
+              >
+                Recalculate results
+              </button>
+              {/*
                 Reopening is deliberately not styled as a primary action: the
                 results are frozen and may already be in JIRA. The confirm says
                 so rather than the button trying to.
@@ -742,6 +765,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         Individual scores are visible to coordinators only, so you can chase non-responders. The committee sees the
         anonymised view after finalisation.
       </p>
+      {round.status === 'FINALISED' ? (
+        <div className="notice warn">
+          <strong>This round’s results are frozen.</strong> Excluding or restoring a score here will not change the
+          business score or the spread until you press <strong>Recalculate results</strong> under Round actions. That is
+          deliberate — a finalised figure may already be in JIRA — but it does mean an exclusion sits there doing
+          nothing until you say so.
+        </div>
+      ) : null}
       <div className="card table-scroll">
         <table>
           <caption className="visually-hidden">Individual submissions</caption>

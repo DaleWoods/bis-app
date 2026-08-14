@@ -143,3 +143,64 @@ describe('a finalised round', () => {
     expect((await roundResults(db, finalised))[0].aggregate.businessScore).toBe(35);
   });
 });
+
+/**
+ * Reported in testing: excluding a committee member's score on a finalised
+ * round greyed the row out and changed nothing else. The freeze is right - a
+ * figure already in JIRA must not move on its own - but there was no way to
+ * say "yes, I meant that", so an exclusion sat there doing nothing.
+ */
+describe('recalculating a finalised round', () => {
+  /** Totals 28, 28, 35 and 56 - close enough to average, spread 13.3. */
+  async function scoreFourWaysApart(): Promise<Member> {
+    const d = await saveMember(db, { name: 'D', email: 'd@example.com', team: 'Trading', role: 'COMMITTEE' });
+    await score(members[0], 4); // 28
+    await score(members[1], 4); // 28
+    await score(members[2], 5); // 35
+    await score(d, 8); //         56
+    return d;
+  }
+
+  async function exclude(...excluded: Member[]): Promise<void> {
+    const ids = new Set(excluded.map((m) => m.id));
+    for (const s of await listRoundSubmissions(db, round.id)) {
+      if (ids.has(s.memberId)) await setSubmissionArchived(db, s.id, true);
+    }
+  }
+
+  it('lets an exclusion move the spread, and flags a ticket that has become too split', async () => {
+    await scoreFourWaysApart();
+    const finalised = await finalise();
+
+    const before = (await roundResults(db, finalised))[0].aggregate;
+    expect(before.stdDev).toBeCloseTo(13.25, 1);
+    expect(before.discussionRequired).toBe(false);
+
+    // Take out the two in the middle, leaving 28 against 56.
+    await exclude(members[1], members[2]);
+
+    // Still frozen: the exclusion on its own changes nothing.
+    expect((await roundResults(db, finalised))[0].aggregate.stdDev).toBeCloseTo(13.25, 1);
+
+    await snapshotRoundResults(db, finalised);
+    const after = (await roundResults(db, finalised))[0].aggregate;
+
+    expect(after.responsesCount).toBe(2);
+    expect(after.stdDev).toBeCloseTo(19.8, 1);
+    // Over the threshold of 16, so it needs talking through before it goes on.
+    expect(after.discussionRequired).toBe(true);
+    expect(after.sendForEstimation).toBe(false);
+  });
+
+  it('shows the committee the same numbers the coordinator sees', async () => {
+    await scoreFourWaysApart();
+    const finalised = await finalise();
+
+    await exclude(members[1], members[2]);
+    await snapshotRoundResults(db, finalised);
+
+    const feedback = await buildFeedbackView(db, finalised);
+    expect(feedback[0].responsesCount).toBe(2);
+    expect(feedback[0].discussionRequired).toBe(true);
+  });
+});
