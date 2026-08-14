@@ -425,7 +425,16 @@ export function GuidePage({ member }: { member: Member }) {
             <p>
               Only tickets that cleared every gate are moved: enough responses, nobody asking to close it, and no
               discussion still outstanding. The two steps are separate, so if the score writes but the workflow refuses
-              the move, you are told exactly that rather than the whole ticket being reported as failed.
+              the move, you are told exactly that rather than the whole ticket being reported as failed — and running
+              the write-back again will finish the move without writing the score a second time.
+            </p>
+            <p>
+              <strong>The transition name has to match JIRA exactly</strong>, and getting it wrong is quiet: the score
+              writes, the move fails, and the ticket stays where it was. Either the transition’s own name or the status
+              it leads to will do, and punctuation is forgiven — but nothing is guessed at, so an abbreviation the
+              workflow uses has to be typed the way the workflow uses it. Rather than guessing, press{' '}
+              <strong>List transitions from JIRA</strong> under Settings → JIRA: it reads a real ticket and offers what
+              its workflow currently accepts, and clicking one fills the box in.
             </p>
             <p>
               Afterwards you get a row per ticket saying what happened and <em>why</em>. Most of the time “skipped” means
@@ -505,6 +514,12 @@ export function GuidePage({ member }: { member: Member }) {
                 not score, which keeps the two jobs apart. Click any column heading to sort the list.
               </li>
               <li>
+                <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
+                or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
+                more than one round. You type the round’s own name to confirm, so a mis-click on a list of
+                similar-looking weeks cannot take the wrong one. Anything already written to JIRA stays in JIRA.
+              </li>
+              <li>
                 <strong>Start afresh</strong> — deletes every round, ticket and score. It asks you to type the phrase
                 out for a reason.
               </li>
@@ -563,9 +578,10 @@ export function GuidePage({ member }: { member: Member }) {
                       The score reached JIRA but the ticket did not move
                     </th>
                     <td>
-                      The write-back row says which of the two it was. If the transition failed, the message is JIRA's
-                      own — usually the transition name in Settings → JIRA no longer matches the workflow. If it was
-                      never attempted, the ticket had not cleared every gate, or the switch is off in Settings.
+                      The write-back row says which of the two it was. If the transition failed, the message names what
+                      the workflow does offer, so you can correct the name under Settings → JIRA and run the write-back
+                      again — it will move the ticket without rewriting the score. If it was never attempted, the ticket
+                      had not cleared every gate, or the switch is off in Settings.
                     </td>
                   </tr>
                   <tr>

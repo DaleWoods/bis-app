@@ -263,21 +263,64 @@ export async function writeBusinessScore(key: string, fieldId: string, score: nu
 }
 
 /** Optional status transition on finalisation (§12.1, §13.2 - off by default). */
-export async function transitionIssue(key: string, transitionName: string): Promise<string> {
-  const { transitions } = await jiraFetch<{ transitions: Array<{ id: string; name: string; to?: { name?: string } }> }>(
+interface JiraTransition {
+  id: string;
+  name: string;
+  to?: { name?: string };
+}
+
+/**
+ * Punctuation and spacing removed, so a name typed as "RA Rdy Estimation"
+ * matches a workflow that spells it "[RA] Rdy Estimation".
+ *
+ * Deliberately only that much. It will not turn "Ready for Estimation" into
+ * "Rdy Estimation" - guessing at abbreviations would move tickets into a status
+ * nobody asked for, which is worse than refusing and saying why.
+ */
+function comparable(value: string): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** What the workflow will accept right now, for a coordinator to choose from. */
+export async function listTransitions(key: string): Promise<Array<{ name: string; toStatus: string }>> {
+  const { transitions } = await jiraFetch<{ transitions: JiraTransition[] }>(
     `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`,
   );
-  const match = transitions.find(
-    (t) =>
-      t.name.toLowerCase() === transitionName.toLowerCase() ||
-      (t.to?.name ?? '').toLowerCase() === transitionName.toLowerCase(),
+  return transitions.map((t) => ({ name: t.name, toStatus: t.to?.name ?? '' }));
+}
+
+export async function transitionIssue(key: string, transitionName: string): Promise<string> {
+  const { transitions } = await jiraFetch<{ transitions: JiraTransition[] }>(
+    `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`,
   );
-  if (!match) throw new Error(`No transition to "${transitionName}" available on ${key}`);
+
+  // JIRA names the transition and the status it leads to separately, and they
+  // are often different - "Send to RA" landing on "[RA] Rdy Estimation". Either
+  // is a reasonable thing for a coordinator to have typed.
+  const wanted = comparable(transitionName);
+  const match = transitions.find((t) => comparable(t.name) === wanted || comparable(t.to?.name ?? '') === wanted);
+
+  if (!match) {
+    // The available list is the answer to "why not", so it goes in the message
+    // rather than a log nobody reads.
+    const available = transitions
+      .map((t) => (t.to?.name && comparable(t.to.name) !== comparable(t.name) ? `"${t.name}" → ${t.to.name}` : `"${t.name}"`))
+      .join(', ');
+    throw new Error(
+      `${key} has no transition called "${transitionName}". From its current status it offers: ${
+        available || 'nothing at all'
+      }. Set the matching name in Settings → JIRA.`,
+    );
+  }
+
   await jiraFetch(`/rest/api/3/issue/${encodeURIComponent(key)}/transitions`, {
     method: 'POST',
     body: JSON.stringify({ transition: { id: match.id } }),
   });
-  return match.name;
+  return match.to?.name || match.name;
 }
 
 function valueOf(field: unknown): string {

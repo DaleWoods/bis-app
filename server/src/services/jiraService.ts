@@ -192,16 +192,41 @@ export async function writeBackRound(
       continue;
     }
 
-    const existing = await db.get<{ id: string; status: string; attempts: number }>(
-      'SELECT id, status, attempts FROM jira_writebacks WHERE idempotency_key = ?',
+    const existing = await db.get<{ id: string; status: string; attempts: number; transitioned_to: string }>(
+      'SELECT id, status, attempts, transitioned_to FROM jira_writebacks WHERE idempotency_key = ?',
       [key],
     );
-    if (existing?.status === 'SUCCESS' && !options.force) {
+
+    /*
+      What counts as ready is the §10.3 gate, plus the one thing the gate cannot
+      know: a split the committee has since talked through and agreed a score
+      for is ready, even though sendForEstimation still says it is not.
+    */
+    const readyForEstimation =
+      (aggregate.minSubmissionsMet || Boolean(options.ignoreMinSubmissions)) &&
+      !aggregate.toClose &&
+      (!aggregate.discussionRequired || agreed !== null);
+    const wantsTransition = config.jira.transitionOnFinalise && readyForEstimation;
+
+    /*
+      An already-written score does not mean an already-finished ticket.
+
+      This used to skip the whole ticket the moment the score had gone across,
+      which left no way to move a ticket on afterwards: switching the transition
+      on, or correcting its name, changed nothing because the second run never
+      got past this check. So the skip now only applies when there is genuinely
+      nothing left to do - and when there is, the score is left alone and only
+      the move is attempted.
+    */
+    const alreadyWritten = existing?.status === 'SUCCESS' && !options.force;
+    const stillToMove = wantsTransition && !(existing?.transitioned_to ?? '').trim();
+    if (alreadyWritten && !stillToMove) {
       entries.push({
         jiraId: ticket.jiraId,
         businessScore,
         status: 'SKIPPED',
         reason: 'Already written with this score',
+        transitionedTo: existing?.transitioned_to || undefined,
       });
       continue;
     }
@@ -225,7 +250,12 @@ export async function writeBackRound(
     }
 
     try {
-      await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, businessScore);
+      // Skipped when the score is already in JIRA and only the move is
+      // outstanding - re-writing an identical value is pointless noise on the
+      // ticket's history.
+      if (!alreadyWritten) {
+        await jira.writeBusinessScore(ticket.jiraId, config.jira.businessScoreFieldId, businessScore);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await db.run('UPDATE jira_writebacks SET status = ?, error = ?, updated_at = ? WHERE id = ?', [
@@ -247,19 +277,10 @@ export async function writeBackRound(
       matches - reported the whole ticket as FAILED even though the score was
       sitting in JIRA. Re-running then wrote the same score again chasing an
       error that had nothing to do with it.
-
-      What counts as ready is the §10.3 gate, plus the one thing the gate
-      cannot know: a split the committee has since talked through and agreed a
-      score for is ready, even though sendForEstimation still says it is not.
     */
-    const readyForEstimation =
-      (aggregate.minSubmissionsMet || Boolean(options.ignoreMinSubmissions)) &&
-      !aggregate.toClose &&
-      (!aggregate.discussionRequired || agreed !== null);
-
-    let transitionedTo = '';
+    let transitionedTo = existing?.transitioned_to ?? '';
     let transitionError = '';
-    if (config.jira.transitionOnFinalise && readyForEstimation) {
+    if (wantsTransition) {
       try {
         transitionedTo = await jira.transitionIssue(ticket.jiraId, config.jira.transitionName);
       } catch (err) {
@@ -287,12 +308,14 @@ export async function writeBackRound(
       status: 'SUCCESS',
       transitionedTo,
       reason: transitionError
-        ? `Score written, but the move to "${config.jira.transitionName}" failed: ${transitionError}`
+        ? `${alreadyWritten ? 'Score was already in JIRA' : 'Score written'}, but the move failed: ${transitionError}`
         : !config.jira.transitionOnFinalise
           ? 'Score written. Moving the ticket on is switched off in Settings → JIRA.'
           : !readyForEstimation
             ? 'Score written. Not moved on — it has not cleared every gate yet.'
-            : undefined,
+            : alreadyWritten
+              ? 'Score was already in JIRA; the ticket has been moved on now.'
+              : undefined,
     });
   }
 

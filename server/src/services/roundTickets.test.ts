@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
-import { ensureDefaultConfig, ensureSeedCategories, listCategories } from './configService.js';
-import { addTicketToRound, createRound, setRoundStatus, type Round } from './roundService.js';
-import { upsertTicket } from './ticketService.js';
+import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, listCategories } from './configService.js';
+import { addTicketToRound, createRound, getRound, setRoundStatus, type Round } from './roundService.js';
+import { getTicket, upsertTicket } from './ticketService.js';
+import { deleteRound } from './adminService.js';
+import { saveMember } from './memberService.js';
+import { saveSubmission } from './submissionService.js';
 
 /**
  * Reported in testing: a round that had been closed and written back to JIRA
@@ -65,5 +68,46 @@ describe('the scoring categories', () => {
     const categories = await listCategories(db);
     expect(categories).toHaveLength(7);
     expect([...new Set(categories.map((c) => c.zeroLabel))]).toEqual(['Not Impacted']);
+  });
+});
+
+describe('deleting one round', () => {
+  it('takes its scores with it and leaves the ticket alone', async () => {
+    const member = await saveMember(db, { name: 'A', email: 'a@example.com', team: 'T', role: 'COMMITTEE' });
+    round = await setRoundStatus(db, round.id, 'OPEN');
+    await addTicketToRound(db, round.id, ticketId);
+
+    const categories = await listCategories(db);
+    await saveSubmission(db, {
+      round,
+      ticket: (await getTicket(db, ticketId))!,
+      member,
+      payload: { relevance: 'YES', scores: Object.fromEntries(categories.map((c) => [c.id, 5])) },
+      config: (await getAppConfig(db)).scoring,
+    });
+
+    const deleted = await deleteRound(db, round.id);
+    expect(deleted).toMatchObject({ weekLabel: 'Week 1', tickets: 1, submissions: 1 });
+
+    expect(await getRound(db, round.id)).toBeUndefined();
+    expect(await db.all('SELECT id FROM submissions WHERE round_id = ?', [round.id])).toHaveLength(0);
+    // The ticket came from JIRA and outlives any one round.
+    expect(await getTicket(db, ticketId)).toBeTruthy();
+  });
+
+  it('reports how many scores had already reached JIRA, since those stay there', async () => {
+    await addTicketToRound(db, round.id, ticketId);
+    await db.run(
+      `INSERT INTO jira_writebacks (id, round_id, ticket_id, jira_id, business_score, idempotency_key, status, attempts, created_at, updated_at)
+       VALUES ('wb1', ?, ?, 'ECOM-1', 42, 'k1', 'SUCCESS', 1, '2026-01-01', '2026-01-01')`,
+      [round.id, ticketId],
+    );
+
+    expect((await deleteRound(db, round.id))?.writebacks).toBe(1);
+    expect(await db.all('SELECT id FROM jira_writebacks WHERE round_id = ?', [round.id])).toHaveLength(0);
+  });
+
+  it('says nothing was there rather than pretending it deleted something', async () => {
+    expect(await deleteRound(db, 'no-such-round')).toBeNull();
   });
 });

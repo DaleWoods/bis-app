@@ -5,10 +5,11 @@ import { requireAuth, requireCoordinator, requireRole } from '../auth/middleware
 import { audit } from '../services/auditService.js';
 import { deactivateCategory, getAppConfig, listCategories, restoreDefaultCategories, saveCategory, saveConfigSection } from '../services/configService.js';
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
-import { suggestFieldIds } from '../integrations/jira.js';
+import { listTransitions, suggestFieldIds } from '../integrations/jira.js';
 import { providerLabel, sendMail } from '../integrations/mail.js';
 import { verifyConnection } from '../integrations/smtp.js';
-import { resetOperationalData } from '../services/adminService.js';
+import { deleteRound, resetOperationalData } from '../services/adminService.js';
+import { getRound } from '../services/roundService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 import { env } from '../config/env.js';
 
@@ -257,6 +258,38 @@ router.get(
 );
 
 /**
+ * What the workflow will actually accept, read off a real ticket.
+ *
+ * The transition name has to match JIRA exactly, and nobody can be expected to
+ * know whether their workflow calls it "Send to RA" or "[RA] Rdy Estimation",
+ * or where the brackets go. Guessing it wrong is silent: the score writes, the
+ * move fails, and the ticket sits where it was. So the list comes from JIRA.
+ *
+ * Transitions depend on the status the ticket is in now, so this asks for one
+ * that is in the state the write-back would find it in - by default the first
+ * ticket the app knows about.
+ */
+router.get(
+  '/jira/transitions',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const asked = String(req.query.jiraId ?? '').trim();
+    const db = await getDb();
+
+    const jiraId =
+      asked ||
+      (await db.get<{ jira_id: string }>('SELECT jira_id FROM tickets ORDER BY created_at DESC LIMIT 1'))?.jira_id ||
+      '';
+    if (!jiraId) {
+      res.status(400).json({ error: 'No ticket to read the workflow from. Import one first, or give a ticket key.' });
+      return;
+    }
+
+    res.json({ jiraId, transitions: await listTransitions(jiraId) });
+  }),
+);
+
+/**
  * Start afresh: delete every round, ticket and score, keeping the committee,
  * the categories and all configuration. Admin only, and the exact phrase has
  * to be typed - there is no undo.
@@ -274,6 +307,36 @@ router.post(
     const counts = await resetOperationalData(db);
     await audit(db, actorOf(req), 'admin.reset-data', 'system', '', counts);
     res.json({ counts });
+  }),
+);
+
+/**
+ * Delete one round rather than all of them - a test round, or one created
+ * twice. Admin only and confirmed by its week label, so a mis-click on a list
+ * of similar-looking weeks cannot take the wrong one.
+ *
+ * The tickets survive; only the round and what was recorded against it go.
+ */
+router.post(
+  '/admin/rounds/:id/delete',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const { confirm } = z.object({ confirm: z.string() }).parse(req.body ?? {});
+    const db = await getDb();
+
+    const round = await getRound(db, req.params.id);
+    if (!round) {
+      res.status(404).json({ error: 'Round not found' });
+      return;
+    }
+    if (confirm.trim() !== round.weekLabel) {
+      res.status(400).json({ error: `Type the round's name (${round.weekLabel}) to confirm` });
+      return;
+    }
+
+    const deleted = await deleteRound(db, round.id);
+    await audit(db, actorOf(req), 'admin.round.delete', 'round', round.id, deleted ?? {});
+    res.json({ deleted });
   }),
 );
 

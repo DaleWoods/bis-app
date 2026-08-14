@@ -163,6 +163,39 @@ describe('writeBackRound', () => {
     expect(writeBusinessScore).toHaveBeenCalledTimes(1);
   });
 
+  it('moves a ticket on later, without writing its score again', async () => {
+    // The reported case: the transition name was wrong, so the score went
+    // across and the ticket stayed put. Correcting the name and re-running has
+    // to be able to finish the job.
+    await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_101', transitionOnFinalise: false }, 'test');
+    await scoreIt(5);
+    const round = (await getRound(db, roundId))!;
+
+    expect((await writeBackRound(db, ACTOR, round))[0].status).toBe('SUCCESS');
+    expect(transitionIssue).not.toHaveBeenCalled();
+
+    await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_101', transitionOnFinalise: true }, 'test');
+    const [second] = await writeBackRound(db, ACTOR, round);
+
+    expect(second.status).toBe('SUCCESS');
+    expect(second.transitionedTo).toBe('Ready for Estimation');
+    expect(second.reason).toMatch(/already in JIRA/i);
+    // The score was right the first time; re-writing it is noise on the ticket.
+    expect(writeBusinessScore).toHaveBeenCalledTimes(1);
+    expect(transitionIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops retrying once the ticket has actually moved', async () => {
+    await scoreIt(5);
+    const round = (await getRound(db, roundId))!;
+
+    await writeBackRound(db, ACTOR, round);
+    const [second] = await writeBackRound(db, ACTOR, round);
+
+    expect(second.status).toBe('SKIPPED');
+    expect(transitionIssue).toHaveBeenCalledTimes(1);
+  });
+
   it('reports a JIRA failure with the message JIRA gave', async () => {
     await scoreIt(5);
     writeBusinessScore.mockRejectedValue(new Error('403 Field is not on the screen'));
@@ -186,7 +219,7 @@ describe('writeBackRound', () => {
 
     const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
     expect(entry.status).toBe('SUCCESS');
-    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', 'RA: Ready for Estimation');
+    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', '[RA] Rdy Estimation');
     expect(entry.transitionedTo).toBe('Ready for Estimation');
   });
 
@@ -229,7 +262,7 @@ describe('a ticket the committee was split on', () => {
     expect(entry.businessScore).toBe(42);
     expect(writeBusinessScore).toHaveBeenCalledWith('ECOM-2463', 'customfield_101', 42);
     // Agreeing a score is what makes it ready, so it moves on like any other.
-    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', 'RA: Ready for Estimation');
+    expect(transitionIssue).toHaveBeenCalledWith('ECOM-2463', '[RA] Rdy Estimation');
   });
 
   it('stays out of JIRA when the meeting sends it back to be scored again', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ROLES, api, type AppConfig, type Category, type Member, type Role } from '../api';
+import { ROLES, api, formatDateTime, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
 
 /**
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
@@ -62,14 +62,26 @@ export function SettingsPage({ member }: { member: Member }) {
   const [sort, setSort] = useState<{ key: MemberSortKey; ascending: boolean }>({ key: 'name', ascending: true });
   const [resetPhrase, setResetPhrase] = useState('');
   const [resetting, setResetting] = useState(false);
+  /** Deleting one round rather than all of them, confirmed by its own name. */
+  const [rounds, setRounds] = useState<Round[]>([]);
+  const [roundToDelete, setRoundToDelete] = useState('');
+  const [roundPhrase, setRoundPhrase] = useState('');
+  const [deletingRound, setDeletingRound] = useState(false);
+  /** What the JIRA workflow actually offers, so the name is chosen not guessed. */
+  const [transitions, setTransitions] = useState<Array<{ name: string; toStatus: string }> | null>(null);
 
   async function load() {
     try {
-      const [{ config, categories, integrations }, { members }] = await Promise.all([api.config(), api.members()]);
+      const [{ config, categories, integrations }, { members }, roundList] = await Promise.all([
+        api.config(),
+        api.members(),
+        api.rounds().then((r) => r.rounds, () => [] as Round[]),
+      ]);
       setConfig(config);
       setCategories(categories);
       setIntegrations(integrations);
       setMembers(members);
+      setRounds(roundList);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load settings');
     }
@@ -377,9 +389,57 @@ export function SettingsPage({ member }: { member: Member }) {
                 Run this transition when the score is written (on by default)
               </label>
               <p className="hint">
-                The transition name exactly as the JIRA workflow spells it. Only tickets that cleared every gate are
-                moved — enough responses, nobody asking to close it, no discussion still outstanding. If the score
-                writes but the move fails, the write-back says so rather than calling the whole thing failed.
+                The name exactly as the JIRA workflow spells it — either the transition’s own name or the status it
+                leads to. Guessing it wrong is quiet: the score writes, the move fails, and the ticket stays put.
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                style={{ marginTop: '0.4rem' }}
+                onClick={async () => {
+                  setError('');
+                  setMessage('');
+                  try {
+                    const { jiraId, transitions } = await api.jiraTransitions();
+                    setTransitions(transitions);
+                    setMessage(
+                      transitions.length
+                        ? `${jiraId} currently offers ${transitions.length} transition(s). Pick one below.`
+                        : `${jiraId} offers no transitions from its current status.`,
+                    );
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Could not read the workflow');
+                  }
+                }}
+              >
+                List transitions from JIRA
+              </button>
+              {transitions?.length ? (
+                <div className="row" style={{ flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.5rem' }}>
+                  {transitions.map((t) => (
+                    <button
+                      type="button"
+                      key={`${t.name}->${t.toStatus}`}
+                      className="secondary"
+                      onClick={() => {
+                        const field = document.getElementById('transitionName') as HTMLInputElement | null;
+                        // The status is the more stable of the two - a workflow
+                        // gets its transitions renamed far more often than its
+                        // statuses - so that is what gets filled in.
+                        if (field) field.value = t.toStatus || t.name;
+                        setMessage('Filled in. Save the JIRA configuration to keep it.');
+                      }}
+                    >
+                      {t.name}
+                      {t.toStatus && t.toStatus !== t.name ? ` → ${t.toStatus}` : ''}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <p className="hint">
+                Only tickets that cleared every gate are moved — enough responses, nobody asking to close it, no
+                discussion still outstanding. If the score writes but the move fails, the write-back says so rather
+                than calling the whole thing failed.
               </p>
             </div>
           </div>
@@ -808,6 +868,100 @@ EMAIL_REPLY_TO=<where replies should go>`}
           </div>
         </form>
       </section>
+
+      {member.role === 'ADMIN' ? (
+        <section className="card" style={{ borderColor: 'var(--danger)' }}>
+          <h2 style={{ marginTop: 0, color: 'var(--danger)' }}>Delete a round</h2>
+          <p>
+            Removes one round and everything recorded against it — its scores, results, discussions, emails and
+            write-back history. <strong>The tickets themselves are kept</strong>, because a ticket comes from JIRA and
+            usually appears in more than one round.
+          </p>
+          <p className="hint">
+            For a test round, or one created twice. Anything already written to JIRA stays there — this database is the
+            only thing being cleared.
+          </p>
+          {rounds.length ? (
+            <>
+              <div className="row">
+                <div className="grow field">
+                  <label htmlFor="round-to-delete">Round</label>
+                  <select
+                    id="round-to-delete"
+                    value={roundToDelete}
+                    onChange={(e) => {
+                      setRoundToDelete(e.target.value);
+                      // The typed name confirms one specific round, so it must
+                      // not survive a change of mind about which one.
+                      setRoundPhrase('');
+                    }}
+                  >
+                    <option value="">Choose a round…</option>
+                    {rounds.map((round) => (
+                      <option key={round.id} value={round.id}>
+                        {round.weekLabel} — {round.status}, {round.ticketCount ?? 0} tickets, cut-off{' '}
+                        {formatDateTime(round.cutOffAt)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grow field">
+                  <label htmlFor="round-confirm">Type the round’s name to confirm</label>
+                  <input
+                    id="round-confirm"
+                    type="text"
+                    value={roundPhrase}
+                    onChange={(e) => setRoundPhrase(e.target.value)}
+                    placeholder={rounds.find((r) => r.id === roundToDelete)?.weekLabel ?? 'Choose a round first'}
+                    disabled={!roundToDelete}
+                    autoComplete="off"
+                  />
+                </div>
+                <div style={{ alignSelf: 'end' }} className="field">
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={
+                      !roundToDelete ||
+                      deletingRound ||
+                      roundPhrase.trim() !== rounds.find((r) => r.id === roundToDelete)?.weekLabel
+                    }
+                    onClick={async () => {
+                      const round = rounds.find((r) => r.id === roundToDelete);
+                      if (!round) return;
+                      if (!window.confirm(`Delete ${round.weekLabel} and every score in it? This cannot be undone.`)) return;
+                      setDeletingRound(true);
+                      setMessage('');
+                      setError('');
+                      try {
+                        const { deleted } = await api.deleteRound(round.id, roundPhrase.trim());
+                        setMessage(
+                          `${deleted.weekLabel} deleted — ${deleted.tickets} ticket(s) unlinked, ${deleted.submissions} score(s) removed${
+                            deleted.writebacks
+                              ? `. ${deleted.writebacks} score(s) had already gone to JIRA and are still there.`
+                              : '.'
+                          }`,
+                        );
+                        setRoundToDelete('');
+                        setRoundPhrase('');
+                        await load();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Could not delete the round');
+                      } finally {
+                        setDeletingRound(false);
+                      }
+                    }}
+                  >
+                    {deletingRound ? 'Deleting…' : 'Delete this round'}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="hint">There are no rounds to delete.</p>
+          )}
+        </section>
+      ) : null}
 
       {member.role === 'ADMIN' ? (
         <section className="card" style={{ borderColor: 'var(--danger)' }}>

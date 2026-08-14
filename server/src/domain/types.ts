@@ -256,7 +256,11 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   // Estimation, and only tickets that cleared every gate - enough responses,
   // nobody asking to close it, no unresolved disagreement - are ever moved.
   transitionOnFinalise: true,
-  transitionName: 'RA: Ready for Estimation',
+  // As the live workflow actually spells it. The requirements called it "RA:
+  // Ready for Estimation", which matched nothing and silently moved no tickets.
+  // Either the transition's name or the status it leads to will do; Settings →
+  // JIRA can list what a real ticket currently offers.
+  transitionName: '[RA] Rdy Estimation',
 };
 
 export const DEFAULT_PACK_CONFIG: PackConfig = {

@@ -456,6 +456,10 @@ export const api = {
   saveCategory: (input: Partial<Category> & { position: number; name: string }) =>
     request<{ category: Category }>('/api/categories', { method: 'POST', body: JSON.stringify(input) }),
   suggestJiraFields: () => request<{ suggestions: Record<string, string> }>('/api/jira/fields/suggest'),
+  jiraTransitions: (jiraId?: string) =>
+    request<{ jiraId: string; transitions: Array<{ name: string; toStatus: string }> }>(
+      `/api/jira/transitions${jiraId ? `?jiraId=${encodeURIComponent(jiraId)}` : ''}`,
+    ),
   sendTestEmail: (to?: string) =>
     request<{ status: string; provider: string; to: string; error?: string }>('/api/email/test', {
       method: 'POST',
@@ -477,6 +481,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ confirm }),
     }),
+
+  deleteRound: (id: string, confirm: string) =>
+    request<{ deleted: { weekLabel: string; tickets: number; submissions: number; writebacks: number } }>(
+      `/api/admin/rounds/${id}/delete`,
+      { method: 'POST', body: JSON.stringify({ confirm }) },
+    ),
 
   audit: (limit = 200) =>
     request<{ entries: Array<{ id: string; at: string; actorEmail: string; action: string; entityType: string; entityId: string; detail: unknown }> }>(
