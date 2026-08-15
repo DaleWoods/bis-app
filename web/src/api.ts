@@ -130,6 +130,8 @@ export interface Submission {
   moreInfo: string;
   archived: boolean;
   scores: Record<string, number>;
+  /** When the score was given. A score cannot be revised, so this is the score's own date. */
+  submittedAt: string;
   updatedAt: string;
 }
 
@@ -245,6 +247,11 @@ export interface FeedbackTicket {
   discussionOutcome: string;
   discussionNote: string;
   agreedScore: number | null;
+  /** Your own answer. Null when you did not score it, or answered anything but Yes. */
+  yourTotal: number | null;
+  yourRelevance: string;
+  /** Where the ticket came in the round, 1 = highest business score. */
+  rank: number;
 }
 
 export const DISCUSSION_OUTCOMES = ['AGREED', 'RESCORE', 'CLOSE'] as const;

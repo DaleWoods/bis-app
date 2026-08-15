@@ -393,7 +393,10 @@ router.get(
       res.status(403).json({ error: 'The feedback view opens once the round is finalised' });
       return;
     }
-    res.json({ round, tickets: await buildFeedbackView(db, round, await listDiscussions(db, round.id)) });
+    res.json({
+      round,
+      tickets: await buildFeedbackView(db, round, await listDiscussions(db, round.id), req.member!.id),
+    });
   }),
 );
 

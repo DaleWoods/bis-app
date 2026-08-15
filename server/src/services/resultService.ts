@@ -178,15 +178,52 @@ export interface FeedbackTicket {
   discussionOutcome: string;
   discussionNote: string;
   agreedScore: number | null;
+  /**
+   * The reading member's own answer. Their own data, so §9's no-attribution
+   * rule does not apply to it - and seeing where you sat against the room is
+   * the only way the feedback view teaches anybody anything.
+   */
+  yourTotal: number | null;
+  yourRelevance: string;
+  /** Where this ticket came in the round, 1 = highest business score. */
+  rank: number;
 }
 
 export async function buildFeedbackView(
   db: Db,
   round: Round,
   discussions: Map<string, Discussion> = new Map(),
+  memberId?: string,
 ): Promise<FeedbackTicket[]> {
   const results = await roundResults(db, round);
   const submissions = await listRoundSubmissions(db, round.id);
+  const categories = await listCategories(db);
+
+  // The reading member's own answers, so they can see where they sat.
+  const mine = new Map<string, { total: number | null; relevance: string }>();
+  for (const submission of submissions) {
+    if (!memberId || submission.memberId !== memberId || submission.archived) continue;
+    mine.set(submission.ticketId, {
+      total:
+        submission.relevance === 'YES'
+          ? categories.reduce((sum, c) => sum + (submission.scores[c.id] ?? 0), 0)
+          : null,
+      relevance: submission.relevance,
+    });
+  }
+
+  /*
+    The round as a league table: highest business score first.
+
+    Ranked on the score alone rather than the priority ratio, because the ratio
+    needs an effort figure RA may not have given yet - half the table would be
+    unranked, and a member reading their feedback wants to know how the room
+    saw the tickets, not what order they will be built in.
+  */
+  const ranks = new Map<string, number>();
+  [...results]
+    .sort((a, b) => (b.aggregate.businessScore ?? -1) - (a.aggregate.businessScore ?? -1))
+    .forEach(({ ticket }, index) => ranks.set(ticket.id, index + 1));
 
   const notesByTicket = new Map<string, string[]>();
   for (const submission of submissions) {
@@ -218,6 +255,9 @@ export async function buildFeedbackView(
     discussionOutcome: discussion?.outcome ? DISCUSSION_OUTCOME_LABELS[discussion.outcome] : '',
     discussionNote: discussion?.note ?? '',
     agreedScore: discussion?.outcome === 'AGREED' ? discussion.agreedScore : null,
+    yourTotal: mine.get(ticket.id)?.total ?? null,
+    yourRelevance: mine.get(ticket.id)?.relevance ?? '',
+    rank: ranks.get(ticket.id) ?? 0,
     };
   });
 }

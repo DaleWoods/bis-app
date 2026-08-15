@@ -5,6 +5,14 @@ import { api, formatDateTime, type FeedbackTicket, type Round } from '../api';
  * §9 post-round feedback view - visible to the whole committee once a round is
  * finalised. Shows how each ticket scored (per-category averages, total, spread,
  * discussion flag) with no individual attribution.
+ *
+ * Two things are attributed, and only to the person reading: their own score on
+ * each ticket, and how it sat against the committee's. That is their own data,
+ * and it is the only part of this page that teaches anybody anything - "I put
+ * that at 60 and the room said 20" is the feedback. It appears here, after the
+ * round, rather than during it: a score you can see the room's answer before
+ * giving is not an independent score, and the spread that decides whether a
+ * ticket needs discussing is only worth reading if every score was.
  */
 export function FeedbackPage({ roundId }: { roundId: string }) {
   const [round, setRound] = useState<Round | null>(null);
@@ -24,13 +32,131 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
   if (error) return <p className="status error">{error}</p>;
   if (!round) return <p>Loading…</p>;
 
+  const table = [...tickets].sort((a, b) => a.rank - b.rank);
+  const scoredByYou = tickets.filter((t) => t.yourTotal !== null && t.businessScore !== null);
+  const higher = scoredByYou.filter((t) => t.yourTotal! > t.businessScore!).length;
+  const lower = scoredByYou.filter((t) => t.yourTotal! < t.businessScore!).length;
+  /*
+    Two different numbers, and saying which is which matters. The lean is the
+    mean signed difference - whether you tend to sit above or below the room.
+    The typical gap is the mean distance, which is bigger whenever you are
+    above on some and below on others. Reporting the lean as though it were the
+    gap makes a scorer who is 30 over on one and 30 under on another look
+    perfectly aligned.
+  */
+  const lean = scoredByYou.length
+    ? scoredByYou.reduce((sum, t) => sum + (t.yourTotal! - t.businessScore!), 0) / scoredByYou.length
+    : 0;
+  const typicalGap = scoredByYou.length
+    ? scoredByYou.reduce((sum, t) => sum + Math.abs(t.yourTotal! - t.businessScore!), 0) / scoredByYou.length
+    : 0;
+
   return (
     <>
       <h1>How the committee scored – {round.weekLabel}</h1>
       <p className="lede">
-        Finalised {formatDateTime(round.finalisedAt)}. Scores are shown as committee averages and spread. Individual
-        scores are never attributed to a named member.
+        Finalised {formatDateTime(round.finalisedAt)}. Scores are shown as committee averages and spread. Nobody else's
+        score is attributed to them — the only individual scores here are your own.
       </p>
+
+      <h2>The round at a glance</h2>
+      <div className="card">
+        {scoredByYou.length ? (
+          <p className="lede" style={{ marginTop: 0 }}>
+            You scored {scoredByYou.length} of {tickets.length} ticket{tickets.length === 1 ? '' : 's'}, higher than the
+            committee on {higher} and lower on {lower}.{' '}
+            {higher + lower > 0 ? (
+              <>
+                Your score was {typicalGap.toFixed(1)} points away from theirs on average, and overall you sat{' '}
+                {Math.abs(lean) < 0.5 ? (
+                  <strong>level with them</strong>
+                ) : (
+                  <>
+                    <strong>
+                      {Math.abs(lean).toFixed(1)} points {lean > 0 ? 'above' : 'below'}
+                    </strong>{' '}
+                    them
+                  </>
+                )}
+                .
+              </>
+            ) : (
+              'You matched the committee on every one.'
+            )}
+          </p>
+        ) : (
+          <p className="lede" style={{ marginTop: 0 }}>
+            You did not score any of the {tickets.length} ticket{tickets.length === 1 ? '' : 's'} in this round, so this
+            is how the rest of the committee saw them.
+          </p>
+        )}
+        <div className="table-scroll">
+          <table>
+            <caption className="visually-hidden">Every ticket in the round, highest business score first</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="num">
+                  #
+                </th>
+                <th scope="col">Ticket</th>
+                <th scope="col" className="num">
+                  Committee
+                </th>
+                <th scope="col" className="num">
+                  You
+                </th>
+                <th scope="col" className="num">
+                  Difference
+                </th>
+                <th scope="col" className="num">
+                  Spread
+                </th>
+                <th scope="col">Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table.map((ticket) => {
+                const gap =
+                  ticket.yourTotal !== null && ticket.businessScore !== null
+                    ? ticket.yourTotal - ticket.businessScore
+                    : null;
+                return (
+                  <tr key={ticket.jiraId}>
+                    <td className="num">{ticket.rank}</td>
+                    <th
+                      scope="row"
+                      style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}
+                    >
+                      {ticket.jiraId} – {ticket.title}
+                    </th>
+                    <td className="num">{ticket.agreedScore ?? ticket.businessScore ?? '—'}</td>
+                    <td className="num">
+                      {ticket.yourTotal !== null
+                        ? ticket.yourTotal
+                        : ticket.yourRelevance
+                          ? 'n/a'
+                          : '—'}
+                    </td>
+                    {/* Signed, because the direction is the interesting half. */}
+                    <td className={`num${gap !== null && Math.abs(gap) >= 20 ? ' over' : ''}`}>
+                      {gap === null ? '—' : gap > 0 ? `+${gap}` : gap}
+                    </td>
+                    <td className="num">{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</td>
+                    <td>
+                      {ticket.discussionOutcome || (ticket.discussionRequired ? 'Held for discussion' : ticket.statusLabel)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">
+          “You” is your own score out of 70; <strong>n/a</strong> means you answered something other than “Yes”, and
+          <strong> —</strong> that you did not score it. A big difference is not a mistake — it usually means you were
+          weighing something the rest of the room could not see, which is exactly what the spread is there to catch.
+        </p>
+      </div>
 
       {tickets.map((ticket) => (
         <section className="card" key={ticket.jiraId} aria-labelledby={`fb-${ticket.jiraId}`}>
@@ -63,6 +189,22 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
               Spread (std dev): <strong>{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</strong>
               {ticket.discussionRequired ? <span className="badge warn"> Discussion required</span> : null}
             </p>
+            {ticket.yourTotal !== null ? (
+              <p style={{ margin: 0 }}>
+                You scored it <strong>{ticket.yourTotal}</strong>
+                {ticket.businessScore !== null ? (
+                  <span className="hint">
+                    {' '}
+                    ({ticket.yourTotal === ticket.businessScore
+                      ? 'the same as the committee'
+                      : `${Math.abs(ticket.yourTotal - ticket.businessScore)} ${
+                          ticket.yourTotal > ticket.businessScore ? 'higher' : 'lower'
+                        } than the committee`}
+                    )
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
             <p style={{ margin: 0 }}>
               Effort: <strong>{ticket.effort ?? '—'}</strong> · Ratio:{' '}
               <strong>{ticket.priorityRatio === null ? '—' : ticket.priorityRatio.toFixed(2)}</strong>

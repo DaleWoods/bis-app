@@ -54,6 +54,18 @@ export function ScoreForm({
   const [status, setStatus] = useState<{ tone: 'saved' | 'error' | ''; message: string }>({ tone: '', message: '' });
   const [saving, setSaving] = useState(false);
 
+  /*
+    A score is given once and stands - it cannot be revised.
+
+    An answer that can be changed is an answer that can be changed after
+    hearing what everyone else thought, and the spread that decides whether a
+    ticket needs discussing only means anything if each score was formed
+    independently. So a submitted score locks, and the way back is for the
+    coordinator to exclude it.
+  */
+  const locked = Boolean(submission) && !submission?.archived;
+  const readOnly = disabled || locked;
+
   const isRequestor = Boolean(ticket.originalRequestor) && ticket.originalRequestor.toLowerCase() === memberEmail.toLowerCase();
   const total = useMemo(
     () => categories.reduce((sum, category) => sum + (Number(scores[category.id]) || 0), 0),
@@ -72,7 +84,7 @@ export function ScoreForm({
         closureInfo: closureInfo || undefined,
         moreInfo: moreInfo || undefined,
       });
-      setStatus({ tone: 'saved', message: 'Saved. You can change your answer until the cut-off.' });
+      setStatus({ tone: 'saved', message: 'Scored. That is your answer for this round.' });
     } catch (err) {
       setStatus({ tone: 'error', message: err instanceof Error ? err.message : 'Could not save' });
     } finally {
@@ -84,7 +96,15 @@ export function ScoreForm({
 
   return (
     <form onSubmit={submit} style={{ marginTop: '1rem' }}>
-      <fieldset disabled={disabled}>
+      {locked ? (
+        <div className="notice">
+          <strong>You have scored this one.</strong> Scores are given once and cannot be changed — everyone answering
+          independently is what makes the spread worth reading. If yours needs correcting, ask whoever is running the
+          round to exclude it and you can score it again.
+        </div>
+      ) : null}
+
+      <fieldset disabled={readOnly}>
         <legend>Is this relevant?</legend>
         {relevanceOptions.map((option) => {
           const requestorOnly = option.value === 'NO_NOT_RELEVANT_TODAY';
@@ -203,18 +223,32 @@ export function ScoreForm({
         <textarea
           id={`notes-${ticket.id}`}
           value={moreInfo}
-          disabled={disabled}
+          disabled={readOnly}
           onChange={(e) => setMoreInfo(e.target.value)}
           placeholder="Anything the coordinator should know, or a query for the requestor"
         />
       </div>
 
-      <div className="row">
-        <button type="submit" disabled={disabled || saving || (relevance === 'YES' && categories.length === 0)}>
-          {saving ? 'Saving…' : submission ? 'Update my score' : 'Submit my score'}
-        </button>
-        {submission ? <span className="hint">Last saved {new Date(submission.updatedAt).toLocaleString('en-GB')}</span> : null}
-      </div>
+      {locked ? (
+        <p className="hint">Scored {new Date(submission!.submittedAt).toLocaleString('en-GB')}.</p>
+      ) : (
+        <div className="row">
+          <button
+            type="submit"
+            disabled={readOnly || saving || (relevance === 'YES' && categories.length === 0)}
+            onClick={(event) => {
+              // Said before it is irreversible, not after. The confirm is the
+              // only warning that arrives while it can still be acted on.
+              if (!window.confirm('Submit this score?\n\nScores cannot be changed once given.')) {
+                event.preventDefault();
+              }
+            }}
+          >
+            {saving ? 'Saving…' : 'Submit my score'}
+          </button>
+          <span className="hint">This cannot be changed once submitted.</span>
+        </div>
+      )}
 
       <p className={`status ${status.tone}`} role="status" aria-live="polite">
         {disabled ? disabledReason ?? 'Scoring is closed for this round.' : status.message}

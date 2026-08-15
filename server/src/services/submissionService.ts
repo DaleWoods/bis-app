@@ -222,17 +222,41 @@ export async function saveSubmission(
     [round.id, ticket.id, member.id],
   );
 
+  /*
+    A score is given once and stands.
+
+    Allowing revisions sounded harmless and was not: an answer that can be
+    changed is an answer that can be changed *after* seeing what everyone else
+    said, and the spread that decides whether a ticket needs discussing is only
+    meaningful if each score was formed independently. It also made "who has
+    responded" a moving target - a member could be complete on Tuesday and not
+    on Wednesday.
+
+    An excluded submission is the way back: the coordinator excludes the wrong
+    one, which frees the member to score it again.
+  */
+  if (existing && !(Number(existing.archived) === 1)) {
+    throw new HttpishError(
+      409,
+      'You have already scored this ticket, and a score cannot be changed once it is in. Ask whoever is running the round if it needs correcting.',
+    );
+  }
+
   const id = existing?.id ?? newId();
   await db.tx(async (tx) => {
     if (existing) {
+      // Only reachable for a submission the coordinator excluded, which is the
+      // sanctioned way to let somebody score again. Scoring again un-excludes
+      // it, or the new answer would be recorded and still not count.
       await tx.run(
-        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, updated_at = ?
+        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, archived = 0, submitted_at = ?, updated_at = ?
          WHERE id = ?`,
         [
           payload.relevance,
           payload.closureReason ?? '',
           payload.closureInfo ?? '',
           payload.moreInfo ?? '',
+          now,
           now,
           id,
         ],

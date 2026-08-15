@@ -69,6 +69,12 @@ coordinators. Put new content in whichever half its reader belongs to.
   emits an unhandled `error` event: not a rejected promise, not catchable around
   the call, and it takes the whole process down. One ticket with a stale
   screenshot link is enough.
+- **A score is given once.** `saveSubmission` refuses a second answer from the
+  same member on the same ticket; the way back is for a coordinator to exclude
+  the wrong one, which reopens it. The independence of each score is what makes
+  the spread mean anything, so nothing should quietly reintroduce a way to
+  revise one - including anything that shows a scorer the room's answer before
+  they have given theirs.
 - **Comments explain why, not what.** The codebase is written to be read by
   someone deciding whether a change is safe.
 

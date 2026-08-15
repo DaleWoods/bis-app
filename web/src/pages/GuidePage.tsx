@@ -112,7 +112,11 @@ export function GuidePage({ member }: { member: Member }) {
         <ul>
           <li>Score from your own team's point of view. You are not trying to guess the overall answer.</li>
           <li>
-            You can change your answers as often as you like until the cut-off. Nothing is final until the round closes.
+            <strong>A score is given once and cannot be changed.</strong> An answer you could revise is one you could
+            revise after hearing what everyone else thought, and the spread that decides whether a ticket needs
+            discussing is only worth reading if every score was formed on its own. Take the time before you submit — you
+            will be asked to confirm. If one genuinely needs correcting, ask whoever is running the round to exclude it
+            and you can score that ticket again.
           </li>
           <li>Nobody else — including whoever is running the round — sees who gave what while the round is open.</li>
           <li>There is no "save all" button. Each ticket saves on its own as you go.</li>
@@ -199,10 +203,20 @@ export function GuidePage({ member }: { member: Member }) {
           before it counts at all. Below that it rolls over to the next round rather than being decided by two people.
         </p>
         <p>
-          After the round is finalised you can see the anonymised results — everyone's spread, the averages per
-          category, and where your own view sat. Get there from the round on the <Link to="/rounds">Rounds</Link> page,
-          or from the <Link to="/">Score</Link> page, which offers the last finalised round when there is nothing open
-          to score.
+          After the round is finalised you can see the results. It opens with the round as a table: every ticket in
+          score order, what the committee gave it, <strong>what you gave it</strong>, the difference, the spread, and
+          what happened to it. Below that, each ticket in full — the averages per category, everyone's totals
+          unattributed, and the notes people left.
+        </p>
+        <p>
+          Your own scores are the only ones named, and only to you. A large difference is not a mistake: it usually
+          means you were weighing something the rest of the room could not see, which is exactly what the spread exists
+          to catch. Get there from the round on the <Link to="/rounds">Rounds</Link> page, or from the{' '}
+          <Link to="/">Score</Link> page, which offers the last finalised round when there is nothing open to score.
+        </p>
+        <p className="hint">
+          It is deliberately after the round rather than during it. A score given after seeing what the room already
+          said is not an independent score, and the whole method rests on them being independent.
         </p>
         <p>
           Finalising <strong>freezes</strong> those numbers. They are stored as they stood at that moment, so a
@@ -374,6 +388,8 @@ export function GuidePage({ member }: { member: Member }) {
             <p>
               “Who scored what” lists individual submissions, coordinators only. You can <strong>Exclude</strong> a
               submission to stop it counting without deleting it — useful when someone scores the wrong ticket.
+              Excluding is also the way to let somebody score again: a committee member cannot change a score once it is
+              given, so if one needs correcting, exclude it and the ticket reopens for them.
             </p>
             <p>
               <strong>On a finalised round, excluding a score does not move the numbers on its own.</strong> Finalising
