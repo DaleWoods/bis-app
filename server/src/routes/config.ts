@@ -130,11 +130,15 @@ const scoringSchema = z.object({
     .optional(),
 });
 
+const cadenceMinute = z.union([z.literal(0), z.literal(15), z.literal(30), z.literal(45)]);
+
 const cadenceSchema = z.object({
   distributionDayOfWeek: z.number().int().min(0).max(6).optional(),
   distributionHour: z.number().int().min(0).max(23).optional(),
+  distributionMinute: cadenceMinute.optional(),
   cutOffDayOfWeek: z.number().int().min(0).max(6).optional(),
   cutOffHour: z.number().int().min(0).max(23).optional(),
+  cutOffMinute: cadenceMinute.optional(),
   reminderHoursBeforeCutOff: z.array(z.number().min(0)).optional(),
   escalationHoursBeforeCutOff: z.number().min(0).nullable().optional(),
   timezone: z.string().optional(),

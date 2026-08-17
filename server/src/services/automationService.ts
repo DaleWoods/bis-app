@@ -116,7 +116,7 @@ export async function listAutomationLog(db: Db, roundId: string): Promise<Automa
 // --- Cadence arithmetic ----------------------------------------------------
 
 /**
- * The next time this day-of-week and hour occurs at or after `from`.
+ * The next time this day-of-week, hour and minute occurs at or after `from`.
  *
  * Deliberately arithmetic on UTC rather than a timezone library: the app has no
  * dependency on one, and the cadence is a weekly rhythm, not a scheduling
@@ -124,10 +124,16 @@ export async function listAutomationLog(db: Db, roundId: string): Promise<Automa
  * out over a British winter - which is why `timezoneOffsetMinutes` exists and
  * why the Settings screen says what it means.
  */
-export function nextOccurrence(from: Date, dayOfWeek: number, hour: number, offsetMinutes = 0): Date {
+export function nextOccurrence(
+  from: Date,
+  dayOfWeek: number,
+  hour: number,
+  minute = 0,
+  offsetMinutes = 0,
+): Date {
   const local = new Date(from.getTime() + offsetMinutes * 60_000);
   const result = new Date(local);
-  result.setUTCHours(hour, 0, 0, 0);
+  result.setUTCHours(hour, minute, 0, 0);
 
   let delta = (dayOfWeek - result.getUTCDay() + 7) % 7;
   if (delta === 0 && result.getTime() <= local.getTime()) delta = 7;
@@ -161,8 +167,14 @@ export function timezoneOffsetMinutes(timezone: string, at: Date = new Date()): 
 /** The window the next round should run over, from the cadence settings. */
 export function nextRoundWindow(cadence: CadenceConfig, from: Date = new Date()): { opensAt: Date; cutOffAt: Date } {
   const offset = timezoneOffsetMinutes(cadence.timezone, from);
-  const opensAt = nextOccurrence(from, cadence.distributionDayOfWeek, cadence.distributionHour, offset);
-  const cutOffAt = nextOccurrence(opensAt, cadence.cutOffDayOfWeek, cadence.cutOffHour, offset);
+  const opensAt = nextOccurrence(
+    from,
+    cadence.distributionDayOfWeek,
+    cadence.distributionHour,
+    cadence.distributionMinute,
+    offset,
+  );
+  const cutOffAt = nextOccurrence(opensAt, cadence.cutOffDayOfWeek, cadence.cutOffHour, cadence.cutOffMinute, offset);
   return { opensAt, cutOffAt };
 }
 

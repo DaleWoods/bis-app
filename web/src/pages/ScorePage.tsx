@@ -3,6 +3,7 @@ import { api, formatDateTime, isCoordinator, type Category, type Member, type Re
 import { Link } from '../router';
 import { TicketCard } from '../components/TicketCard';
 import { ScoreForm } from '../components/ScoreForm';
+import { Countdown } from '../components/Countdown';
 
 interface Props {
   member: Member;
@@ -120,7 +121,7 @@ export function ScorePage({ member, roundId }: Props) {
       <>
         <h1>{round.weekLabel}</h1>
         <p className="lede">
-          Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>.
+          Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong> <Countdown target={round.cutOffAt} />
         </p>
         <div className="notice" role="status">
           <strong>Nothing to score yet.</strong> This round has no tickets in it — the coordinator is still putting it
@@ -134,8 +135,9 @@ export function ScorePage({ member, roundId }: Props) {
     <>
       <h1>{round.weekLabel}</h1>
       <p className="lede">
-        Score each ticket 0–10 across the seven categories. Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>. You
-        can change your answers until then. Nobody else sees your individual scores while the round is open.
+        Score each ticket 0–10 across the seven categories. Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>{' '}
+        <Countdown target={round.cutOffAt} /> — take your time before submitting each one, since a score is given
+        once and cannot be changed. Nobody else sees your individual scores while the round is open.
       </p>
 
       <div className="notice" role="status">

@@ -16,6 +16,7 @@ import {
 import { cardWarnings } from '../card';
 import { Link } from '../router';
 import { DiscussionPanel } from '../components/DiscussionPanel';
+import { Countdown } from '../components/Countdown';
 import { TicketEditor } from './TicketEditor';
 
 /**
@@ -51,6 +52,8 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [emails, setEmails] = useState<
     Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
   >([]);
+  /** For a round created by hand with no opening time - the way to give it one after the fact. */
+  const [opensAtInput, setOpensAtInput] = useState('');
 
   /**
    * The four requests the page needs, in flight together and all awaited.
@@ -157,7 +160,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
           <h1>{round.weekLabel}</h1>
           <p className="lede">
             <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span> · Cut-off{' '}
-            {formatDateTime(round.cutOffAt)} · {tickets.length} tickets · {scored} with responses · {readyForEstimation}{' '}
+            {formatDateTime(round.cutOffAt)}
+            {round.status === 'OPEN' ? (
+              <>
+                {' '}
+                <Countdown target={round.cutOffAt} />
+              </>
+            ) : null}{' '}
+            · {tickets.length} tickets · {scored} with responses · {readyForEstimation}{' '}
             ready to send for estimation
             {needDiscussion.length ? (
               <>
@@ -359,6 +369,42 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               <span className={`dot ${automation.paused || !automation.enabled ? 'off' : 'on'}`} aria-hidden="true" />
               {automation.next}
             </p>
+
+            {/*
+              A round created from "New round" has no opening time unless one
+              was given, which is exactly what stops automation ever opening
+              it - `describeNext` says so above, but only this fixes it.
+            */}
+            {round.status === 'DRAFT' && !round.opensAt ? (
+              <div className="row" style={{ marginBottom: '0.6rem' }}>
+                <div className="field grow" style={{ maxWidth: 260 }}>
+                  <label htmlFor="opens-at-input">Give it an opening time</label>
+                  <input
+                    id="opens-at-input"
+                    type="datetime-local"
+                    value={opensAtInput}
+                    onChange={(e) => setOpensAtInput(e.target.value)}
+                  />
+                </div>
+                <div style={{ alignSelf: 'end' }}>
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={Boolean(busy) || !opensAtInput}
+                    onClick={() =>
+                      run('set-opens-at', async () => {
+                        await api.updateRound(round.id, { opensAt: new Date(opensAtInput).toISOString() });
+                        setOpensAtInput('');
+                        return 'Opening time set — automation can now open and distribute this round.';
+                      })
+                    }
+                  >
+                    Set
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="row">
               {automation.enabled ? (
                 <button

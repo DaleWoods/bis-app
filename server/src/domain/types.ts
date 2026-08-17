@@ -129,8 +129,12 @@ export interface CadenceConfig {
   /** 0=Sunday .. 6=Saturday. Not hard-coded weekdays (§11). */
   distributionDayOfWeek: number;
   distributionHour: number;
+  /** Minutes past the hour: 0, 15, 30 or 45. */
+  distributionMinute: number;
   cutOffDayOfWeek: number;
   cutOffHour: number;
+  /** Minutes past the hour: 0, 15, 30 or 45. */
+  cutOffMinute: number;
   /** Hours before cut-off at which reminders fire, e.g. [48, 24, 4]. */
   reminderHoursBeforeCutOff: number[];
   escalationHoursBeforeCutOff: number | null;
@@ -219,8 +223,10 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
 export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   distributionDayOfWeek: 4, // Thursday send, per the weekly rhythm in §11
   distributionHour: 9,
+  distributionMinute: 0,
   cutOffDayOfWeek: 2, // Tuesday cut-off (COP Tue)
   cutOffHour: 17,
+  cutOffMinute: 0,
   reminderHoursBeforeCutOff: [48, 24, 4],
   escalationHoursBeforeCutOff: 2,
   timezone: 'Europe/London',

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ROLES, api, formatDateTime, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
+import { nextRoundWindow } from '../cadence';
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MINUTE_OPTIONS = [0, 15, 30, 45];
 
 /**
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
@@ -68,6 +72,16 @@ export function SettingsPage({ member }: { member: Member }) {
   const [deletingRound, setDeletingRound] = useState(false);
   /** What the JIRA workflow actually offers, so the name is chosen not guessed. */
   const [transitions, setTransitions] = useState<Array<{ name: string; toStatus: string }> | null>(null);
+  /**
+   * Held as controlled state, unlike the other settings forms, so the preview
+   * below it can update the instant a field changes rather than only after
+   * "Save cadence" is pressed - which is the whole point of the preview.
+   */
+  const [cadenceForm, setCadenceForm] = useState<AppConfig['cadence'] | null>(null);
+
+  useEffect(() => {
+    if (config) setCadenceForm(config.cadence);
+  }, [config]);
 
   async function load() {
     try {
@@ -660,65 +674,144 @@ EMAIL_REPLY_TO=<where replies should go>`}
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Cadence</h2>
         <p className="hint">
-          Distribution and reminders are scheduled around these, not hard-coded weekdays. Times are read as wall-clock
-          time in the timezone below.
+          Two separate points in the week: when a round <strong>opens</strong> — goes out to the committee — and when
+          it <strong>closes</strong> — the cut-off, after which nobody can score. Automation (above) uses these to work
+          out both times for the next round; a round created by hand can use them too, or set its own. Times are
+          wall-clock time in <strong>{config.cadence.timezone}</strong>, so 09:00 means 09:00 there whatever the
+          clocks are doing.
         </p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            saveSection(
-              'cadence',
-              {
-                distributionDayOfWeek: Number(form.get('distributionDayOfWeek')),
-                distributionHour: Number(form.get('distributionHour')),
-                cutOffDayOfWeek: Number(form.get('cutOffDayOfWeek')),
-                cutOffHour: Number(form.get('cutOffHour')),
-                reminderHoursBeforeCutOff: String(form.get('reminderHoursBeforeCutOff'))
-                  .split(',')
-                  .map((value) => Number(value.trim()))
-                  .filter((value) => Number.isFinite(value)),
-              },
-              'Cadence',
-            );
-          }}
-        >
-          <div className="row">
-            <div className="grow field">
-              <label htmlFor="distributionDayOfWeek">Distribution day</label>
-              <select id="distributionDayOfWeek" name="distributionDayOfWeek" defaultValue={config.cadence.distributionDayOfWeek}>
-                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => (
-                  <option key={day} value={index}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grow field">
-              <label htmlFor="distributionHour">Distribution hour</label>
-              <input id="distributionHour" name="distributionHour" type="number" min={0} max={23} defaultValue={config.cadence.distributionHour} />
-            </div>
-            <div className="grow field">
-              <label htmlFor="cutOffDayOfWeek">Cut-off day</label>
-              <select id="cutOffDayOfWeek" name="cutOffDayOfWeek" defaultValue={config.cadence.cutOffDayOfWeek}>
-                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => (
-                  <option key={day} value={index}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grow field">
-              <label htmlFor="cutOffHour">Cut-off hour</label>
-              <input id="cutOffHour" name="cutOffHour" type="number" min={0} max={23} defaultValue={config.cadence.cutOffHour} />
-            </div>
-            <div className="grow field">
-              <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
-              <input id="reminderHoursBeforeCutOff" name="reminderHoursBeforeCutOff" type="text" defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')} />
-            </div>
-          </div>
-          <button type="submit">Save cadence</button>
-        </form>
+        {cadenceForm ? (
+          <>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                saveSection(
+                  'cadence',
+                  {
+                    distributionDayOfWeek: cadenceForm.distributionDayOfWeek,
+                    distributionHour: cadenceForm.distributionHour,
+                    distributionMinute: cadenceForm.distributionMinute,
+                    cutOffDayOfWeek: cadenceForm.cutOffDayOfWeek,
+                    cutOffHour: cadenceForm.cutOffHour,
+                    cutOffMinute: cadenceForm.cutOffMinute,
+                    reminderHoursBeforeCutOff: String(form.get('reminderHoursBeforeCutOff'))
+                      .split(',')
+                      .map((value) => Number(value.trim()))
+                      .filter((value) => Number.isFinite(value)),
+                  },
+                  'Cadence',
+                );
+              }}
+            >
+              <fieldset style={{ border: '1px solid var(--border, #d8dee6)', borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                <legend>Round opens</legend>
+                <div className="row">
+                  <div className="grow field">
+                    <label htmlFor="distributionDayOfWeek">Day</label>
+                    <select
+                      id="distributionDayOfWeek"
+                      value={cadenceForm.distributionDayOfWeek}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, distributionDayOfWeek: Number(e.target.value) })}
+                    >
+                      {WEEKDAYS.map((day, index) => (
+                        <option key={day} value={index}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grow field">
+                    <label htmlFor="distributionHour">Hour (24h)</label>
+                    <input
+                      id="distributionHour"
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={cadenceForm.distributionHour}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, distributionHour: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="grow field">
+                    <label htmlFor="distributionMinute">Minute</label>
+                    <select
+                      id="distributionMinute"
+                      value={cadenceForm.distributionMinute}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, distributionMinute: Number(e.target.value) })}
+                    >
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <option key={minute} value={minute}>
+                          :{String(minute).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset style={{ border: '1px solid var(--border, #d8dee6)', borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                <legend>Round closes (cut-off)</legend>
+                <div className="row">
+                  <div className="grow field">
+                    <label htmlFor="cutOffDayOfWeek">Day</label>
+                    <select
+                      id="cutOffDayOfWeek"
+                      value={cadenceForm.cutOffDayOfWeek}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, cutOffDayOfWeek: Number(e.target.value) })}
+                    >
+                      {WEEKDAYS.map((day, index) => (
+                        <option key={day} value={index}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grow field">
+                    <label htmlFor="cutOffHour">Hour (24h)</label>
+                    <input
+                      id="cutOffHour"
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={cadenceForm.cutOffHour}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, cutOffHour: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="grow field">
+                    <label htmlFor="cutOffMinute">Minute</label>
+                    <select
+                      id="cutOffMinute"
+                      value={cadenceForm.cutOffMinute}
+                      onChange={(e) => setCadenceForm({ ...cadenceForm, cutOffMinute: Number(e.target.value) })}
+                    >
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <option key={minute} value={minute}>
+                          :{String(minute).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </fieldset>
+
+              <div className="field" style={{ maxWidth: 320, marginBottom: '1rem' }}>
+                <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
+                <input
+                  id="reminderHoursBeforeCutOff"
+                  name="reminderHoursBeforeCutOff"
+                  type="text"
+                  defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')}
+                />
+              </div>
+
+              <CadencePreview cadence={cadenceForm} />
+
+              <button type="submit" style={{ marginTop: '1rem' }}>
+                Save cadence
+              </button>
+            </form>
+          </>
+        ) : null}
       </section>
 
       <section className="card">
@@ -989,5 +1082,36 @@ EMAIL_REPLY_TO=<where replies should go>`}
         </section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * What "Create next week's round" (automation, above) would actually do with
+ * these settings, recomputed on every keystroke. This is the direct answer to
+ * "why did it open on a day I didn't expect" - open and close are two separate
+ * fields, each searching forward independently from now, and seeing the result
+ * before saving is a lot clearer than working it out from two day/hour pairs.
+ */
+function CadencePreview({ cadence }: { cadence: AppConfig['cadence'] }) {
+  const { opensAt, cutOffAt } = nextRoundWindow(cadence);
+  const when = (date: Date) =>
+    date.toLocaleString('en-GB', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: cadence.timezone,
+    });
+  const hoursOpen = Math.round(((cutOffAt.getTime() - opensAt.getTime()) / 3600_000) * 10) / 10;
+  const windowLength = hoursOpen < 48 ? `${hoursOpen} hour${hoursOpen === 1 ? '' : 's'}` : `${Math.round((hoursOpen / 24) * 10) / 10} days`;
+
+  return (
+    <div className="notice">
+      With these settings, a round created automatically would <strong>open {when(opensAt)}</strong> and{' '}
+      <strong>close {when(cutOffAt)}</strong> — {windowLength} to score. If that is not what you expected, it is
+      usually the open day/hour above, not the close one, that needs changing: close always searches forward from
+      open, so a close day earlier in the week than open pushes it into the following week.
+    </div>
   );
 }

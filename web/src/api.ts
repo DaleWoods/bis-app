@@ -209,8 +209,10 @@ export interface AppConfig {
   cadence: {
     distributionDayOfWeek: number;
     distributionHour: number;
+    distributionMinute: number;
     cutOffDayOfWeek: number;
     cutOffHour: number;
+    cutOffMinute: number;
     reminderHoursBeforeCutOff: number[];
     escalationHoursBeforeCutOff: number | null;
     timezone: string;
@@ -358,9 +360,9 @@ export const api = {
       results?: TicketResult[];
       submissions?: Submission[];
     }>(`/api/rounds/${id}`),
-  createRound: (input: { weekLabel: string; cutOffAt: string; stream?: string; notes?: string }) =>
+  createRound: (input: { weekLabel: string; cutOffAt: string; opensAt?: string | null; stream?: string; notes?: string }) =>
     request<{ round: Round }>('/api/rounds', { method: 'POST', body: JSON.stringify(input) }),
-  updateRound: (id: string, input: Partial<{ weekLabel: string; cutOffAt: string; notes: string }>) =>
+  updateRound: (id: string, input: Partial<{ weekLabel: string; cutOffAt: string; opensAt: string | null; notes: string }>) =>
     request<{ round: Round }>(`/api/rounds/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   setRoundStatus: (id: string, status: 'OPEN' | 'CLOSED' | 'FINALISED') =>
     request<{ round: Round }>(`/api/rounds/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),

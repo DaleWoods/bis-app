@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api, formatDateTime, isCoordinator, type Member, type Round } from '../api';
 import { Link, useRouter } from '../router';
+import { Countdown } from '../components/Countdown';
 
 export function RoundsPage({ member }: { member: Member }) {
   const { navigate } = useRouter();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [error, setError] = useState('');
   const [weekLabel, setWeekLabel] = useState(defaultWeekLabel());
+  const [opensAt, setOpensAt] = useState('');
   const [cutOffAt, setCutOffAt] = useState(defaultCutOff());
   const [creating, setCreating] = useState(false);
 
@@ -22,7 +24,11 @@ export function RoundsPage({ member }: { member: Member }) {
     setCreating(true);
     setError('');
     try {
-      const { round } = await api.createRound({ weekLabel, cutOffAt: new Date(cutOffAt).toISOString() });
+      const { round } = await api.createRound({
+        weekLabel,
+        cutOffAt: new Date(cutOffAt).toISOString(),
+        opensAt: opensAt ? new Date(opensAt).toISOString() : null,
+      });
       navigate(`/rounds/${round.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the round');
@@ -45,6 +51,10 @@ export function RoundsPage({ member }: { member: Member }) {
               <input id="week-label" type="text" value={weekLabel} onChange={(e) => setWeekLabel(e.target.value)} required />
             </div>
             <div className="grow">
+              <label htmlFor="opens-at">Opens (optional)</label>
+              <input id="opens-at" type="datetime-local" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} />
+            </div>
+            <div className="grow">
               <label htmlFor="cut-off">Cut-off</label>
               <input id="cut-off" type="datetime-local" value={cutOffAt} onChange={(e) => setCutOffAt(e.target.value)} required />
             </div>
@@ -54,6 +64,11 @@ export function RoundsPage({ member }: { member: Member }) {
               </button>
             </div>
           </div>
+          <p className="hint">
+            Leave &ldquo;Opens&rdquo; blank if you will open and distribute this round yourself. Set it if you want
+            automation to open and email the committee at that time — without it, automation leaves a round it did
+            not create alone, the same as one with no opening time set at all.
+          </p>
         </form>
       ) : null}
 
@@ -67,6 +82,7 @@ export function RoundsPage({ member }: { member: Member }) {
               <th scope="col">Round</th>
               <th scope="col">Status</th>
               <th scope="col">Cut-off</th>
+              <th scope="col">Time left</th>
               <th scope="col" className="num">
                 Tickets
               </th>
@@ -86,6 +102,7 @@ export function RoundsPage({ member }: { member: Member }) {
                   <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span>
                 </td>
                 <td>{formatDateTime(round.cutOffAt)}</td>
+                <td>{round.status === 'OPEN' ? <Countdown target={round.cutOffAt} /> : '—'}</td>
                 <td className="num">{round.ticketCount}</td>
                 <td>{round.distributionSentAt ? formatDateTime(round.distributionSentAt) : '—'}</td>
                 <td>
@@ -96,7 +113,7 @@ export function RoundsPage({ member }: { member: Member }) {
             ))}
             {!rounds.length ? (
               <tr>
-                <td colSpan={6}>No rounds yet.</td>
+                <td colSpan={7}>No rounds yet.</td>
               </tr>
             ) : null}
           </tbody>

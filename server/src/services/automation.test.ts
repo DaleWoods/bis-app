@@ -42,7 +42,20 @@ describe('nextOccurrence', () => {
   it('reads the hour as wall-clock time in the offset it is given', () => {
     // 09:00 in BST (UTC+1) is 08:00 UTC.
     const from = new Date('2026-08-05T10:00:00Z');
-    expect(nextOccurrence(from, 4, 9, 60).toISOString()).toBe('2026-08-06T08:00:00.000Z');
+    expect(nextOccurrence(from, 4, 9, 0, 60).toISOString()).toBe('2026-08-06T08:00:00.000Z');
+  });
+
+  it('honours a quarter-hour or half-hour minute value', () => {
+    const from = new Date('2026-08-05T10:00:00Z');
+    expect(nextOccurrence(from, 4, 9, 15).toISOString()).toBe('2026-08-06T09:15:00.000Z');
+    expect(nextOccurrence(from, 4, 9, 30).toISOString()).toBe('2026-08-06T09:30:00.000Z');
+  });
+
+  it('treats the minute as part of what "has the hour passed" means', () => {
+    // Thursday 09:30 UTC: the 09:15 slot has gone, the 09:45 one has not.
+    const from = new Date('2026-08-06T09:30:00Z');
+    expect(nextOccurrence(from, 4, 9, 15).toISOString()).toBe('2026-08-13T09:15:00.000Z');
+    expect(nextOccurrence(from, 4, 9, 45).toISOString()).toBe('2026-08-06T09:45:00.000Z');
   });
 });
 
@@ -71,6 +84,13 @@ describe('nextRoundWindow', () => {
     const cadence = { ...DEFAULT_CADENCE_CONFIG, distributionDayOfWeek: 5, cutOffDayOfWeek: 1 };
     const { opensAt, cutOffAt } = nextRoundWindow(cadence, new Date('2026-08-05T10:00:00Z'));
     expect(cutOffAt.getTime()).toBeGreaterThan(opensAt.getTime());
+  });
+
+  it('carries the configured minute through to both ends of the window', () => {
+    const cadence = { ...DEFAULT_CADENCE_CONFIG, distributionMinute: 15, cutOffMinute: 30 };
+    const { opensAt, cutOffAt } = nextRoundWindow(cadence, new Date('2026-08-05T10:00:00Z'));
+    expect(opensAt.getUTCMinutes()).toBe(15);
+    expect(cutOffAt.getUTCMinutes()).toBe(30);
   });
 });
 

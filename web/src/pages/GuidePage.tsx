@@ -512,6 +512,13 @@ export function GuidePage({ member }: { member: Member }) {
               The round page always says what will happen next — “Finalises at Tue 11 Aug, 18:00, then the scores go to
               JIRA” — and lists everything the app has already done to it.
             </p>
+            <p className="hint">
+              A round automation created gets an opening time from the Cadence settings automatically. A round you
+              create by hand only gets one if you give it one — set “Opens” on the New Round form, or add it
+              afterwards from the round page — otherwise automation leaves it alone entirely (it will not open,
+              distribute, chase or close a round it cannot see an opening time on), the same as if automation were
+              switched off just for that round.
+            </p>
           </Section>
 
           <Section id="settings" title="Settings worth knowing about">
@@ -529,8 +536,14 @@ export function GuidePage({ member }: { member: Member }) {
                 you go too far.
               </li>
               <li>
-                <strong>Cadence</strong> — which days and times the week runs on, read as wall-clock time in the
-                timezone set there, so they hold across the clocks changing. Automation works from these.
+                <strong>Cadence</strong> — two separate settings, each its own day, hour and minute (on the hour, or a
+                quarter/half past): when a round <strong>opens</strong> and goes out to the committee, and when it{' '}
+                <strong>closes</strong> — the cut-off. Times are read as wall-clock time in the timezone set there, so
+                they hold across the clocks changing. Cut-off always searches forward from the opening, so a close
+                day earlier in the week than the open day pushes the round into the following week — Settings shows a
+                live preview of exactly when the next automatically-created round would open and close, so you can
+                see the effect before saving rather than after. Automation works from these; a round created by hand
+                can use them too, or set its own opening time.
               </li>
               <li>
                 <strong>Committee</strong> — who can sign in, and which of the two roles they have.{' '}
