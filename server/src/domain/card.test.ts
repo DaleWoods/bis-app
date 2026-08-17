@@ -126,6 +126,15 @@ describe('cardWarnings', () => {
     );
   });
 
+  it('catches "metadata" and "payload" left untranslated', () => {
+    // Reported live: a card for ECOM-1737 read "the payload includes additional
+    // metadata attributes" - exactly the wording the ticket used, never
+    // translated into what a buyer would recognise.
+    expect(cardWarnings({ ...good, panelCurrent: 'The payload includes additional metadata attributes' })).toContainEqual(
+      expect.stringContaining('reads technical'),
+    );
+  });
+
   it('notices a picture with no caption, and a picture nobody used', () => {
     expect(cardWarnings({ ...good, screenshotCaption: '' })).toContain('the picture has no caption');
     expect(cardWarnings({ ...good, screenshotAttachmentId: '', hasUnusedImage: true })).toContain(

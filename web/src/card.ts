@@ -83,7 +83,7 @@ export function cardLines(value: string | null | undefined, max = 3): string[] {
  * gets scored anyway.
  */
 const JARGON =
-  /\b(api|endpoint|null|nullable|cache|cron|regex|css|dom|sql|json|payload|middleware|refactor|deploy(?:ment)?|backend|front[- ]?end|repo(?:sitory)?|schema|env(?:ironment)? var\w*|stack ?trace|race condition|component|400|404|500|timeout)\b/i;
+  /\b(api|endpoint|null|nullable|cache|cron|regex|css|dom|sql|json|payload|metadata|middleware|refactor|deploy(?:ment)?|backend|front[- ]?end|repo(?:sitory)?|schema|env(?:ironment)? var\w*|stack ?trace|race condition|component|400|404|500|timeout)\b/i;
 
 export interface CardCheckInput {
   title: string;

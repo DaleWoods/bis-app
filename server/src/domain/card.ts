@@ -147,7 +147,7 @@ export interface CardCheckInput {
  * left the reader none the wiser.
  */
 const JARGON =
-  /\b(api|endpoint|null|nullable|cache|cron|regex|css|dom|sql|json|payload|middleware|refactor|deploy(?:ment)?|backend|front[- ]?end|repo(?:sitory)?|schema|env(?:ironment)? var\w*|stack ?trace|race condition|component|400|404|500|timeout)\b/i;
+  /\b(api|endpoint|null|nullable|cache|cron|regex|css|dom|sql|json|payload|metadata|middleware|refactor|deploy(?:ment)?|backend|front[- ]?end|repo(?:sitory)?|schema|env(?:ironment)? var\w*|stack ?trace|race condition|component|400|404|500|timeout)\b/i;
 
 /**
  * What is wrong with a card, in the words a coordinator would use.
