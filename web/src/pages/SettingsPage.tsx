@@ -68,6 +68,9 @@ export function SettingsPage({ member }: { member: Member }) {
   const [resetting, setResetting] = useState(false);
   /** Deleting one round rather than all of them. */
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [participation, setParticipation] = useState<
+    Array<{ memberId: string; memberName: string; team: string; roundsCompleted: number; roundsConsidered: number }>
+  >([]);
   const [roundToDelete, setRoundToDelete] = useState('');
   const [deletingRound, setDeletingRound] = useState(false);
   /** What the JIRA workflow actually offers, so the name is chosen not guessed. */
@@ -85,16 +88,18 @@ export function SettingsPage({ member }: { member: Member }) {
 
   async function load() {
     try {
-      const [{ config, categories, integrations }, { members }, roundList] = await Promise.all([
+      const [{ config, categories, integrations }, { members }, roundList, participationList] = await Promise.all([
         api.config(),
         api.members(),
         api.rounds().then((r) => r.rounds, () => [] as Round[]),
+        api.roundParticipation().then((r) => r.participation, () => []),
       ]);
       setConfig(config);
       setCategories(categories);
       setIntegrations(integrations);
       setMembers(members);
       setRounds(roundList);
+      setParticipation(participationList);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load settings');
     }
@@ -699,6 +704,7 @@ EMAIL_REPLY_TO=<where replies should go>`}
                       .split(',')
                       .map((value) => Number(value.trim()))
                       .filter((value) => Number.isFinite(value)),
+                    escalationHoursBeforeCutOff: cadenceForm.escalationHoursBeforeCutOff,
                   },
                   'Cadence',
                 );
@@ -794,14 +800,36 @@ EMAIL_REPLY_TO=<where replies should go>`}
                 </div>
               </fieldset>
 
-              <div className="field" style={{ maxWidth: 320, marginBottom: '1rem' }}>
-                <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
-                <input
-                  id="reminderHoursBeforeCutOff"
-                  name="reminderHoursBeforeCutOff"
-                  type="text"
-                  defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')}
-                />
+              <div className="row">
+                <div className="field grow" style={{ maxWidth: 320 }}>
+                  <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
+                  <input
+                    id="reminderHoursBeforeCutOff"
+                    name="reminderHoursBeforeCutOff"
+                    type="text"
+                    defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')}
+                  />
+                </div>
+                <div className="field grow" style={{ maxWidth: 220 }}>
+                  <label htmlFor="escalationHoursBeforeCutOff">Final reminder (hours before cut-off)</label>
+                  <input
+                    id="escalationHoursBeforeCutOff"
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={cadenceForm.escalationHoursBeforeCutOff ?? ''}
+                    placeholder="Off"
+                    onChange={(e) =>
+                      setCadenceForm({
+                        ...cadenceForm,
+                        escalationHoursBeforeCutOff: e.target.value === '' ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                  <p className="hint">
+                    A sharper-worded last chase, on top of the reminders above. Empty turns it off.
+                  </p>
+                </div>
               </div>
 
               <CadencePreview cadence={cadenceForm} />
@@ -813,6 +841,50 @@ EMAIL_REPLY_TO=<where replies should go>`}
           </>
         ) : null}
       </section>
+
+      {participation.length ? (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Committee participation</h2>
+          <p className="hint">
+            Completion rate over the last {participation[0]?.roundsConsidered ?? 0} finalised round
+            {participation[0]?.roundsConsidered === 1 ? '' : 's'} — the pattern across rounds, not just this one.
+            Lowest first, so a quiet drop-off is easy to spot.
+          </p>
+          <div className="table-scroll">
+            <table>
+              <caption className="visually-hidden">Committee participation over recent rounds</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Team</th>
+                  <th scope="col" className="num">
+                    Completed
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...participation]
+                  .sort((a, b) => {
+                    const rateA = a.roundsConsidered ? a.roundsCompleted / a.roundsConsidered : 1;
+                    const rateB = b.roundsConsidered ? b.roundsCompleted / b.roundsConsidered : 1;
+                    return rateA - rateB || a.memberName.localeCompare(b.memberName, 'en-GB');
+                  })
+                  .map((row) => (
+                    <tr key={row.memberId}>
+                      <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
+                        {row.memberName}
+                      </th>
+                      <td>{row.team}</td>
+                      <td className="num">
+                        {row.roundsCompleted} of {row.roundsConsidered}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Committee</h2>

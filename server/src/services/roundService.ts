@@ -192,11 +192,30 @@ export async function markDistributed(db: Db, id: string): Promise<void> {
 
 export async function listRoundTickets(db: Db, roundId: string): Promise<Ticket[]> {
   const rows = await db.all<any>(
-    `SELECT t.* FROM round_tickets rt JOIN tickets t ON t.id = rt.ticket_id
+    `SELECT t.*, rt.held AS round_held, rt.held_reason AS round_held_reason FROM round_tickets rt
+     JOIN tickets t ON t.id = rt.ticket_id
      WHERE rt.round_id = ? ORDER BY rt.position ASC, t.jira_id ASC`,
     [roundId],
   );
-  return rows.map(mapTicket);
+  return rows.map((row) => ({
+    ...mapTicket(row),
+    held: Number(row.round_held ?? 0) === 1,
+    heldReason: row.round_held_reason ?? '',
+  }));
+}
+
+/**
+ * A ticket automation was not confident enough to show the committee yet -
+ * `cardWarnings()` flagged it at the moment the round opened. The rest of the
+ * round is unaffected; this one waits here until a coordinator releases it.
+ */
+export async function setTicketHeld(db: Db, roundId: string, ticketId: string, held: boolean, reason = ''): Promise<void> {
+  await db.run('UPDATE round_tickets SET held = ?, held_reason = ? WHERE round_id = ? AND ticket_id = ?', [
+    held ? 1 : 0,
+    held ? reason : '',
+    roundId,
+    ticketId,
+  ]);
 }
 
 /**

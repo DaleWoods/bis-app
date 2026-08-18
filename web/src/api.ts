@@ -76,6 +76,9 @@ export interface Ticket {
   manualEffort: number | null;
   attachments: TicketAttachment[];
   screenshotAttachmentId: string;
+  /** Set when this ticket came from a round: held back from the committee at distribution. */
+  held?: boolean;
+  heldReason?: string;
 }
 
 export interface TicketAttachment {
@@ -323,14 +326,24 @@ export const api = {
   myRound: () =>
     request<{
       round: Round | null;
-      /** The round to look back at when there is nothing to score right now. */
+      /** The round to look back at, whether or not one is currently open. */
       lastFinalised?: Round | null;
+      /** Whether you scored anything (that still counts) in lastFinalised. */
+      lastFinalisedIncludesYou?: boolean;
+      /** Your own completion rate over recent finalised rounds. */
+      myParticipation?: { roundsCompleted: number; roundsConsidered: number };
       canScore: boolean;
       scoringOpen?: boolean;
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
+      /** How many of the committee have finished so far - a count, never who. */
+      participation?: { completed: number; total: number };
     }>('/api/my/round'),
+  roundParticipation: (limit = 8) =>
+    request<{
+      participation: Array<{ memberId: string; memberName: string; team: string; roundsCompleted: number; roundsConsidered: number }>;
+    }>(`/api/rounds/participation?limit=${limit}`),
   myRoundSubmissions: (roundId: string) =>
     request<{
       round: Round;
@@ -339,6 +352,7 @@ export const api = {
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
+      participation?: { completed: number; total: number };
     }>(`/api/rounds/${roundId}/my-submissions`),
   saveSubmission: (
     roundId: string,
@@ -434,13 +448,21 @@ export const api = {
     request<{ tickets: Ticket[]; submissionsRemoved: number }>(`/api/rounds/${roundId}/tickets/${ticketId}`, {
       method: 'DELETE',
     }),
+  releaseTicket: (roundId: string, ticketId: string) =>
+    request<{ tickets: Ticket[] }>(`/api/rounds/${roundId}/tickets/${ticketId}/release`, { method: 'POST', body: '{}' }),
   importCsv: (csv: string, roundId?: string) =>
     request<{ imported: Ticket[]; skipped: string[] }>('/api/tickets/import/csv', {
       method: 'POST',
       body: JSON.stringify({ csv, roundId }),
     }),
   importJira: (jql: string | undefined, roundId?: string) =>
-    request<{ imported: Ticket[]; addedToRound: number; jql: string; aiDrafted: number }>('/api/tickets/import/jira', {
+    request<{
+      imported: Ticket[];
+      addedToRound: number;
+      jql: string;
+      aiDrafted: number;
+      possibleDuplicates: Array<{ jiraId: string; title: string; similarTo: Array<{ jiraId: string; title: string }> }>;
+    }>('/api/tickets/import/jira', {
       method: 'POST',
       body: JSON.stringify({ jql, roundId }),
     }),

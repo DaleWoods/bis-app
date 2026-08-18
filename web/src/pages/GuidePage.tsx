@@ -120,6 +120,10 @@ export function GuidePage({ member }: { member: Member }) {
           </li>
           <li>Nobody else — including whoever is running the round — sees who gave what while the round is open.</li>
           <li>There is no "save all" button. Each ticket saves on its own as you go.</li>
+          <li>
+            The Score page shows how many of the committee have completed the round so far — a count, never who, so
+            you can see the round moving without anyone's individual answers being visible early.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks
@@ -218,6 +222,11 @@ export function GuidePage({ member }: { member: Member }) {
           It is deliberately after the round rather than during it. A score given after seeing what the room already
           said is not an independent score, and the whole method rests on them being independent.
         </p>
+        <p className="hint">
+          You do not need to remember to check back. The next time you are in the app after a round you scored
+          finishes, a banner points you straight at it — it goes away once you have seen it, or once a newer round
+          finalises.
+        </p>
         <p>
           Finalising <strong>freezes</strong> those numbers. They are stored as they stood at that moment, so a
           finalised round shows the same figures for good — later changes to settings or to anyone's submission do not
@@ -237,11 +246,14 @@ export function GuidePage({ member }: { member: Member }) {
                 <strong>Put the tickets in.</strong> “Import from JIRA” pulls whatever is sitting in the configured
                 queue. You can also add one by hand or paste CSV. A round only takes tickets while it is a draft or
                 open — once it is closed, adding one would give the committee something nobody can score, so it is
-                refused and you are pointed at the next round instead.
+                refused and you are pointed at the next round instead. An import also checks the incoming titles
+                against everything still live in another round and says if one looks like a duplicate — worth a look
+                before the same issue gets scored twice under two ticket numbers.
               </li>
               <li>
                 <strong>Check the cards.</strong> This is the part that decides whether the round is any good — see
-                below.
+                below. A ticket with no effort figures yet is flagged “No effort set” as soon as it is in, rather than
+                only once the round is nearly over, so it can be chased alongside scoring.
               </li>
               <li>
                 <strong>Distribute to committee.</strong> This opens the round and emails everyone a link. Once
@@ -251,7 +263,7 @@ export function GuidePage({ member }: { member: Member }) {
               </li>
               <li>
                 <strong>Chase non-responders</strong> as the cut-off approaches. Submission progress shows who is
-                outstanding.
+                outstanding. “Send final reminder” sends a sharper-worded last chase, naming what is still outstanding.
               </li>
               <li>
                 <strong>Close scoring</strong> at the cut-off — or earlier if everyone is done.
@@ -513,6 +525,18 @@ export function GuidePage({ member }: { member: Member }) {
               JIRA” — and lists everything the app has already done to it.
             </p>
             <p className="hint">
+              When automation opens a round, it holds back any ticket with nothing drafted at all or that still reads
+              technical — the rest of the round still opens and goes out on time. A held ticket shows on the round
+              page with why, and a “Release to committee” button once you have fixed it or decided it is fine as it
+              is. This is a much narrower check than the “Check this card” hint on every ticket, which flags things —
+              a missing figure, no screenshot caption — worth improving but not worth holding a round up for.
+            </p>
+            <p className="hint">
+              A step that fails gets one automatic retry after half an hour, in case it was a passing blip — the round
+              page says so (“will retry automatically”). If the retry also fails, it says “retries exhausted — run
+              this step by hand”, and stays that way until you do.
+            </p>
+            <p className="hint">
               A round automation created gets an opening time from the Cadence settings automatically. A round you
               create by hand only gets one if you give it one — set “Opens” on the New Round form, or add it
               afterwards from the round page — otherwise automation leaves it alone entirely (it will not open,
@@ -543,12 +567,17 @@ export function GuidePage({ member }: { member: Member }) {
                 day earlier in the week than the open day pushes the round into the following week — Settings shows a
                 live preview of exactly when the next automatically-created round would open and close, so you can
                 see the effect before saving rather than after. Automation works from these; a round created by hand
-                can use them too, or set its own opening time.
+                can use them too, or set its own opening time. A “Final reminder” hour, on top of the ordinary
+                reminders, sends one sharper-worded last chase before the cut-off — leave it blank to turn it off.
               </li>
               <li>
                 <strong>Committee</strong> — who can sign in, and which of the two roles they have.{' '}
                 <strong>Committee</strong> members score; <strong>Admins</strong> run the process and deliberately do
                 not score, which keeps the two jobs apart. Click any column heading to sort the list.
+              </li>
+              <li>
+                <strong>Committee participation</strong> — completion rate over recent finalised rounds, lowest first,
+                so a quiet drop-off is easy to spot rather than something you have to notice by memory.
               </li>
               <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round

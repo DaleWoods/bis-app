@@ -56,13 +56,18 @@ export function buildDistributionEmail(round: Round, tickets: Ticket[], member: 
 export function buildReminderEmail(
   round: Round,
   member: Member,
-  outstanding: number,
+  outstandingTickets: Ticket[],
   escalation = false,
 ): { subject: string; html: string } {
+  const outstanding = outstandingTickets.length;
+  const list = outstandingTickets
+    .map((ticket) => `<li style="margin-bottom:4px"><strong>${escapeHtml(ticket.jiraId)}</strong> – ${escapeHtml(ticket.title)}</li>`)
+    .join('');
   return {
     subject: `${escalation ? 'Final reminder' : 'Reminder'}: Business Impact Scoring – ${round.weekLabel}`,
     html: shell(`<p>Hi ${escapeHtml(member.name.split(' ')[0] || member.name)},</p>
-<p>You have <strong>${outstanding}</strong> ticket${outstanding === 1 ? '' : 's'} still to score in the ${escapeHtml(round.weekLabel)} round.</p>
+<p>You have <strong>${outstanding}</strong> ticket${outstanding === 1 ? '' : 's'} still to score in the ${escapeHtml(round.weekLabel)} round:</p>
+<ul>${list}</ul>
 <p><strong>Cut-off:</strong> ${escapeHtml(formatUkDate(round.cutOffAt))}. Tickets without at least the minimum number of responses roll over to the next round.</p>
 <p><a href="${roundUrl(round)}" style="background:#1F4E79;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;display:inline-block">Finish scoring</a></p>`),
   };
@@ -114,13 +119,13 @@ export async function sendDistribution(
 export async function sendReminders(
   db: Db,
   round: Round,
-  outstandingByMember: Array<{ member: Member; outstanding: number }>,
+  outstandingByMember: Array<{ member: Member; outstandingTickets: Ticket[] }>,
   escalation = false,
 ): Promise<EmailResult[]> {
   const results: EmailResult[] = [];
-  for (const { member, outstanding } of outstandingByMember) {
-    if (outstanding <= 0) continue;
-    const { subject, html } = buildReminderEmail(round, member, outstanding, escalation);
+  for (const { member, outstandingTickets } of outstandingByMember) {
+    if (!outstandingTickets.length) continue;
+    const { subject, html } = buildReminderEmail(round, member, outstandingTickets, escalation);
     const outcome = await sendMail({ to: [member.email], subject, html });
     await logEmail(db, {
       roundId: round.id,

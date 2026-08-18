@@ -152,6 +152,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const scored = results.filter((r) => r.aggregate.responsesCount > 0).length;
   const readyForEstimation = results.filter((r) => r.aggregate.sendForEstimation).length;
   const needDiscussion = results.filter((r) => r.aggregate.discussionRequired);
+  const held = tickets.filter((t) => t.held);
 
   return (
     <>
@@ -174,6 +175,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 {' · '}
                 <span className="badge warn">
                   {needDiscussion.length} need{needDiscussion.length === 1 ? 's' : ''} discussion
+                </span>
+              </>
+            ) : null}
+            {held.length ? (
+              <>
+                {' · '}
+                <span className="badge warn">
+                  {held.length} held back from the committee
                 </span>
               </>
             ) : null}
@@ -288,6 +297,24 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               >
                 Chase non-responders
               </button>
+              {round.status === 'OPEN' ? (
+                <button
+                  className="secondary"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    run('escalate', async () => {
+                      const { results } = await api.remind(round.id, true);
+                      const sent = results.filter((r) => r.status === 'SENT').length;
+                      if (results.length && !sent) {
+                        return `NO EMAIL WAS SENT — email is not configured. ${results.length} final reminder(s) were composed and logged.`;
+                      }
+                      return `Sent a final reminder to ${sent} member(s) with outstanding tickets.`;
+                    })
+                  }
+                >
+                  Send final reminder
+                </button>
+              ) : null}
             </>
           ) : null}
           {round.status === 'OPEN' ? (
@@ -575,7 +602,12 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 const drafted = result.aiDrafted
                   ? ` ${result.aiDrafted} card(s) drafted from the full ticket — review them before you distribute.`
                   : '';
-                return `Imported ${result.imported.length} ticket(s) from JIRA.${drafted}`;
+                const duplicates = result.possibleDuplicates.length
+                  ? ` Possible duplicate${result.possibleDuplicates.length === 1 ? '' : 's'}: ${result.possibleDuplicates
+                      .map((d) => `${d.jiraId} looks like ${d.similarTo.map((s) => s.jiraId).join(', ')}`)
+                      .join('; ')} — worth a look before scoring both.`
+                  : '';
+                return `Imported ${result.imported.length} ticket(s) from JIRA.${drafted}${duplicates}`;
               })
             }
           >
@@ -697,6 +729,17 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 {result?.sendForEstimation ? <span className="badge high">Send for Est</span> : null}
                 {result?.clarificationRequested ? <span className="badge">Unsure ×{result.excludedCounts.UNSURE}</span> : null}
                 {result?.parkRequested ? <span className="badge warn">Park</span> : null}
+                {/*
+                  The status label only says "Awaiting RA effort" once enough
+                  responses are in - by then the round is nearly over and RA
+                  has had no warning. This shows the moment it is missing, so
+                  it can be chased alongside scoring rather than after it.
+                */}
+                {result && result.effort === null ? (
+                  <span className="badge warn" title="Nothing in the RA poker fields yet — the priority ratio cannot be calculated until it is set">
+                    No effort set
+                  </span>
+                ) : null}
               </div>
 
               {result?.discussionRequired ? (
@@ -713,6 +756,31 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 {ticket.backendPokerScore ?? '—'} · Frontend {ticket.frontendPokerScore ?? '—'} · Manual effort{' '}
                 {ticket.manualEffort ?? '—'}
               </p>
+
+              {/*
+                Automation would not send this one unattended - the rest of the
+                round went out on time, and this sits here until a coordinator
+                has looked at it, the same doubt cardWarnings() names above.
+              */}
+              {ticket.held ? (
+                <div className="notice warn" style={{ marginTop: '0.5rem' }}>
+                  <strong>Held back — not sent to the committee.</strong> {ticket.heldReason || 'Automation flagged this card when the round opened.'}
+                  <div className="row" style={{ marginTop: '0.5rem' }}>
+                    <button
+                      className="secondary"
+                      disabled={Boolean(busy)}
+                      onClick={() =>
+                        run('release', async () => {
+                          await api.releaseTicket(round.id, ticket.id);
+                          return `${ticket.jiraId} released to the committee.`;
+                        })
+                      }
+                    >
+                      Release to committee
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="row">
               <button className="secondary" onClick={() => setEditing(isEditing ? null : ticket.id)}>

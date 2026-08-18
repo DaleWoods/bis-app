@@ -1,6 +1,7 @@
 import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
 import { AppConfig, AutomationConfig, CadenceConfig } from '../domain/types.js';
+import { cardBlocksAutomatedDistribution, type CardCheckInput } from '../domain/card.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { audit, AuditActor } from './auditService.js';
@@ -18,8 +19,15 @@ import {
   listRoundTickets,
   markDistributed,
   setRoundStatus,
+  setTicketHeld,
 } from './roundService.js';
-import { roundProgress } from './submissionService.js';
+import { outstandingTicketsByMember } from './submissionService.js';
+import type { Ticket } from './ticketService.js';
+
+/** cardWarnings() needs to know about an unused image; listRoundTickets already carries the attachment list. */
+function withHasUnusedImage(ticket: Ticket): CardCheckInput {
+  return { ...ticket, hasUnusedImage: ticket.attachments.some((a) => a.isImage) };
+}
 
 /**
  * The weekly cycle, run by the app (§11, §12.2).
@@ -60,18 +68,45 @@ export interface AutomationRun {
 }
 
 /**
+ * A transient failure - a JIRA blip, a mail server timeout - deserves one
+ * automatic second try before it becomes a person's problem. Long enough that
+ * retrying is not just hitting the same outage again a minute later.
+ */
+const RETRY_COOLDOWN_MS = 30 * 60_000;
+const MAX_ATTEMPTS = 2;
+
+/**
  * Records that a step ran, and reports whether this call is the one that got to
  * run it. The unique index does the work: two concurrent ticks race, one
  * inserts, the other is told no.
+ *
+ * A row that failed is not necessarily done: up to `MAX_ATTEMPTS`, a claim on
+ * it succeeds again once `RETRY_COOLDOWN_MS` has passed, so the next tick gets
+ * one more go. Past that it behaves as it always has - claimed for good, the
+ * matching manual button the only way back.
  */
-async function claim(db: Db, roundId: string, action: string): Promise<boolean> {
-  const existing = await db.get<{ id: string }>(
-    'SELECT id FROM round_automation_log WHERE round_id = ? AND action = ?',
+async function claim(db: Db, roundId: string, action: string, now: Date = new Date()): Promise<boolean> {
+  const existing = await db.get<{ id: string; outcome: string; attempts: number; ran_at: string }>(
+    'SELECT id, outcome, attempts, ran_at FROM round_automation_log WHERE round_id = ? AND action = ?',
     [roundId, action],
   );
-  if (existing) return false;
+  if (existing) {
+    const failed = existing.outcome.startsWith('Failed:');
+    const dueForRetry =
+      failed &&
+      Number(existing.attempts) < MAX_ATTEMPTS &&
+      now.getTime() - new Date(existing.ran_at).getTime() >= RETRY_COOLDOWN_MS;
+    if (!dueForRetry) return false;
+    await db.run('UPDATE round_automation_log SET attempts = attempts + 1, ran_at = ?, outcome = ?, detail = ? WHERE id = ?', [
+      nowIso(),
+      '',
+      '',
+      existing.id,
+    ]);
+    return true;
+  }
   try {
-    await db.run('INSERT INTO round_automation_log (id, round_id, action, ran_at) VALUES (?, ?, ?, ?)', [
+    await db.run('INSERT INTO round_automation_log (id, round_id, action, ran_at, attempts) VALUES (?, ?, ?, ?, 1)', [
       newId(),
       roundId,
       action,
@@ -319,25 +354,40 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
 
   // --- Open and distribute ------------------------------------------------
   if (automation.distribute && state.status === 'DRAFT' && opensAt !== null && now.getTime() >= opensAt) {
-    if (await claim(db, round.id, 'distribute')) {
+    if (await claim(db, round.id, 'distribute', now)) {
       try {
         const tickets = await listRoundTickets(db, round.id);
-        if (!tickets.length) {
-          // Distributing an empty round emails the committee a deck with
-          // nothing in it. Wait for a ticket rather than send that.
+        // A ticket cardBlocksAutomatedDistribution() flags - nothing drafted
+        // at all, or jargon leaking through - is not safe to send unattended.
+        // Held back rather than dropped, so a coordinator finds it sitting on
+        // the round rather than missing from it.
+        const flagged = new Map(tickets.map((t) => [t.id, cardBlocksAutomatedDistribution(withHasUnusedImage(t))]));
+        const ready = tickets.filter((t) => !flagged.get(t.id)?.length);
+
+        if (!ready.length) {
+          // Nothing safe to send yet - same as an empty round: wait for a
+          // ticket, or for a coordinator to fix what's here.
           await release(db, round.id, 'distribute');
         } else {
+          for (const ticket of tickets) {
+            const warnings = flagged.get(ticket.id) ?? [];
+            if (warnings.length) await setTicketHeld(db, round.id, ticket.id, true, warnings.join('; '));
+          }
+          const held = tickets.length - ready.length;
+
           const opened = await setRoundStatus(db, round.id, 'OPEN');
           const members = await listActiveScorers(db);
-          const results = await sendDistribution(db, opened, tickets, members);
+          const results = await sendDistribution(db, opened, ready, members);
           const sent = results.filter((r) => r.status === 'SENT').length;
           // Only a real send counts as distribution. With email off the
           // messages are composed and logged, and the round should not claim
           // the committee has been told.
           if (sent > 0) await markDistributed(db, round.id);
-          const outcome = `Opened and emailed ${sent} of ${results.length} member(s)`;
+          const outcome = `Opened and emailed ${sent} of ${results.length} member(s), ${ready.length} ticket(s)${
+            held ? ` — ${held} held back for a card that needs a look` : ''
+          }`;
           await record(db, round.id, 'distribute', outcome);
-          await audit(db, AUTOMATION_ACTOR, 'round.distribute', 'round', round.id, { sent, automated: true });
+          await audit(db, AUTOMATION_ACTOR, 'round.distribute', 'round', round.id, { sent, held, automated: true });
           push('distribute', outcome);
         }
       } catch (err) {
@@ -349,30 +399,41 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
 
   // --- Reminders ----------------------------------------------------------
   if (automation.remind && state.status === 'OPEN') {
-    for (const hours of [...config.cadence.reminderHoursBeforeCutOff].sort((a, b) => b - a)) {
+    // The escalation hour is a reminder point like any other, just later and
+    // sharper-worded - so it runs through the same claim/send/record path
+    // rather than a separate one that could drift from it.
+    const points: Array<{ hours: number; escalation: boolean }> = [
+      ...config.cadence.reminderHoursBeforeCutOff.map((hours) => ({ hours, escalation: false })),
+      ...(config.cadence.escalationHoursBeforeCutOff !== null
+        ? [{ hours: config.cadence.escalationHoursBeforeCutOff, escalation: true }]
+        : []),
+    ].sort((a, b) => b.hours - a.hours);
+
+    for (const { hours, escalation } of points) {
       const due = cutOff - hours * 60 * 60 * 1000;
       if (now.getTime() < due || now.getTime() >= cutOff) continue;
-      const action = `remind:${hours}`;
-      if (!(await claim(db, round.id, action))) continue;
+      const action = escalation ? `escalate:${hours}` : `remind:${hours}`;
+      if (!(await claim(db, round.id, action, now))) continue;
       try {
         const scorers = await listActiveScorers(db);
         const tickets = await listRoundTickets(db, round.id);
-        const progress = await roundProgress(db, round.id, scorers, tickets.length);
-        const outstanding = progress
-          .filter((row) => row.outstanding > 0)
-          .flatMap((row) => {
-            const member = scorers.find((m) => m.id === row.memberId);
-            return member ? [{ member, outstanding: row.outstanding }] : [];
-          });
-        if (!outstanding.length) {
+        const outstandingTickets = await outstandingTicketsByMember(db, round.id, scorers, tickets);
+        const targets = scorers
+          .map((member) => ({ member, outstandingTickets: outstandingTickets.get(member.id) ?? [] }))
+          .filter((t) => t.outstandingTickets.length > 0);
+        if (!targets.length) {
           await record(db, round.id, action, 'Everyone had already scored');
           continue;
         }
-        const results = await sendReminders(db, round, outstanding);
+        const results = await sendReminders(db, round, targets, escalation);
         const sent = results.filter((r) => r.status === 'SENT').length;
-        const outcome = `Chased ${sent} of ${outstanding.length} outstanding member(s)`;
+        const outcome = `Chased ${sent} of ${targets.length} outstanding member(s)`;
         await record(db, round.id, action, outcome);
-        await audit(db, AUTOMATION_ACTOR, 'round.remind', 'round', round.id, { hours, sent, automated: true });
+        await audit(db, AUTOMATION_ACTOR, escalation ? 'round.escalate' : 'round.remind', 'round', round.id, {
+          hours,
+          sent,
+          automated: true,
+        });
         push(action, outcome);
       } catch (err) {
         await failed(db, round, action, err, push);
@@ -382,7 +443,7 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
 
   // --- Close --------------------------------------------------------------
   if (automation.close && state.status === 'OPEN' && now.getTime() >= cutOff) {
-    if (await claim(db, round.id, 'close')) {
+    if (await claim(db, round.id, 'close', now)) {
       try {
         await setRoundStatus(db, round.id, 'CLOSED');
         await record(db, round.id, 'close', 'Scoring closed at the cut-off');
@@ -399,7 +460,7 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
   const finaliseAt = cutOff + automation.finaliseDelayHours * 60 * 60 * 1000;
   await reload();
   if (automation.finalise && state.status === 'CLOSED' && now.getTime() >= finaliseAt) {
-    if (await claim(db, round.id, 'finalise')) {
+    if (await claim(db, round.id, 'finalise', now)) {
       try {
         const finalised = await setRoundStatus(db, round.id, 'FINALISED');
         const results = await snapshotRoundResults(db, finalised);
@@ -424,18 +485,18 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
   // having been the one to finalise it. Finalising by hand is a manual
   // override of one step, not an instruction to stop automating the rest.
   if (automation.writeBack && state.status === 'FINALISED') {
-    await runWriteBack(db, state, push);
+    await runWriteBack(db, state, now, push);
   }
 }
 
-async function runWriteBack(db: Db, round: Round, push: (action: string, outcome: string) => void): Promise<void> {
+async function runWriteBack(db: Db, round: Round, now: Date, push: (action: string, outcome: string) => void): Promise<void> {
   if (!env.jira.configured) {
-    await claim(db, round.id, 'writeback');
+    await claim(db, round.id, 'writeback', now);
     await record(db, round.id, 'writeback', 'Skipped — JIRA is not configured');
     push('writeback', 'Skipped — JIRA is not configured');
     return;
   }
-  if (!(await claim(db, round.id, 'writeback'))) return;
+  if (!(await claim(db, round.id, 'writeback', now))) return;
 
   try {
     const entries = await writeBackRound(db, AUTOMATION_ACTOR, round);
@@ -467,10 +528,19 @@ async function failed(
   push: (action: string, outcome: string) => void,
 ): Promise<void> {
   const message = err instanceof Error ? err.message : String(err);
-  await record(db, round.id, action, `Failed: ${message}`);
-  await audit(db, AUTOMATION_ACTOR, `automation.${action}.failed`, 'round', round.id, { error: message });
+  // A transient blip and a genuinely broken step read identically to a
+  // coordinator unless the message says which one this is - so it says.
+  const row = await db.get<{ attempts: number }>(
+    'SELECT attempts FROM round_automation_log WHERE round_id = ? AND action = ?',
+    [round.id, action],
+  );
+  const attempts = Number(row?.attempts ?? MAX_ATTEMPTS);
+  const tail = attempts < MAX_ATTEMPTS ? ' (will retry automatically)' : ' (retries exhausted — run this step by hand)';
+  const outcome = `Failed: ${message}${tail}`;
+  await record(db, round.id, action, outcome);
+  await audit(db, AUTOMATION_ACTOR, `automation.${action}.failed`, 'round', round.id, { error: message, attempts });
   console.warn(`[bis] automation ${action} failed for ${round.weekLabel}: ${message}`);
-  push(action, `Failed: ${message}`);
+  push(action, outcome);
 }
 
 /**

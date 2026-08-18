@@ -3,7 +3,7 @@ import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
 import { ensureDefaultConfig, ensureSeedCategories, saveConfigSection } from './configService.js';
 import { listAutomationLog, runDueAutomation } from './automationService.js';
-import { createRound, getRound, listRounds, setRoundStatus, updateRound } from './roundService.js';
+import { createRound, getRound, listRounds, listRoundTickets, setRoundStatus, updateRound } from './roundService.js';
 import { addTicketToRound } from './roundService.js';
 import { saveMember } from './memberService.js';
 import { upsertTicket } from './ticketService.js';
@@ -37,7 +37,14 @@ async function aRound(overrides: Record<string, unknown> = {}) {
     opensAt: OPENS_AT,
     ...overrides,
   });
-  const ticket = await upsertTicket(db, { jiraId: `ECOM-${Math.random().toString().slice(2, 7)}`, title: 'A ticket' });
+  // A drafted card, not a blank one - these tests are about the cycle, not
+  // about the hold-back gate, which has its own tests below.
+  const ticket = await upsertTicket(db, {
+    jiraId: `ECOM-${Math.random().toString().slice(2, 7)}`,
+    title: 'A ticket',
+    execSummary: 'Something a buyer would care about',
+    panelCurrent: 'How it works today',
+  });
   await addTicketToRound(db, round.id, ticket.id);
   return round;
 }
@@ -90,6 +97,77 @@ describe('the automated cycle', () => {
 
     await runDueAutomation(db, new Date('2026-08-11T18:01:00Z'));
     expect((await getRound(db, round.id))?.status).toBe('FINALISED');
+  });
+
+  it('retries a failed step once, after the cooldown', async () => {
+    await automation();
+    const round = await aRound();
+
+    // A step that failed 40 minutes ago - past the 30-minute cooldown - on
+    // its first attempt.
+    await db.run(
+      `INSERT INTO round_automation_log (id, round_id, action, ran_at, outcome, attempts)
+       VALUES ('log-1', ?, 'close', ?, 'Failed: simulated JIRA blip', 1)`,
+      [round.id, '2026-08-11T16:20:00.000Z'],
+    );
+
+    const run = await runDueAutomation(db, new Date('2026-08-11T17:00:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('CLOSED');
+    expect(run.steps.some((s) => s.action === 'close' && s.outcome.includes('cut-off'))).toBe(true);
+  });
+
+  it('does not retry before the cooldown has passed', async () => {
+    await automation();
+    const round = await aRound();
+
+    // Failed five minutes ago - still inside the cooldown.
+    await db.run(
+      `INSERT INTO round_automation_log (id, round_id, action, ran_at, outcome, attempts)
+       VALUES ('log-2', ?, 'close', ?, 'Failed: simulated JIRA blip', 1)`,
+      [round.id, '2026-08-11T16:55:00.000Z'],
+    );
+
+    await runDueAutomation(db, new Date('2026-08-11T17:00:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('OPEN');
+  });
+
+  it('leaves a step that has already had its one retry for a person, however long it waits', async () => {
+    await automation();
+    const round = await aRound();
+
+    // Already retried once (attempts = 2) and failed again, long enough ago
+    // that a cooldown would otherwise have passed.
+    await db.run(
+      `INSERT INTO round_automation_log (id, round_id, action, ran_at, outcome, attempts)
+       VALUES ('log-3', ?, 'close', ?, 'Failed: simulated JIRA blip (retries exhausted — run this step by hand)', 2)`,
+      [round.id, '2026-08-11T10:00:00.000Z'],
+    );
+
+    await runDueAutomation(db, new Date('2026-08-12T09:00:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('OPEN');
+  });
+
+  it('fires the escalation reminder at its own configured hour, naming what is outstanding', async () => {
+    await automation();
+    const round = await aRound();
+    // Open it, so there is a round to be reminded about.
+    await runDueAutomation(db, new Date('2026-08-06T08:05:00Z'));
+
+    // Default cadence: escalationHoursBeforeCutOff = 2. Cut-off is 16:00, so
+    // 15:00 is inside the escalation window and past the ordinary 4-hour one.
+    const run = await runDueAutomation(db, new Date('2026-08-11T15:00:00Z'));
+    const escalated = run.steps.find((s) => s.action.startsWith('escalate:'));
+    expect(escalated).toBeTruthy();
+    // Email is not configured in tests, so the send is suppressed rather than
+    // sent - the target count is what proves the outstanding ticket was found.
+    expect(escalated?.outcome).toMatch(/chased 0 of 1 outstanding member/i);
+
+    const emails = await db.all<{ kind: string; subject: string }>(
+      "SELECT kind, subject FROM email_log WHERE round_id = ? AND kind = 'ESCALATION'",
+      [round.id],
+    );
+    expect(emails).toHaveLength(1);
+    expect(emails[0].subject).toMatch(/^Final reminder:/);
   });
 
   it('runs each step exactly once, however often the tick fires', async () => {
@@ -156,7 +234,12 @@ describe('the automated cycle', () => {
     expect((await getRound(db, round.id))?.status).toBe('DRAFT');
 
     // ...and it is not stuck: adding a ticket lets the next tick send it.
-    const ticket = await upsertTicket(db, { jiraId: 'ECOM-9', title: 'Late arrival' });
+    const ticket = await upsertTicket(db, {
+      jiraId: 'ECOM-9',
+      title: 'Late arrival',
+      execSummary: 'Something a buyer would care about',
+      panelCurrent: 'How it works today',
+    });
     await addTicketToRound(db, round.id, ticket.id);
     await runDueAutomation(db, new Date('2026-08-06T08:06:00Z'));
     expect((await getRound(db, round.id))?.status).toBe('OPEN');
@@ -213,6 +296,50 @@ describe('creating rounds', () => {
 
     await runDueAutomation(db, new Date('2026-08-07T10:00:00Z'));
     expect(await listRounds(db)).toHaveLength(1);
+  });
+});
+
+describe('holding back a weak card from an automated distribution', () => {
+  async function roundWithTwoTickets() {
+    const round = await createRound(db, { weekLabel: 'Week commencing 03 Aug 2026', cutOffAt: CUT_OFF, opensAt: OPENS_AT });
+    const good = await upsertTicket(db, {
+      jiraId: 'ECOM-GOOD',
+      title: 'A properly drafted ticket',
+      execSummary: 'Something a buyer would care about',
+      panelCurrent: 'How it works today',
+    });
+    // Nothing drafted at all - the case cardBlocksAutomatedDistribution() exists for.
+    const blank = await upsertTicket(db, { jiraId: 'ECOM-BLANK', title: 'Nobody has looked at this yet' });
+    await addTicketToRound(db, round.id, good.id);
+    await addTicketToRound(db, round.id, blank.id);
+    return { round, good, blank };
+  }
+
+  it('opens on time with the ready tickets and holds the blank one back', async () => {
+    await automation();
+    const { round, blank } = await roundWithTwoTickets();
+
+    await runDueAutomation(db, new Date('2026-08-06T08:05:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('OPEN');
+
+    const tickets = await listRoundTickets(db, round.id);
+    expect(tickets.find((t) => t.id === blank.id)?.held).toBe(true);
+    expect(tickets.find((t) => t.jiraId === 'ECOM-GOOD')?.held).toBe(false);
+  });
+
+  it('does not open at all while every ticket is held', async () => {
+    await automation();
+    const round = await createRound(db, { weekLabel: 'Week commencing 03 Aug 2026', cutOffAt: CUT_OFF, opensAt: OPENS_AT });
+    const blank = await upsertTicket(db, { jiraId: 'ECOM-BLANK', title: 'Nobody has looked at this yet' });
+    await addTicketToRound(db, round.id, blank.id);
+
+    await runDueAutomation(db, new Date('2026-08-06T08:05:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('DRAFT');
+
+    // Not stuck: a coordinator finishing the card lets the next tick send it.
+    await upsertTicket(db, { jiraId: 'ECOM-BLANK', title: 'Nobody has looked at this yet', execSummary: 'Now it is written up' });
+    await runDueAutomation(db, new Date('2026-08-06T08:06:00Z'));
+    expect((await getRound(db, round.id))?.status).toBe('OPEN');
   });
 });
 

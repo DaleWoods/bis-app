@@ -187,6 +187,36 @@ export function cardWarnings(card: CardCheckInput): string[] {
   return warnings;
 }
 
+/**
+ * The narrow subset of `cardWarnings()` worth holding a ticket back from an
+ * automated distribution for, rather than just flagging on the round page.
+ *
+ * Deliberately much stricter than "any warning at all": without AI drafting
+ * configured, the heading parser never fills in figures or a screenshot
+ * caption and often leaves "once it's live" blank by design - `cardWarnings()`
+ * says so on almost every card that drafter writes, which is useful for a
+ * coordinator to see and useless as an unattended gate. Only the two things
+ * that make a card actually unsafe to send - nothing drafted at all, or
+ * jargon a buyer would not understand - stop it going out on its own; a
+ * missing figure or caption is a coordinator's polish to add later, not a
+ * reason to withhold a ticket from the committee.
+ */
+export function cardBlocksAutomatedDistribution(card: CardCheckInput): string[] {
+  const blockers: string[] = [];
+  const summary = (card.execSummary ?? '').trim();
+  const sections = [card.panelCurrent, card.panelImpacts, card.panelFuture, card.panelBenefits];
+  if (!summary && sections.every((value) => !cardLines(value, 4).length)) {
+    blockers.push('nothing has been drafted for this card yet');
+  }
+
+  const jargon = [summary, card.panelCurrent, card.panelImpacts, card.panelFuture, card.panelBenefits]
+    .join(' ')
+    .match(JARGON);
+  if (jargon) blockers.push(`reads technical (“${jargon[0]}”)`);
+
+  return blockers;
+}
+
 /** Punctuation and spacing removed, so "A carousel." and "a carousel" match. */
 function normalise(value: string): string {
   return value

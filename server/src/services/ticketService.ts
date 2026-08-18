@@ -44,6 +44,13 @@ export interface Ticket {
   attachments: TicketAttachment[];
   /** Which attachment is shown on the card. Empty = none chosen. */
   screenshotAttachmentId: string;
+  /**
+   * Set only when this ticket came from `listRoundTickets`: whether automation
+   * held it back from the committee when the round opened, and why. Undefined
+   * everywhere a ticket is not viewed through one particular round.
+   */
+  held?: boolean;
+  heldReason?: string;
 }
 
 export interface TicketAttachment {
@@ -202,6 +209,22 @@ export async function getTicket(db: Db, id: string): Promise<Ticket | undefined>
 export async function getTicketByJiraId(db: Db, jiraId: string): Promise<Ticket | undefined> {
   const row = await db.get<TicketRow>('SELECT * FROM tickets WHERE UPPER(jira_id) = UPPER(?)', [jiraId]);
   return row ? mapTicket(row) : undefined;
+}
+
+/**
+ * Tickets still live in a round that has not been finalised - the pool worth
+ * checking a newly imported ticket against for a likely duplicate. A ticket
+ * that only ever sat in a finalised round is history, not something still
+ * being worked, so it is left out.
+ */
+export async function activeTicketTitles(db: Db): Promise<Array<{ id: string; jiraId: string; title: string }>> {
+  const rows = await db.all<{ id: string; jira_id: string; title: string }>(
+    `SELECT DISTINCT t.id, t.jira_id, t.title FROM tickets t
+     JOIN round_tickets rt ON rt.ticket_id = t.id
+     JOIN rounds r ON r.id = rt.round_id
+     WHERE r.status != 'FINALISED'`,
+  );
+  return rows.map((row) => ({ id: row.id, jiraId: row.jira_id, title: row.title }));
 }
 
 /**

@@ -19,9 +19,17 @@ import {
   removeTicketFromRound,
   reorderRoundTickets,
   setRoundStatus,
+  setTicketHeld,
   updateRound,
 } from '../services/roundService.js';
-import { listRoundSubmissions, roundProgress, setSubmissionArchived } from '../services/submissionService.js';
+import {
+  listRoundSubmissions,
+  outstandingTicketsByMember,
+  participationHistory,
+  roundProgress,
+  setSubmissionArchived,
+} from '../services/submissionService.js';
+import type { Ticket } from '../services/ticketService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
 import { discussionAgenda, listDiscussions, recordDiscussion } from '../services/discussionService.js';
 import { describeNext, listAutomationLog, runDueAutomation } from '../services/automationService.js';
@@ -31,6 +39,21 @@ import { buildPdf } from '../pack/pdf.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
+
+/**
+ * Completion rate over recent rounds, not just this one - so a coordinator can
+ * see who has quietly drifted off without piecing it together from memory.
+ */
+router.get(
+  '/rounds/participation',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const limit = Number(req.query.limit ?? 8) || 8;
+    const scorers = await listActiveScorers(db);
+    res.json({ participation: await participationHistory(db, scorers, limit) });
+  }),
+);
 
 router.get(
   '/rounds',
@@ -265,6 +288,18 @@ router.delete(
       submissionsRemoved,
     });
     res.json({ tickets: await listRoundTickets(db, req.params.id), submissionsRemoved });
+  }),
+);
+
+/** Let a ticket automation held back at distribution go to the committee. */
+router.post(
+  '/rounds/:id/tickets/:ticketId/release',
+  requireCoordinator,
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    await setTicketHeld(db, req.params.id, req.params.ticketId, false);
+    await audit(db, actorOf(req), 'round.ticket.release', 'round', req.params.id, { ticketId: req.params.ticketId });
+    res.json({ tickets: await listRoundTickets(db, req.params.id) });
   }),
 );
 
@@ -584,14 +619,23 @@ router.post(
     }
     const tickets = await listRoundTickets(db, round.id);
     const scorers = await listActiveScorers(db);
-    const progress = await roundProgress(db, round.id, scorers, tickets.length);
 
-    const targets = [] as Array<{ member: (typeof scorers)[number]; outstanding: number }>;
-    for (const row of progress) {
-      if (memberIds && !memberIds.includes(row.memberId)) continue;
-      if (row.outstanding <= 0) continue;
-      const member = scorers.find((m) => m.id === row.memberId) ?? (await getMember(db, row.memberId));
-      if (member) targets.push({ member, outstanding: row.outstanding });
+    // Chasing somebody by id who is not (or no longer) an active scorer is
+    // still allowed - Chase non-responders can target anyone on the round.
+    const extra = [];
+    for (const id of memberIds ?? []) {
+      if (scorers.some((m) => m.id === id)) continue;
+      const member = await getMember(db, id);
+      if (member) extra.push(member);
+    }
+    const considered = [...scorers, ...extra];
+    const outstandingTickets = await outstandingTicketsByMember(db, round.id, considered, tickets);
+
+    const targets = [] as Array<{ member: (typeof considered)[number]; outstandingTickets: Ticket[] }>;
+    for (const member of considered) {
+      if (memberIds && !memberIds.includes(member.id)) continue;
+      const forMember = outstandingTickets.get(member.id) ?? [];
+      if (forMember.length) targets.push({ member, outstandingTickets: forMember });
     }
 
     const results = await sendReminders(db, round, targets, escalation ?? false);

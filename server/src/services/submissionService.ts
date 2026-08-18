@@ -307,6 +307,83 @@ export async function setSubmissionArchived(db: Db, submissionId: string, archiv
   ]);
 }
 
+/**
+ * Which tickets each member has not yet scored - the useful half of "you have
+ * 3 outstanding", which used to make somebody go and work out which 3 for
+ * themselves before a reminder was any use to them.
+ */
+export async function outstandingTicketsByMember(
+  db: Db,
+  roundId: string,
+  scorers: Member[],
+  tickets: Ticket[],
+): Promise<Map<string, Ticket[]>> {
+  const rows = await db.all<{ member_id: string; ticket_id: string }>(
+    'SELECT member_id, ticket_id FROM submissions WHERE round_id = ? AND archived = 0',
+    [roundId],
+  );
+  const doneByMember = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!doneByMember.has(row.member_id)) doneByMember.set(row.member_id, new Set());
+    doneByMember.get(row.member_id)!.add(row.ticket_id);
+  }
+  return new Map(
+    scorers.map((member) => {
+      const done = doneByMember.get(member.id) ?? new Set<string>();
+      return [member.id, tickets.filter((t) => !done.has(t.id))];
+    }),
+  );
+}
+
+export interface MemberParticipation {
+  memberId: string;
+  memberName: string;
+  team: string;
+  /** How many of the last `roundsConsidered` finalised rounds this member completed. */
+  roundsCompleted: number;
+  roundsConsidered: number;
+}
+
+/**
+ * Completion rate over the last `limit` finalised rounds - not this round's
+ * progress, which `roundProgress` already covers, but the pattern across
+ * several. A round with no tickets teaches nothing about who engaged, so it
+ * is left out of the count on both sides of the fraction.
+ */
+export async function participationHistory(db: Db, scorers: Member[], limit = 8): Promise<MemberParticipation[]> {
+  const rounds = await db.all<{ id: string; ticket_count: number }>(
+    `SELECT r.id, (SELECT COUNT(*) FROM round_tickets rt WHERE rt.round_id = r.id) AS ticket_count
+     FROM rounds r WHERE r.status = 'FINALISED' ORDER BY r.cut_off_at DESC LIMIT ?`,
+    [limit],
+  );
+  const considered = rounds.filter((r) => Number(r.ticket_count) > 0);
+  if (!considered.length) {
+    return scorers.map((m) => ({ memberId: m.id, memberName: m.name, team: m.team, roundsCompleted: 0, roundsConsidered: 0 }));
+  }
+
+  const roundIds = considered.map((r) => r.id);
+  const placeholders = roundIds.map(() => '?').join(',');
+  const rows = await db.all<{ member_id: string; round_id: string; submitted: number }>(
+    `SELECT member_id, round_id, COUNT(*) AS submitted FROM submissions
+     WHERE round_id IN (${placeholders}) AND archived = 0 GROUP BY member_id, round_id`,
+    roundIds,
+  );
+  const submittedByMemberRound = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    if (!submittedByMemberRound.has(row.member_id)) submittedByMemberRound.set(row.member_id, new Map());
+    submittedByMemberRound.get(row.member_id)!.set(row.round_id, Number(row.submitted));
+  }
+  const ticketCountByRound = new Map(considered.map((r) => [r.id, Number(r.ticket_count)]));
+
+  return scorers.map((member) => {
+    const byRound = submittedByMemberRound.get(member.id) ?? new Map();
+    const roundsCompleted = considered.filter(
+      (r) => (byRound.get(r.id) ?? 0) >= (ticketCountByRound.get(r.id) ?? Infinity),
+    ).length;
+    return { memberId: member.id, memberName: member.name, team: member.team, roundsCompleted, roundsConsidered: considered.length };
+  });
+}
+
 export interface MemberProgress {
   memberId: string;
   memberName: string;

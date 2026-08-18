@@ -22,8 +22,14 @@ export function ScorePage({ member, roundId }: Props) {
   const [relevanceOptions, setRelevanceOptions] = useState<Array<{ value: Relevance; label: string }>>([]);
   const [closureReasons, setClosureReasons] = useState<string[]>([]);
   const [mayScore, setMayScore] = useState(true);
-  /** The round to look back at when there is nothing to score right now. */
+  /** The round to look back at, whether or not one is currently open. */
   const [lastFinalised, setLastFinalised] = useState<Round | null>(null);
+  const [lastFinalisedIncludesYou, setLastFinalisedIncludesYou] = useState(false);
+  /** How many of the committee have finished so far - a count, never who. */
+  const [participation, setParticipation] = useState<{ completed: number; total: number } | null>(null);
+  /** Your own completion rate over recent rounds. */
+  const [myParticipation, setMyParticipation] = useState<{ roundsCompleted: number; roundsConsidered: number } | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,12 +44,17 @@ export function ScorePage({ member, roundId }: Props) {
         setRelevanceOptions(model.relevanceOptions);
         setClosureReasons(model.closureReasons);
         setRound(data.round);
-        setLastFinalised(('lastFinalised' in data ? data.lastFinalised : null) ?? null);
+        const finalised = ('lastFinalised' in data ? data.lastFinalised : null) ?? null;
+        setLastFinalised(finalised);
+        setLastFinalisedIncludesYou(('lastFinalisedIncludesYou' in data && data.lastFinalisedIncludesYou) ?? false);
+        setBannerDismissed(finalised ? localStorage.getItem(`bis-feedback-seen-${finalised.id}`) === '1' : false);
         setMayScore(data.canScore !== false);
         setScoringOpen(Boolean(data.scoringOpen));
         setTickets(data.tickets);
         setCategories(data.categories);
         setSubmissions(data.submissions);
+        setParticipation(('participation' in data && data.participation) || null);
+        setMyParticipation(('myParticipation' in data && data.myParticipation) || null);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the round');
@@ -59,10 +70,36 @@ export function ScorePage({ member, roundId }: Props) {
   if (loading) return <p>Loading…</p>;
   if (error) return <p className="status error">{error}</p>;
 
+  function dismissBanner() {
+    if (lastFinalised) localStorage.setItem(`bis-feedback-seen-${lastFinalised.id}`, '1');
+    setBannerDismissed(true);
+  }
+
+  /*
+    A member who scored a round only finds out what happened to it if they
+    remember to go back and check - which mostly does not happen. This puts
+    the invitation in front of them instead, the next time they are in the
+    app, rather than leaving it to an email they may never open. It is not
+    shown at all once dismissed or once a newer round has finalised, so it
+    never nags about the same result twice.
+  */
+  const feedbackBanner =
+    lastFinalised && lastFinalisedIncludesYou && !bannerDismissed ? (
+      <div className="notice" role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+        <span>
+          <strong>The round you scored has finished.</strong> <Link to={`/feedback/${lastFinalised.id}`}>See how your scores compared to the committee’s</Link>.
+        </span>
+        <button type="button" className="secondary" onClick={dismissBanner} aria-label="Dismiss">
+          Dismiss
+        </button>
+      </div>
+    ) : null;
+
   if (!round) {
     return (
       <>
         <h1>Scoring</h1>
+        {feedbackBanner}
         <div className="notice">
           {mayScore
             ? 'There is no open scoring round at the moment. You will get an email when the next round opens.'
@@ -73,7 +110,7 @@ export function ScorePage({ member, roundId }: Props) {
           finalised was told there was nothing open and left with nowhere to
           go - not even to the results of the round they had just scored.
         */}
-        {lastFinalised ? (
+        {lastFinalised && !lastFinalisedIncludesYou ? (
           <p>
             The last round, <strong>{lastFinalised.weekLabel}</strong>, finished
             {lastFinalised.finalisedAt ? ` on ${formatDateTime(lastFinalised.finalisedAt)}` : ''}.{' '}
@@ -93,6 +130,7 @@ export function ScorePage({ member, roundId }: Props) {
     return (
       <>
         <h1>{round.weekLabel}</h1>
+        {feedbackBanner}
         <p className="lede">
           You are signed in as a {isCoordinator(member.role) ? 'coordinator' : 'viewer'}, so you do not score tickets —
           the committee does. This is the round they are working on.
@@ -120,6 +158,7 @@ export function ScorePage({ member, roundId }: Props) {
     return (
       <>
         <h1>{round.weekLabel}</h1>
+        {feedbackBanner}
         <p className="lede">
           Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong> <Countdown target={round.cutOffAt} />
         </p>
@@ -134,6 +173,7 @@ export function ScorePage({ member, roundId }: Props) {
   return (
     <>
       <h1>{round.weekLabel}</h1>
+      {feedbackBanner}
       <p className="lede">
         Score each ticket 0–10 across the seven categories. Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>{' '}
         <Countdown target={round.cutOffAt} /> — take your time before submitting each one, since a score is given
@@ -143,8 +183,39 @@ export function ScorePage({ member, roundId }: Props) {
       <div className="notice" role="status">
         You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong>{' '}
         {tickets.length === 1 ? 'ticket' : 'tickets'}
-        {outstanding > 0 ? ` — ${outstanding} to go.` : ' — all done, thank you.'}
+        {outstanding > 0 ? ` — ${outstanding} to go.` : '.'}
+        {participation && participation.total > 0 ? (
+          <>
+            {' '}
+            <span className="hint">
+              {participation.completed} of {participation.total} committee members have completed this round so far.
+            </span>
+          </>
+        ) : null}
       </div>
+
+      {/*
+        The one piece of feedback that started this: people did not know what
+        happened after they submitted. Shown the instant the last ticket is
+        in, on the page they are already looking at - not an email they may
+        never open.
+      */}
+      {outstanding === 0 ? (
+        <div className="notice" role="status">
+          <strong>That's everything — thank you.</strong> Scoring closes {formatDateTime(round.cutOffAt)}. Once
+          everyone's answers are in, they're combined into a business score for each ticket — if the committee was
+          too split on one, it goes to a discussion instead of straight to JIRA. You'll be able to see how your own
+          scores compared to the committee's once the round is finalised.
+          {myParticipation && myParticipation.roundsConsidered > 0 ? (
+            <>
+              {' '}
+              <span className="hint">
+                You've completed {myParticipation.roundsCompleted} of the last {myParticipation.roundsConsidered} rounds.
+              </span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {!scoringOpen ? (
         <div className="notice warn">

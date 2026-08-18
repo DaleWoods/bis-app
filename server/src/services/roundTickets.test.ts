@@ -3,7 +3,7 @@ import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
 import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, listCategories } from './configService.js';
 import { addTicketToRound, createRound, getRound, setRoundStatus, type Round } from './roundService.js';
-import { getTicket, upsertTicket } from './ticketService.js';
+import { activeTicketTitles, getTicket, upsertTicket } from './ticketService.js';
 import { deleteRound } from './adminService.js';
 import { saveMember } from './memberService.js';
 import { saveSubmission } from './submissionService.js';
@@ -109,5 +109,23 @@ describe('deleting one round', () => {
 
   it('says nothing was there rather than pretending it deleted something', async () => {
     expect(await deleteRound(db, 'no-such-round')).toBeNull();
+  });
+});
+
+describe('activeTicketTitles', () => {
+  it('includes a ticket sitting in a draft or open round, but not one only in a finalised round', async () => {
+    const draftTicket = await upsertTicket(db, { jiraId: 'ECOM-DRAFT', title: 'In a draft round' });
+    await addTicketToRound(db, round.id, draftTicket.id);
+
+    const finalisedRound = await createRound(db, { weekLabel: 'Old week', cutOffAt: '2020-01-01T00:00:00.000Z' });
+    const oldTicket = await upsertTicket(db, { jiraId: 'ECOM-OLD', title: 'Only ever in a finalised round' });
+    await addTicketToRound(db, finalisedRound.id, oldTicket.id);
+    await setRoundStatus(db, finalisedRound.id, 'OPEN');
+    await setRoundStatus(db, finalisedRound.id, 'CLOSED');
+    await setRoundStatus(db, finalisedRound.id, 'FINALISED');
+
+    const active = await activeTicketTitles(db);
+    expect(active.map((t) => t.jiraId)).toContain('ECOM-DRAFT');
+    expect(active.map((t) => t.jiraId)).not.toContain('ECOM-OLD');
   });
 });

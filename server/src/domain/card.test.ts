@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARD_KINDS, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
+import { CARD_KINDS, cardBlocksAutomatedDistribution, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
 import { sectionHeights } from '../pack/pptx.js';
 
 describe('labelsFor', () => {
@@ -144,5 +144,51 @@ describe('cardWarnings', () => {
 
   it('says when there are no figures to show', () => {
     expect(cardWarnings({ ...good, impactFacts: '' })).toContain('no figures');
+  });
+});
+
+describe('cardBlocksAutomatedDistribution', () => {
+  const good = {
+    title: 'Aurora banner carousel component - no rotation delay',
+    execSummary: 'The homepage banner never moves past the first promotion, so campaigns we paid for are not seen.',
+    panelCurrent: 'Banner stays on the first promotion',
+    panelImpacts: 'Two spring campaigns paid for and never shown',
+    panelFuture: 'Banner moves on every few seconds',
+    panelBenefits: 'Every promotion we pay for is actually seen.',
+    impactFacts: '',
+    screenshotCaption: '',
+  };
+
+  it('lets a card through that is missing only the polish cardWarnings() would flag', () => {
+    // No figures and no screenshot caption - cardWarnings() would name both,
+    // but neither makes a card unsafe to send unattended.
+    expect(cardBlocksAutomatedDistribution(good)).toEqual([]);
+  });
+
+  it('blocks a card with nothing drafted at all', () => {
+    expect(
+      cardBlocksAutomatedDistribution({
+        title: 'A ticket nobody has looked at',
+        execSummary: '',
+        panelCurrent: '',
+        panelImpacts: '',
+        panelFuture: '',
+        panelBenefits: '',
+        impactFacts: '',
+        screenshotCaption: '',
+      }),
+    ).toContainEqual(expect.stringContaining('nothing has been drafted'));
+  });
+
+  it('does not block a card that has at least a headline and one section written', () => {
+    expect(
+      cardBlocksAutomatedDistribution({ ...good, panelImpacts: '', panelFuture: '', panelBenefits: '' }),
+    ).toEqual([]);
+  });
+
+  it('blocks a card that still reads technical', () => {
+    expect(cardBlocksAutomatedDistribution({ ...good, panelCurrent: 'The payload includes additional metadata' })).toContainEqual(
+      expect.stringContaining('reads technical'),
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
 import { AppConfig } from '../domain/types.js';
+import { DUPLICATE_TITLE_THRESHOLD, titleSimilarity } from '../domain/similarity.js';
 import * as jira from '../integrations/jira.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
@@ -8,9 +9,15 @@ import { AuditActor, audit } from './auditService.js';
 import { getAppConfig } from './configService.js';
 import { HttpishError, Round, addTicketToRound, assertRoundAcceptsTickets, getRound } from './roundService.js';
 import { roundResults } from './resultService.js';
-import { Ticket, upsertTicket } from './ticketService.js';
+import { Ticket, activeTicketTitles, upsertTicket } from './ticketService.js';
 import { draftCardsFor, draftToTicketFields } from './cardDraftService.js';
 import { heldForDiscussion, listDiscussions } from './discussionService.js';
+
+export interface PossibleDuplicate {
+  jiraId: string;
+  title: string;
+  similarTo: Array<{ jiraId: string; title: string }>;
+}
 
 export interface ImportResult {
   imported: Ticket[];
@@ -19,6 +26,8 @@ export interface ImportResult {
   jql: string;
   /** How many cards the AI drafter wrote, so the UI can say which one ran. */
   aiDrafted: number;
+  /** Tickets whose title closely matches one already live in another round - worth a look before scoring both. */
+  possibleDuplicates: PossibleDuplicate[];
 }
 
 /** Read the Business Scoring queue and bring it into the app (§12.1). */
@@ -82,13 +91,33 @@ export async function importQueue(
   }
 
   const aiDrafted = drafts.filter((d) => d.drafter === 'ai').length;
+  const possibleDuplicates = await findPossibleDuplicates(db, imported);
   await audit(db, actor, 'jira.import', 'round', options.roundId ?? '', {
     jql: options.jql ?? config.jira.queueJql,
     count: imported.length,
     aiDrafted,
+    possibleDuplicates: possibleDuplicates.length,
   });
 
-  return { imported, addedToRound: options.roundId ? imported.length : 0, jql, aiDrafted };
+  return { imported, addedToRound: options.roundId ? imported.length : 0, jql, aiDrafted, possibleDuplicates };
+}
+
+/**
+ * Whether the same underlying issue has already been raised under a different
+ * JIRA number. Checked against everything still live in a round, not just this
+ * import batch, so re-raising last week's ticket under a new number is caught
+ * too - not just two near-identical tickets pulled in together.
+ */
+async function findPossibleDuplicates(db: Db, imported: Ticket[]): Promise<PossibleDuplicate[]> {
+  const active = await activeTicketTitles(db);
+  const duplicates: PossibleDuplicate[] = [];
+  for (const ticket of imported) {
+    const similarTo = active
+      .filter((other) => other.jiraId !== ticket.jiraId && titleSimilarity(ticket.title, other.title) >= DUPLICATE_TITLE_THRESHOLD)
+      .map((other) => ({ jiraId: other.jiraId, title: other.title }));
+    if (similarTo.length) duplicates.push({ jiraId: ticket.jiraId, title: ticket.title, similarTo });
+  }
+  return duplicates;
 }
 
 /** Refresh RA poker effort (and status) for tickets already in the app (§10.4). */
