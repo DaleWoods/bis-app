@@ -687,8 +687,9 @@ export function GuidePage({ member }: { member: Member }) {
               </table>
             </div>
             <p className="hint">
-              The <Link to="/audit">Audit</Link> log records every action and who took it, with automation's own steps
-              marked as such.
+              The <Link to="/audit">Audit</Link> page records every action and who took it, with automation's own
+              steps marked as such. It also shows each committee member's last sign-in and their completion rate
+              over recent rounds, so quiet drift is visible before it becomes a pattern.
             </p>
           </Section>
         </>

@@ -251,36 +251,38 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               Open round
             </button>
           ) : null}
-          {round.status !== 'FINALISED' ? (
-            <>
-              <button
-                className="secondary"
-                disabled={Boolean(busy)}
-                onClick={() => {
-                  if (
-                    round.distributionSentAt &&
-                    !window.confirm(
-                      `This round was already distributed on ${formatDateTime(round.distributionSentAt)}. Send it again to the whole committee?`,
-                    )
-                  ) {
-                    return;
+          {round.status === 'DRAFT' || round.status === 'OPEN' ? (
+            <button
+              className="secondary"
+              disabled={Boolean(busy)}
+              onClick={() => {
+                if (
+                  round.distributionSentAt &&
+                  !window.confirm(
+                    `This round was already distributed on ${formatDateTime(round.distributionSentAt)}. Send it again to the whole committee?`,
+                  )
+                ) {
+                  return;
+                }
+                return run('distribute', async () => {
+                  const { results } = await api.distribute(round.id, true);
+                  const sent = results.filter((r) => r.status === 'SENT').length;
+                  const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
+                  const failed = results.filter((r) => r.status === 'FAILED').length;
+                  if (suppressed && !sent) {
+                    return `Round opened, but NO EMAIL WAS SENT — email is not configured. ${suppressed} message(s) were composed and logged. Use "Copy scoring link" to share it yourself.`;
                   }
-                  return run('distribute', async () => {
-                    const { results } = await api.distribute(round.id, true);
-                    const sent = results.filter((r) => r.status === 'SENT').length;
-                    const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
-                    const failed = results.filter((r) => r.status === 'FAILED').length;
-                    if (suppressed && !sent) {
-                      return `Round opened, but NO EMAIL WAS SENT — email is not configured. ${suppressed} message(s) were composed and logged. Use "Copy scoring link" to share it yourself.`;
-                    }
-                    return `Distribution: ${sent} sent${suppressed ? `, ${suppressed} not sent (email off)` : ''}${
-                      failed ? `, ${failed} failed` : ''
-                    }.`;
-                  });
-                }}
-              >
-                {round.distributionSentAt ? 'Re-send to committee' : 'Distribute to committee'}
-              </button>
+                  return `Distribution: ${sent} sent${suppressed ? `, ${suppressed} not sent (email off)` : ''}${
+                    failed ? `, ${failed} failed` : ''
+                  }.`;
+                });
+              }}
+            >
+              {round.distributionSentAt ? 'Re-send to committee' : 'Distribute to committee'}
+            </button>
+          ) : null}
+          {round.status === 'OPEN' ? (
+            <>
               <button
                 className="secondary"
                 disabled={Boolean(busy)}
@@ -297,24 +299,22 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               >
                 Chase non-responders
               </button>
-              {round.status === 'OPEN' ? (
-                <button
-                  className="secondary"
-                  disabled={Boolean(busy)}
-                  onClick={() =>
-                    run('escalate', async () => {
-                      const { results } = await api.remind(round.id, true);
-                      const sent = results.filter((r) => r.status === 'SENT').length;
-                      if (results.length && !sent) {
-                        return `NO EMAIL WAS SENT — email is not configured. ${results.length} final reminder(s) were composed and logged.`;
-                      }
-                      return `Sent a final reminder to ${sent} member(s) with outstanding tickets.`;
-                    })
-                  }
-                >
-                  Send final reminder
-                </button>
-              ) : null}
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                onClick={() =>
+                  run('escalate', async () => {
+                    const { results } = await api.remind(round.id, true);
+                    const sent = results.filter((r) => r.status === 'SENT').length;
+                    if (results.length && !sent) {
+                      return `NO EMAIL WAS SENT — email is not configured. ${results.length} final reminder(s) were composed and logged.`;
+                    }
+                    return `Sent a final reminder to ${sent} member(s) with outstanding tickets.`;
+                  })
+                }
+              >
+                Send final reminder
+              </button>
             </>
           ) : null}
           {round.status === 'OPEN' ? (

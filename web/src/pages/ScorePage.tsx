@@ -238,7 +238,16 @@ export function ScorePage({ member, roundId }: Props) {
               disabledReason="Scoring is closed for this round."
               onSave={async (payload) => {
                 const { submission: saved } = await api.saveSubmission(round.id, ticket.id, payload);
-                setSubmissions((current) => [...current.filter((s) => s.ticketId !== ticket.id), saved]);
+                setSubmissions((current) => {
+                  const next = [...current.filter((s) => s.ticketId !== ticket.id), saved];
+                  // The "that's everything" notice and the confirmation live at
+                  // the top of the page - easy to miss if the last ticket
+                  // scored was the one at the bottom of a long list.
+                  if (next.length === tickets.length && current.length < tickets.length) {
+                    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+                  }
+                  return next;
+                });
               }}
             />
           </TicketCard>
