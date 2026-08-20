@@ -1,15 +1,18 @@
 :root {
-  --navy: #1f4e79;
-  --navy-dark: #163a5a;
-  --ink: #1b1b1b;
-  --muted: #5b6b7b;
-  --line: #d8e0e8;
-  --bg: #f5f7fa;
+  --brand: #6d5646;
+  --brand-dark: #54402f;
+  --gold: #b58512;
+  --gold-text: #8a670e;
+  --header-bg: #1a1a1a;
+  --ink: #1a1a1a;
+  --muted: #6b645d;
+  --line: #ddd8d2;
+  --bg: #f6f4f1;
   --panel: #ffffff;
-  --panel-alt: #f4f7fa;
+  --panel-alt: #f4f4f4;
   --high: #1a7f4b;
   --medium: #9a6b00;
-  --low: #6b7280;
+  --low: #78716c;
   --danger: #b3261e;
   --focus: #005fcc;
   --radius: 8px;
@@ -22,7 +25,7 @@
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Segoe UI', Helvetica, Arial, sans-serif;
   color: var(--ink);
   background: var(--bg);
   line-height: 1.5;
@@ -38,7 +41,7 @@ body {
   position: absolute;
   left: -9999px;
   top: 0;
-  background: var(--navy);
+  background: var(--brand);
   color: #fff;
   padding: 10px 16px;
   z-index: 100;
@@ -49,7 +52,7 @@ body {
 }
 
 header.app-header {
-  background: var(--navy);
+  background: var(--header-bg);
   color: #fff;
   padding: 0.75rem 1.25rem;
   display: flex;
@@ -57,11 +60,30 @@ header.app-header {
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 3px solid var(--gold);
 }
 header.app-header .brand {
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   font-size: 1.05rem;
   letter-spacing: 0.01em;
+}
+header.app-header .brand-mark {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+header.app-header .brand-divider {
+  width: 1px;
+  height: 1.1rem;
+  background: var(--gold);
+  opacity: 0.6;
+}
+header.app-header .brand-name {
+  font-weight: 500;
 }
 header.app-header nav {
   display: flex;
@@ -69,11 +91,13 @@ header.app-header nav {
   gap: 0.25rem;
 }
 header.app-header nav a {
-  color: #e7eef5;
+  color: #e8e3da;
   text-decoration: none;
   padding: 0.4rem 0.7rem;
   border-radius: var(--radius);
-  font-size: 0.94rem;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 header.app-header nav a:hover {
   background: rgba(255, 255, 255, 0.14);
@@ -81,12 +105,12 @@ header.app-header nav a:hover {
 }
 header.app-header nav a[aria-current='page'] {
   background: #fff;
-  color: var(--navy);
+  color: var(--brand);
   font-weight: 600;
 }
 header.app-header .who {
   font-size: 0.86rem;
-  color: #dfe9f2;
+  color: #d9d3ca;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -140,8 +164,8 @@ button,
 .button {
   font: inherit;
   border-radius: var(--radius);
-  border: 1px solid var(--navy);
-  background: var(--navy);
+  border: 1px solid var(--brand);
+  background: var(--brand);
   color: #fff;
   padding: 0.5rem 0.95rem;
   cursor: pointer;
@@ -150,16 +174,16 @@ button,
 }
 button:hover,
 .button:hover {
-  background: var(--navy-dark);
+  background: var(--brand-dark);
 }
 button.secondary,
 .button.secondary {
   background: #fff;
-  color: var(--navy);
+  color: var(--brand);
 }
 button.secondary:hover,
 .button.secondary:hover {
-  background: #eef3f8;
+  background: #f2ece5;
 }
 button.danger {
   background: #fff;
@@ -261,8 +285,8 @@ th.num {
   border-color: var(--danger);
 }
 .badge.open {
-  color: var(--high);
-  border-color: var(--high);
+  color: var(--gold-text);
+  border-color: var(--gold);
 }
 
 /* --- Ticket card: the §7 slide, rendered in-app ------------------------
@@ -404,11 +428,11 @@ th.num {
   border-radius: 8px;
   padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
-  color: #33465a;
+  color: #4a3f36;
 }
 .fact-label {
   font-weight: 600;
-  color: var(--navy);
+  color: var(--brand);
   margin-right: 0.2rem;
 }
 
@@ -420,7 +444,7 @@ th.num {
   border-left: 3px solid var(--accent);
   border-radius: 0 8px 8px 0;
   font-size: 0.95rem;
-  color: #14243a;
+  color: #332a22;
 }
 .benefit-lead {
   font-weight: 700;
@@ -436,7 +460,7 @@ th.num {
   font-size: 1.1rem;
   line-height: 1.55;
   margin: 0 0 0.9rem;
-  color: #14243a;
+  color: #332a22;
 }
 
 .chips {
@@ -450,7 +474,7 @@ th.num {
   border-radius: 999px;
   padding: 0.1rem 0.6rem;
   font-size: 0.8rem;
-  color: #44586a;
+  color: #57493d;
 }
 .chip-label {
   color: var(--muted);
@@ -551,11 +575,11 @@ th.num {
 }
 .metadata {
   margin-top: 0.9rem;
-  background: #eff3f7;
+  background: #f4f1ec;
   border-radius: var(--radius);
   padding: 0.55rem 0.7rem;
   font-size: 0.82rem;
-  color: #44586a;
+  color: #57493d;
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1rem;
@@ -654,19 +678,19 @@ legend {
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--navy) 0 var(--fill, 0%),
-    #dbe3ec var(--fill, 0%) 100%
+    var(--brand) 0 var(--fill, 0%),
+    #ddd3c8 var(--fill, 0%) 100%
   );
 }
 .score-row input[type='range']::-moz-range-track {
   height: 5px;
   border-radius: 999px;
-  background: #dbe3ec;
+  background: #ddd3c8;
 }
 .score-row input[type='range']::-moz-range-progress {
   height: 5px;
   border-radius: 999px;
-  background: var(--navy);
+  background: var(--brand);
 }
 .score-row input[type='range']::-webkit-slider-thumb {
   appearance: none;
@@ -674,7 +698,7 @@ legend {
   width: 1.05rem;
   height: 1.05rem;
   border-radius: 50%;
-  background: var(--navy);
+  background: var(--brand);
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
   margin-top: -0.35rem;
@@ -683,7 +707,7 @@ legend {
   width: 1.05rem;
   height: 1.05rem;
   border-radius: 50%;
-  background: var(--navy);
+  background: var(--brand);
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
 }
@@ -703,7 +727,7 @@ legend {
   border-radius: var(--radius);
   padding: 0.3rem 0;
   background: var(--panel-alt);
-  color: var(--navy);
+  color: var(--brand);
 }
 .total-line {
   font-weight: 700;
@@ -724,8 +748,8 @@ legend {
 }
 
 .notice {
-  border-left: 4px solid var(--navy);
-  background: #eef3f8;
+  border-left: 4px solid var(--brand);
+  background: #f3ede6;
   padding: 0.7rem 0.9rem;
   border-radius: 0 var(--radius) var(--radius) 0;
   margin-bottom: 1rem;
@@ -736,7 +760,7 @@ legend {
 }
 
 .bar {
-  background: #e6ecf2;
+  background: #e9e4dd;
   border-radius: 999px;
   height: 0.55rem;
   overflow: hidden;
@@ -745,7 +769,7 @@ legend {
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--navy);
+  background: var(--brand);
 }
 
 .distribution {
@@ -823,18 +847,18 @@ legend {
  * round is long and every row looks alike.
  */
 .ticket-row.editing {
-  border-color: var(--navy);
+  border-color: var(--brand);
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   margin-bottom: 0;
 }
 .ticket-row.editing + .card.editor {
-  border-color: var(--navy);
+  border-color: var(--brand);
   border-top: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   margin-top: 0;
-  box-shadow: inset 0 3px 0 var(--navy);
+  box-shadow: inset 0 3px 0 var(--brand);
 }
 
 .login-wrap {
@@ -897,7 +921,7 @@ legend {
   gap: 0.5rem;
   margin: 0 0 0.6rem;
   font-size: 0.95rem;
-  color: #33465a;
+  color: #4a3f36;
 }
 .automation .dot {
   width: 0.55rem;
@@ -983,7 +1007,7 @@ th.plain {
   gap: 0.3rem 1.1rem;
 }
 .guide-toc a {
-  color: var(--navy);
+  color: var(--brand);
 }
 /* The header is not sticky, but an anchor jump still reads better with room. */
 .guide-section {
@@ -1004,7 +1028,7 @@ th button.sort {
   letter-spacing: inherit;
 }
 th button.sort:hover {
-  color: var(--navy);
+  color: var(--brand);
 }
 th button.sort:focus-visible {
   outline: 3px solid var(--focus);
@@ -1019,7 +1043,7 @@ th button.sort:hover .arrow {
 }
 th button.sort .arrow.on {
   opacity: 1;
-  color: var(--navy);
+  color: var(--brand);
 }
 
 /* §10.4 discussion agenda: one block per ticket the committee split on. */
