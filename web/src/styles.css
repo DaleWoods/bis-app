@@ -786,8 +786,15 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * No position: absolute. It used to have one, but an absolutely positioned
+ * element with no positioned ancestor is placed relative to the viewport, not
+ * its actual container - inside a horizontally-scrolling table that put it
+ * off past the right edge, it escaped the table's own overflow clipping and
+ * widened the whole page on mobile. Left in normal flow, a 1x1px clipped box
+ * has no visible footprint either way.
+ */
 .visually-hidden {
-  position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
