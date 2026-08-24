@@ -28,11 +28,35 @@ function roundUrl(round: Round): string {
   return `${env.publicWebOrigin.replace(/\/+$/, '')}/score/${round.id}`;
 }
 
-function shell(body: string): string {
-  return `<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;color:#1b1b1b;line-height:1.5">
+// Mirrors web/src/styles.css - kept as hex here because email clients don't
+// see the app's stylesheet, so the palette can't be shared via CSS variables.
+const BRAND = '#6d5646';
+const GOLD = '#b58512';
+const HEADER_BG = '#1a1a1a';
+const INK = '#1a1a1a';
+const MUTED = '#6b645d';
+const BG = '#f6f4f1';
+const FONT = "'Gill Sans','Gill Sans MT',Calibri,'Segoe UI',Helvetica,Arial,sans-serif";
+
+/** Table-based, inline-styled shell - the layout most email clients render consistently. */
+export function shell(body: string): string {
+  return `<div style="background:${BG};padding:24px 12px;font-family:${FONT}">
+<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #ddd8d2">
+<div style="background:${HEADER_BG};padding:14px 20px;border-bottom:3px solid ${GOLD}">
+<span style="color:${GOLD};font-size:12px;font-weight:600;letter-spacing:0.2em;text-transform:uppercase">WOSG</span>
+<span style="color:#e8e3da;font-size:12px;padding:0 8px">&middot;</span>
+<span style="color:#ffffff;font-size:14px">Business Impact Scoring</span>
+</div>
+<div style="padding:24px 20px;font-size:15px;color:${INK};line-height:1.5">
 ${body}
-<p style="color:#666;font-size:12px;margin-top:28px">Sent by the Business Impact Scoring app.</p>
+<p style="color:${MUTED};font-size:12px;margin-top:28px">Sent by the Business Impact Scoring app.</p>
+</div>
+</div>
 </div>`;
+}
+
+function ctaButton(url: string, label: string): string {
+  return `<p><a href="${url}" style="background:${BRAND};color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;display:inline-block">${escapeHtml(label)}</a></p>`;
 }
 
 export function buildDistributionEmail(round: Round, tickets: Ticket[], member: Member): { subject: string; html: string } {
@@ -47,7 +71,7 @@ export function buildDistributionEmail(round: Round, tickets: Ticket[], member: 
     html: shell(`<p>Hi ${escapeHtml(member.name.split(' ')[0] || member.name)},</p>
 <p>The ${escapeHtml(round.weekLabel)} scoring round is open. Please score each ticket 0–10 across the seven impact categories before the cut-off.</p>
 <p><strong>Cut-off:</strong> ${escapeHtml(formatUkDate(round.cutOffAt))} (${escapeHtml(round.cutOffAt)})</p>
-<p><a href="${roundUrl(round)}" style="background:#1F4E79;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;display:inline-block">Open the round and score</a></p>
+${ctaButton(roundUrl(round), 'Open the round and score')}
 <p>Tickets in this round:</p>
 <ul>${list}</ul>`),
   };
@@ -69,7 +93,7 @@ export function buildReminderEmail(
 <p>You have <strong>${outstanding}</strong> ticket${outstanding === 1 ? '' : 's'} still to score in the ${escapeHtml(round.weekLabel)} round:</p>
 <ul>${list}</ul>
 <p><strong>Cut-off:</strong> ${escapeHtml(formatUkDate(round.cutOffAt))}. Tickets without at least the minimum number of responses roll over to the next round.</p>
-<p><a href="${roundUrl(round)}" style="background:#1F4E79;color:#fff;padding:10px 18px;border-radius:4px;text-decoration:none;display:inline-block">Finish scoring</a></p>`),
+${ctaButton(roundUrl(round), 'Finish scoring')}`),
   };
 }
 

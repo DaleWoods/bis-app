@@ -7,6 +7,7 @@ import { deactivateCategory, getAppConfig, listCategories, restoreDefaultCategor
 import { RELEVANCE_LABELS, RELEVANCE_VALUES } from '../domain/types.js';
 import { listTransitions, suggestFieldIds } from '../integrations/jira.js';
 import { providerLabel, sendMail } from '../integrations/mail.js';
+import { shell } from '../services/emailService.js';
 import { verifyConnection } from '../integrations/smtp.js';
 import { deleteRound, resetOperationalData } from '../services/adminService.js';
 import { getRound } from '../services/roundService.js';
@@ -97,10 +98,9 @@ router.post(
     const outcome = await sendMail({
       to: [to],
       subject: 'Business Impact Scoring — test email',
-      html: `<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">
-<p>This is a test from the Business Impact Scoring app.</p>
+      html: shell(`<p>This is a test from the Business Impact Scoring app.</p>
 <p>If you can read this, distribution and reminder email will reach the committee.</p>
-<p style="color:#666;font-size:12px">Sent via ${providerLabel()}.</p></div>`,
+<p style="color:#6b645d;font-size:12px">Sent via ${providerLabel()}.</p>`),
     });
 
     const db = await getDb();

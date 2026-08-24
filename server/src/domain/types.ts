@@ -273,7 +273,7 @@ export const DEFAULT_PACK_CONFIG: PackConfig = {
   organisation: 'WOSG',
   deckTitle: 'Business Impact Scoring',
   closingMessage: 'Thank you – please submit your scores before the cut-off.',
-  accentColour: '1F4E79',
+  accentColour: '6D5646',
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {

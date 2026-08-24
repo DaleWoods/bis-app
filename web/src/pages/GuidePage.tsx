@@ -560,6 +560,11 @@ export function GuidePage({ member }: { member: Member }) {
                 you go too far.
               </li>
               <li>
+                <strong>Distribution pack</strong> — the organisation name, deck title, closing message and accent
+                colour used on the downloadable PPTX/PDF pack. Nothing here reaches the app itself, only what gets
+                exported.
+              </li>
+              <li>
                 <strong>Cadence</strong> — two separate settings, each its own day, hour and minute (on the hour, or a
                 quarter/half past): when a round <strong>opens</strong> and goes out to the committee, and when it{' '}
                 <strong>closes</strong> — the cut-off. Times are read as wall-clock time in the timezone set there, so
