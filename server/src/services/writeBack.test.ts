@@ -185,6 +185,30 @@ describe('writeBackRound', () => {
     expect(transitionIssue).toHaveBeenCalledTimes(1);
   });
 
+  it('moves a ticket later that was written under the responses override, without needing the override again', async () => {
+    // The reported case: a coordinator overrode the responses gate to get an
+    // early score written, then came back to move the ticket - without the
+    // override this time - and the plain retry refused, quoting the same
+    // responses shortfall the write itself had already been forgiven for.
+    // Once a score is written, that question is settled; only toClose and
+    // discussionRequired should still gate the move.
+    await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_101', transitionOnFinalise: false }, 'test');
+    await scoreIt(2); // still short of the minimum of 5
+    const round = (await getRound(db, roundId))!;
+
+    const [first] = await writeBackRound(db, ACTOR, round, { ignoreMinSubmissions: true });
+    expect(first.status).toBe('SUCCESS');
+    expect(transitionIssue).not.toHaveBeenCalled();
+
+    await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_101', transitionOnFinalise: true }, 'test');
+    const [second] = await writeBackRound(db, ACTOR, round);
+
+    expect(second.status).toBe('SUCCESS');
+    expect(second.transitionedTo).toBe('Ready for Estimation');
+    expect(writeBusinessScore).toHaveBeenCalledTimes(1);
+    expect(transitionIssue).toHaveBeenCalledTimes(1);
+  });
+
   it('stops retrying once the ticket has actually moved', async () => {
     await scoreIt(5);
     const round = (await getRound(db, roundId))!;

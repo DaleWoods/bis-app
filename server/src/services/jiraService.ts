@@ -186,15 +186,34 @@ export async function writeBackRound(
 
     const businessScore = agreed ?? aggregate.businessScore;
     const key = `${round.id}:${ticket.id}:${businessScore}`;
+
+    const existing = await db.get<{ id: string; status: string; attempts: number; transitioned_to: string }>(
+      'SELECT id, status, attempts, transitioned_to FROM jira_writebacks WHERE idempotency_key = ?',
+      [key],
+    );
+    const alreadyWritten = existing?.status === 'SUCCESS' && !options.force;
+
     // The minimum-responses gate (§10) is a rule about confidence, not about
     // JIRA, so a coordinator can knowingly write past it - for a test ticket, or
-    // a round the committee will never reach a quorum on.
-    if (!aggregate.minSubmissionsMet && !options.ignoreMinSubmissions) {
+    // a round the committee will never reach a quorum on. A ticket whose score
+    // is already written has had this question answered once already; without
+    // the alreadyWritten exception, a plain retry meant only to pick up a
+    // corrected transition name (or a newly-enabled transitionOnFinalise) hit
+    // this gate again and never reached the move-only path below.
+    if (!aggregate.minSubmissionsMet && !options.ignoreMinSubmissions && !alreadyWritten) {
       entries.push({
         jiraId: ticket.jiraId,
         businessScore: aggregate.businessScore,
         status: 'SKIPPED',
-        reason: `${aggregate.responsesCount} of the ${config.scoring.minSubmissions} responses needed — rolls over to the next round`,
+        // A finalised round writes from the snapshot taken at finalise time,
+        // not from submissions as they stand now (§12.1) - a response that
+        // arrived since, or a member re-scoring after "Reopen for scoring",
+        // will not count here until "Recalculate results" refreshes it.
+        reason:
+          `${aggregate.responsesCount} of the ${config.scoring.minSubmissions} responses needed — rolls over to the next round` +
+          (round.status === 'FINALISED'
+            ? '. If more responses have come in since this round was finalised, click "Recalculate results" under Round actions first.'
+            : ''),
       });
       continue;
     }
@@ -221,18 +240,21 @@ export async function writeBackRound(
       continue;
     }
 
-    const existing = await db.get<{ id: string; status: string; attempts: number; transitioned_to: string }>(
-      'SELECT id, status, attempts, transitioned_to FROM jira_writebacks WHERE idempotency_key = ?',
-      [key],
-    );
-
     /*
-      What counts as ready is the §10.3 gate, plus the one thing the gate cannot
+      What counts as ready is the §10.3 gate, plus two things the gate cannot
       know: a split the committee has since talked through and agreed a score
-      for is ready, even though sendForEstimation still says it is not.
+      for is ready, even though sendForEstimation still says it is not; and a
+      ticket whose score is already written has already had its minimum-
+      responses question answered - normally, or by an explicit override on
+      that write. Re-asking it here on every later retry made the move
+      permanently un-retriable on a stale-snapshot round without supplying
+      "ignore minimum" all over again, with nothing on screen to say why: the
+      write stays done, but toClose and discussionRequired still gate the
+      move, because either can change independently of what already went to
+      JIRA.
     */
     const readyForEstimation =
-      (aggregate.minSubmissionsMet || Boolean(options.ignoreMinSubmissions)) &&
+      (aggregate.minSubmissionsMet || Boolean(options.ignoreMinSubmissions) || alreadyWritten) &&
       !aggregate.toClose &&
       (!aggregate.discussionRequired || agreed !== null);
     const wantsTransition = config.jira.transitionOnFinalise && readyForEstimation;
@@ -247,7 +269,6 @@ export async function writeBackRound(
       nothing left to do - and when there is, the score is left alone and only
       the move is attempted.
     */
-    const alreadyWritten = existing?.status === 'SUCCESS' && !options.force;
     const stillToMove = wantsTransition && !(existing?.transitioned_to ?? '').trim();
     if (alreadyWritten && !stillToMove) {
       entries.push({

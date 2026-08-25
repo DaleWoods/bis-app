@@ -86,8 +86,7 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           </p>
         ) : (
           <p className="lede" style={{ marginTop: 0 }}>
-            You did not score any of the {tickets.length} ticket{tickets.length === 1 ? '' : 's'} in this round, so this
-            is how the rest of the committee saw them.
+            You didn't score any tickets in this round, so here's how the rest of the committee saw them.
           </p>
         )}
         <div className="table-scroll">
@@ -143,7 +142,7 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
                     </td>
                     <td className="num">{ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}</td>
                     <td>
-                      {ticket.discussionOutcome || (ticket.discussionRequired ? 'Held for discussion' : ticket.statusLabel)}
+                      {ticket.discussionOutcome || (ticket.discussionRequired ? 'Held for discussion' : ticket.resultLabel)}
                     </td>
                   </tr>
                 );
@@ -152,9 +151,10 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           </table>
         </div>
         <p className="hint">
-          “You” is your own score out of 70; <strong>n/a</strong> means you answered something other than “Yes”, and
-          <strong> —</strong> that you did not score it. A big difference is not a mistake — it usually means you were
-          weighing something the rest of the room could not see, which is exactly what the spread is there to catch.
+          The “You” column is your own score out of 70 for that ticket. <strong>n/a</strong> means you answered
+          something other than “Yes” to the relevance question; a dash means you didn't score it at all. A big
+          difference from the committee isn't a mistake — it usually means you saw something about the ticket the
+          rest of the room didn't, which is exactly what the spread is there to catch.
         </p>
       </div>
 

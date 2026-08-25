@@ -195,12 +195,6 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
           </p>
         </div>
         <div className="row">
-          <a className="button secondary" href={`/api/rounds/${round.id}/pack.pptx`}>
-            Download pack (PPTX)
-          </a>
-          <a className="button secondary" href={`/api/rounds/${round.id}/pack.pdf`}>
-            PDF
-          </a>
           <a className="button secondary" href={`/api/rounds/${round.id}/results.csv`}>
             Results CSV
           </a>

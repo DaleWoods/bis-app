@@ -510,7 +510,7 @@ export function SettingsPage({ member }: { member: Member }) {
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Distribution pack</h2>
-        <p className="hint">Branding for the downloadable PPTX/PDF pack (Round detail → Download pack).</p>
+        <p className="hint">Branding for the PPTX pack attached to the distribution email.</p>
         <form
           onSubmit={(event) => {
             event.preventDefault();

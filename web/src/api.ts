@@ -241,6 +241,8 @@ export interface FeedbackTicket {
   stdDev: number | null;
   discussionRequired: boolean;
   statusLabel: string;
+  /** What actually happened to the ticket - "Sent for estimation" etc, not a priority label. */
+  resultLabel: string;
   priorityRatio: number | null;
   priorityBandLabel: string;
   effort: number | null;

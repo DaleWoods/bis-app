@@ -15,6 +15,20 @@ export interface TicketResult {
   aggregate: TicketAggregate;
 }
 
+/**
+ * What actually happened to this ticket in the round - distinct from
+ * `statusLabel`, which is a priority classification ("Awaiting RA effort",
+ * "High priority") and never describes an outcome. Shown on the Feedback
+ * page's Outcome column, which used to fall back to statusLabel and so could
+ * read "Awaiting RA effort" as though effort data were something the round
+ * itself was waiting on, rather than a separate fact about the JIRA ticket.
+ */
+function resultLabelFor(aggregate: TicketAggregate): string {
+  if (aggregate.toClose) return 'Committee said this can be closed';
+  if (!aggregate.minSubmissionsMet) return 'Not enough responses to send';
+  return 'Sent for estimation';
+}
+
 /** Compute every ticket in a round from live submissions (§10). */
 export async function computeRoundResults(
   db: Db,
@@ -163,6 +177,13 @@ export interface FeedbackTicket {
   stdDev: number | null;
   discussionRequired: boolean;
   statusLabel: string;
+  /**
+   * What actually happened to the ticket - "Sent for estimation", "Not
+   * enough responses to send", "Committee said this can be closed" - as
+   * distinct from statusLabel, which is a priority classification and never
+   * describes an outcome.
+   */
+  resultLabel: string;
   priorityRatio: number | null;
   priorityBandLabel: string;
   effort: number | null;
@@ -245,6 +266,7 @@ export async function buildFeedbackView(
     stdDev: aggregate.stdDev,
     discussionRequired: aggregate.discussionRequired,
     statusLabel: aggregate.statusLabel,
+    resultLabel: resultLabelFor(aggregate),
     priorityRatio: aggregate.priorityRatio,
     priorityBandLabel: aggregate.priorityBand ? PRIORITY_BAND_LABELS[aggregate.priorityBand] : '',
     effort: aggregate.effort,
