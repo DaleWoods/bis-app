@@ -8,7 +8,7 @@ import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
 import { listActiveScorers } from '../services/memberService.js';
 import { getActiveRound, getRound, isScoringOpen, listRoundTickets, listRounds } from '../services/roundService.js';
-import { listMemberSubmissions, participationHistory, roundProgress, saveSubmission } from '../services/submissionService.js';
+import { listMemberSubmissions, roundProgress, saveSubmission } from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
@@ -65,17 +65,12 @@ router.get(
     const lastFinalisedIncludesYou = lastFinalised
       ? (await listMemberSubmissions(db, lastFinalised.id, req.member!.id)).some(isValidSubmission)
       : false;
-    // Your own record over recent rounds - "you've completed 6 of the last 8"
-    // is a small, positive nudge that costs nothing to compute here since it
-    // shares the same recent-rounds query as the coordinator's view.
-    const myParticipation = (await participationHistory(db, [req.member!], 8))[0];
 
     if (!round) {
       res.json({
         round: null,
         lastFinalised,
         lastFinalisedIncludesYou,
-        myParticipation,
         tickets: [],
         submissions: [],
         categories: await listCategories(db),
@@ -91,7 +86,6 @@ router.get(
       round,
       lastFinalised,
       lastFinalisedIncludesYou,
-      myParticipation,
       canScore: canScore(req.member!.role),
       scoringOpen: isScoringOpen(round),
       tickets,

@@ -23,14 +23,35 @@ import { CARD_KINDS, KIND_HINTS, labelsFor } from '../card';
  * Settings. Never type one in; read it from `model`.
  */
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+/**
+ * A section you open, not a wall you scroll past. Collapsed by default (bar
+ * the first) so the page's first impression is a short list of titles, not
+ * eleven sections of prose stacked on top of each other - the content itself
+ * is unchanged, just not all in front of you at once. A same-page link to a
+ * closed section still works: browsers auto-open a <details> that contains
+ * the :target.
+ */
+function Section({
+  id,
+  title,
+  index,
+  defaultOpen,
+  children,
+}: {
+  id: string;
+  title: string;
+  index: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="card guide-section" id={id} aria-labelledby={`${id}-h`}>
-      <h2 id={`${id}-h`} style={{ marginTop: 0 }}>
-        {title}
-      </h2>
-      {children}
-    </section>
+    <details className="card guide-section" id={id} open={defaultOpen}>
+      <summary aria-labelledby={`${id}-h`}>
+        <span className="guide-section-index">{index}</span>
+        <h2 id={`${id}-h`}>{title}</h2>
+      </summary>
+      <div className="guide-section-body">{children}</div>
+    </details>
   );
 }
 
@@ -84,15 +105,29 @@ export function GuidePage({ member }: { member: Member }) {
       <nav className="card guide-toc" aria-label="On this page">
         <strong>On this page</strong>
         <ul>
-          {contents.map(([id, title]) => (
+          {contents.map(([id, title], i) => (
             <li key={id}>
-              <a href={`#${id}`}>{title}</a>
+              <a
+                href={`#${id}`}
+                onClick={() => {
+                  // The id lives on the <details> itself, not on something
+                  // nested inside it - a browser only auto-opens a closed
+                  // <details> for a :target buried inside, not for the
+                  // <details> element being the target, so a plain anchor
+                  // jump here would scroll to a section and leave it shut.
+                  const el = document.getElementById(id);
+                  if (el instanceof HTMLDetailsElement) el.open = true;
+                }}
+              >
+                <span className="guide-toc-index">{i + 1}</span>
+                {title}
+              </a>
             </li>
           ))}
         </ul>
       </nav>
 
-      <Section id="scoring" title="Scoring a ticket">
+      <Section id="scoring" title="Scoring a ticket" index={1} defaultOpen>
         <p>
           Open <strong>Score</strong>. You will see every ticket in the round that is open, each as a card that answers
           four questions in the same order every time: what this is, what it is costing us, what we would do about it,
@@ -114,9 +149,9 @@ export function GuidePage({ member }: { member: Member }) {
           <li>
             <strong>A score is given once and cannot be changed.</strong> An answer you could revise is one you could
             revise after hearing what everyone else thought, and the spread that decides whether a ticket needs
-            discussing is only worth reading if every score was formed on its own. Take the time before you submit — you
-            will be asked to confirm. If one genuinely needs correcting, ask whoever is running the round to exclude it
-            and you can score that ticket again.
+            discussing is only worth reading if every score was formed on its own. Take the time before you submit — it
+            cannot be undone. If one genuinely needs correcting, ask whoever is running the round to exclude it and you
+            can score that ticket again.
           </li>
           <li>Nobody else — including whoever is running the round — sees who gave what while the round is open.</li>
           <li>There is no "save all" button. Each ticket saves on its own as you go.</li>
@@ -131,7 +166,7 @@ export function GuidePage({ member }: { member: Member }) {
         </p>
       </Section>
 
-      <Section id="answers" title="The four answers">
+      <Section id="answers" title="The four answers" index={2}>
         <div className="table-scroll">
           <table>
             <caption className="visually-hidden">What each relevance answer does</caption>
@@ -180,7 +215,7 @@ export function GuidePage({ member }: { member: Member }) {
         </div>
       </Section>
 
-      <Section id="what-happens" title="What happens to your scores">
+      <Section id="what-happens" title="What happens to your scores" index={3}>
         <p>Once the round closes, each ticket's totals are combined:</p>
         <ul>
           <li>
@@ -236,7 +271,7 @@ export function GuidePage({ member }: { member: Member }) {
 
       {coordinator ? (
         <>
-          <Section id="week" title="Running the week">
+          <Section id="week" title="Running the week" index={4}>
             <ol>
               <li>
                 <strong>Create the round</strong> on the Rounds page, or let the app create it (see Letting it run
@@ -285,7 +320,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="cards" title="Writing a good card">
+          <Section id="cards" title="Writing a good card" index={5}>
             <p>
               The card is all a committee member gets. A card written out of a thin JIRA title produces a guess, not a
               score. Press <strong>Edit card</strong> on any ticket — the editor opens directly underneath it.
@@ -366,7 +401,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="results" title="Reading the results">
+          <Section id="results" title="Reading the results" index={6}>
             <p>Each ticket on the round page carries its own numbers. The ones worth understanding:</p>
             <ul>
               <li>
@@ -409,7 +444,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="discussions" title="Tickets the committee split on">
+          <Section id="discussions" title="Tickets the committee split on" index={7}>
             <p>
               When the committee's totals for a ticket are further apart than the spread threshold, averaging them
               produces a number nobody in the room agreed with. Those tickets collect on the{' '}
@@ -448,7 +483,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="jira" title="Getting scores into JIRA">
+          <Section id="jira" title="Getting scores into JIRA" index={8}>
             <p>
               <strong>Write scores to JIRA</strong> appears once a round is finalised. It writes each ticket's business
               score to the configured field and then moves the ticket on — to <em>Ready for Estimation</em> by default,
@@ -495,7 +530,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="automation" title="Letting it run itself">
+          <Section id="automation" title="Letting it run itself" index={9}>
             <p>
               <strong>Settings → Run the round automatically.</strong> Off until you switch it on. Every step is its own
               switch, so you can let the app create and chase a round long before you let it write to JIRA.
@@ -541,7 +576,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="settings" title="Settings worth knowing about">
+          <Section id="settings" title="Settings worth knowing about" index={10}>
             <ul>
               <li>
                 <strong>Minimum responses</strong> — below this a ticket rolls over instead of being scored.
@@ -588,7 +623,7 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="problems" title="When something looks wrong">
+          <Section id="problems" title="When something looks wrong" index={11}>
             <div className="table-scroll">
               <table>
                 <caption className="visually-hidden">Common problems and what they mean</caption>

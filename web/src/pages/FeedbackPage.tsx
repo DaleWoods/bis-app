@@ -151,10 +151,8 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           </table>
         </div>
         <p className="hint">
-          The “You” column is your own score out of 70 for that ticket. <strong>n/a</strong> means you answered
-          something other than “Yes” to the relevance question; a dash means you didn't score it at all. A big
-          difference from the committee isn't a mistake — it usually means you saw something about the ticket the
-          rest of the room didn't, which is exactly what the spread is there to catch.
+          “You” is your own score out of 70 — <strong>n/a</strong> means you didn't say “Yes”, a dash means you
+          didn't score it. A big gap from the committee isn't a mistake; it's what the spread is there to catch.
         </p>
       </div>
 

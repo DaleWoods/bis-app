@@ -27,8 +27,6 @@ export function ScorePage({ member, roundId }: Props) {
   const [lastFinalisedIncludesYou, setLastFinalisedIncludesYou] = useState(false);
   /** How many of the committee have finished so far - a count, never who. */
   const [participation, setParticipation] = useState<{ completed: number; total: number } | null>(null);
-  /** Your own completion rate over recent rounds. */
-  const [myParticipation, setMyParticipation] = useState<{ roundsCompleted: number; roundsConsidered: number } | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
@@ -54,7 +52,6 @@ export function ScorePage({ member, roundId }: Props) {
         setCategories(data.categories);
         setSubmissions(data.submissions);
         setParticipation(('participation' in data && data.participation) || null);
-        setMyParticipation(('myParticipation' in data && data.myParticipation) || null);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the round');
@@ -193,29 +190,6 @@ export function ScorePage({ member, roundId }: Props) {
           </>
         ) : null}
       </div>
-
-      {/*
-        The one piece of feedback that started this: people did not know what
-        happened after they submitted. Shown the instant the last ticket is
-        in, on the page they are already looking at - not an email they may
-        never open.
-      */}
-      {outstanding === 0 ? (
-        <div className="notice" role="status">
-          <strong>That's everything — thank you.</strong> Scoring closes {formatDateTime(round.cutOffAt)}. Once
-          everyone's answers are in, they're combined into a business score for each ticket — if the committee was
-          too split on one, it goes to a discussion instead of straight to JIRA. You'll be able to see how your own
-          scores compared to the committee's once the round is finalised.
-          {myParticipation && myParticipation.roundsConsidered > 0 ? (
-            <>
-              {' '}
-              <span className="hint">
-                You've completed {myParticipation.roundsCompleted} of the last {myParticipation.roundsConsidered} rounds.
-              </span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
 
       {!scoringOpen ? (
         <div className="notice warn">

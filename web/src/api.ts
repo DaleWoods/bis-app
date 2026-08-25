@@ -331,8 +331,6 @@ export const api = {
       lastFinalised?: Round | null;
       /** Whether you scored anything (that still counts) in lastFinalised. */
       lastFinalisedIncludesYou?: boolean;
-      /** Your own completion rate over recent finalised rounds. */
-      myParticipation?: { roundsCompleted: number; roundsConsidered: number };
       canScore: boolean;
       scoringOpen?: boolean;
       tickets: Ticket[];
