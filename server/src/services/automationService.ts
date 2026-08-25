@@ -9,8 +9,6 @@ import { getAppConfig } from './configService.js';
 import { sendDistribution, sendReminders } from './emailService.js';
 import { importQueue, writeBackRound } from './jiraService.js';
 import { listActiveScorers } from './memberService.js';
-import { packFilenameSlug, packInput } from './packService.js';
-import { buildPptx } from '../pack/pptx.js';
 import { roundResults, snapshotRoundResults } from './resultService.js';
 import {
   Round,
@@ -379,24 +377,7 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
 
           const opened = await setRoundStatus(db, round.id, 'OPEN');
           const members = await listActiveScorers(db);
-
-          // Matches manual "Distribute to committee", which always attaches
-          // the pack - the app has no download button for it any more, so the
-          // email is the only place anyone sees it.
-          let attachment;
-          if (env.email.canSend) {
-            const input = await packInput(round.id);
-            if (input) {
-              const buffer = await buildPptx(input);
-              attachment = {
-                name: `bis-${packFilenameSlug(opened.weekLabel)}-pack.pptx`,
-                contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                contentBytes: buffer.toString('base64'),
-              };
-            }
-          }
-
-          const results = await sendDistribution(db, opened, ready, members, attachment);
+          const results = await sendDistribution(db, opened, ready, members);
           const sent = results.filter((r) => r.status === 'SENT').length;
           // Only a real send counts as distribution. With email off the
           // messages are composed and logged, and the round should not claim

@@ -233,17 +233,7 @@ export function ScoreForm({
         <p className="hint">Scored {new Date(submission!.submittedAt).toLocaleString('en-GB')}.</p>
       ) : (
         <div className="row">
-          <button
-            type="submit"
-            disabled={readOnly || saving || (relevance === 'YES' && categories.length === 0)}
-            onClick={(event) => {
-              // Said before it is irreversible, not after. The confirm is the
-              // only warning that arrives while it can still be acted on.
-              if (!window.confirm('Submit this score?\n\nScores cannot be changed once given.')) {
-                event.preventDefault();
-              }
-            }}
-          >
+          <button type="submit" disabled={readOnly || saving || (relevance === 'YES' && categories.length === 0)}>
             {saving ? 'Saving…' : 'Submit my score'}
           </button>
           <span className="hint">This cannot be changed once submitted.</span>

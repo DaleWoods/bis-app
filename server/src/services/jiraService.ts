@@ -201,6 +201,11 @@ export async function writeBackRound(
     // corrected transition name (or a newly-enabled transitionOnFinalise) hit
     // this gate again and never reached the move-only path below.
     if (!aggregate.minSubmissionsMet && !options.ignoreMinSubmissions && !alreadyWritten) {
+      // Only a "Yes" to the relevance question counts as a response (§10.1) -
+      // someone who submitted "Unsure" or "No" shows as done on the round's
+      // submission progress but does not count here, which reads as a
+      // contradiction unless it's spelled out.
+      const nonYes = aggregate.submissionsCount - aggregate.responsesCount;
       entries.push({
         jiraId: ticket.jiraId,
         businessScore: aggregate.businessScore,
@@ -211,6 +216,9 @@ export async function writeBackRound(
         // will not count here until "Recalculate results" refreshes it.
         reason:
           `${aggregate.responsesCount} of the ${config.scoring.minSubmissions} responses needed — rolls over to the next round` +
+          (nonYes > 0
+            ? ` (${aggregate.submissionsCount} submitted in total; ${nonYes} answered something other than "Yes", which doesn't count toward this)`
+            : '') +
           (round.status === 'FINALISED'
             ? '. If more responses have come in since this round was finalised, click "Recalculate results" under Round actions first.'
             : ''),

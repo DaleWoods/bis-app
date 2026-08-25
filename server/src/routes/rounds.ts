@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
-import { env } from '../config/env.js';
 import { requireAuth, requireCoordinator } from '../auth/middleware.js';
 import { DISCUSSION_OUTCOMES, STREAMS, isCoordinator } from '../domain/types.js';
 import { audit } from '../services/auditService.js';
@@ -33,9 +32,6 @@ import type { Ticket } from '../services/ticketService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
 import { discussionAgenda, listDiscussions, recordDiscussion } from '../services/discussionService.js';
 import { describeNext, listAutomationLog, runDueAutomation } from '../services/automationService.js';
-import { buildPptx } from '../pack/pptx.js';
-import { buildPdf } from '../pack/pdf.js';
-import { packFilenameSlug as slug, packInput } from '../services/packService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
@@ -435,64 +431,12 @@ router.get(
   }),
 );
 
-/**
- * A pack holds the same ticket content the round page does, so it answers to
- * the same rule: a draft round is the coordinator's working area until it is
- * distributed. Without this the deck was a way round the 403 on GET /rounds/:id.
- */
-function packVisible(req: Parameters<typeof requireAuth>[0], round: { status: string }): boolean {
-  return isCoordinator(req.member!.role) || round.status !== 'DRAFT';
-}
-
-router.get(
-  '/rounds/:id/pack.pptx',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const input = await packInput(req.params.id);
-    if (!input) {
-      res.status(404).json({ error: 'Round not found' });
-      return;
-    }
-    if (!packVisible(req, input.round)) {
-      res.status(403).json({ error: 'This round has not been distributed yet' });
-      return;
-    }
-    const buffer = await buildPptx(input);
-    await audit(await getDb(), actorOf(req), 'round.pack.pptx', 'round', input.round.id, {});
-    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-    res.setHeader('content-disposition', `attachment; filename="bis-${slug(input.round.weekLabel)}-pack.pptx"`);
-    res.send(buffer);
-  }),
-);
-
-router.get(
-  '/rounds/:id/pack.pdf',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const input = await packInput(req.params.id);
-    if (!input) {
-      res.status(404).json({ error: 'Round not found' });
-      return;
-    }
-    if (!packVisible(req, input.round)) {
-      res.status(403).json({ error: 'This round has not been distributed yet' });
-      return;
-    }
-    const buffer = await buildPdf(input);
-    res.setHeader('content-type', 'application/pdf');
-    res.setHeader('content-disposition', `attachment; filename="bis-${slug(input.round.weekLabel)}-pack.pdf"`);
-    res.send(buffer);
-  }),
-);
-
 /** Open the round and email the committee (§12.2). */
 router.post(
   '/rounds/:id/distribute',
   requireCoordinator,
   asyncHandler(async (req, res) => {
-    const { attachPack, open } = z
-      .object({ attachPack: z.boolean().optional(), open: z.boolean().optional() })
-      .parse(req.body ?? {});
+    const { open } = z.object({ open: z.boolean().optional() }).parse(req.body ?? {});
     const db = await getDb();
     let round = await getRound(db, req.params.id);
     if (!round) {
@@ -506,23 +450,8 @@ router.post(
     }
     if ((open ?? true) && round.status === 'DRAFT') round = await setRoundStatus(db, round.id, 'OPEN');
 
-    let attachment;
-    // Building the deck takes real time, and an attachment on a message that
-    // will only be logged is work nobody sees.
-    if (attachPack && env.email.canSend) {
-      const input = await packInput(round.id);
-      if (input) {
-        const buffer = await buildPptx(input);
-        attachment = {
-          name: `bis-${slug(round.weekLabel)}-pack.pptx`,
-          contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          contentBytes: buffer.toString('base64'),
-        };
-      }
-    }
-
     const recipients = await listActiveScorers(db);
-    const results = await sendDistribution(db, round, tickets, recipients, attachment);
+    const results = await sendDistribution(db, round, tickets, recipients);
     // Only stamp the round as distributed if something actually went out. With
     // email switched off every result is SUPPRESSED, and stamping it anyway put
     // a "Distributed" badge on a round nobody had been told about.
@@ -616,5 +545,9 @@ router.get(
     res.json({ writebacks: await listWriteBacks(db, req.params.id) });
   }),
 );
+
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'round';
+}
 
 export default router;

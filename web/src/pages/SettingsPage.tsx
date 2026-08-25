@@ -509,54 +509,6 @@ export function SettingsPage({ member }: { member: Member }) {
       </section>
 
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>Distribution pack</h2>
-        <p className="hint">Branding for the PPTX pack attached to the distribution email.</p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            saveSection(
-              'pack',
-              {
-                organisation: String(form.get('organisation')),
-                deckTitle: String(form.get('deckTitle')),
-                closingMessage: String(form.get('closingMessage')),
-                accentColour: String(form.get('accentColour')).replace('#', ''),
-              },
-              'Distribution pack',
-            );
-          }}
-        >
-          <div className="row">
-            <div className="grow field">
-              <label htmlFor="pack-organisation">Organisation</label>
-              <input id="pack-organisation" name="organisation" type="text" defaultValue={config.pack.organisation} />
-            </div>
-            <div className="grow field">
-              <label htmlFor="pack-deckTitle">Deck title</label>
-              <input id="pack-deckTitle" name="deckTitle" type="text" defaultValue={config.pack.deckTitle} />
-            </div>
-            <div className="field">
-              <label htmlFor="pack-accentColour">Accent colour</label>
-              <input
-                id="pack-accentColour"
-                name="accentColour"
-                type="text"
-                defaultValue={`#${config.pack.accentColour.replace('#', '')}`}
-                style={{ width: '7rem' }}
-              />
-              <p className="hint">Hex, e.g. #6D5646.</p>
-            </div>
-          </div>
-          <div className="field">
-            <label htmlFor="pack-closingMessage">Closing message</label>
-            <input id="pack-closingMessage" name="closingMessage" type="text" defaultValue={config.pack.closingMessage} />
-          </div>
-          <button type="submit">Save distribution pack</button>
-        </form>
-      </section>
-
-      <section className="card">
         <h2 style={{ marginTop: 0 }}>Email</h2>
         {integrations?.emailProvider === 'none' ? (
           <>

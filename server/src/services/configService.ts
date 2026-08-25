@@ -8,7 +8,6 @@ import {
   DEFAULT_AUTOMATION_CONFIG,
   DEFAULT_CADENCE_CONFIG,
   DEFAULT_JIRA_CONFIG,
-  DEFAULT_PACK_CONFIG,
   DEFAULT_SCORING_CONFIG,
   ScoringConfig,
   SEED_CATEGORIES,
@@ -69,7 +68,6 @@ export async function getAppConfig(db: Db): Promise<AppConfig> {
     cadence: merge(DEFAULT_CADENCE_CONFIG, stored.get('cadence')),
     automation: merge(DEFAULT_AUTOMATION_CONFIG, stored.get('automation')),
     jira: merge(DEFAULT_JIRA_CONFIG, stored.get('jira')),
-    pack: merge(DEFAULT_PACK_CONFIG, stored.get('pack')),
   };
 }
 

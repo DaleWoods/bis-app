@@ -160,7 +160,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         <div>
           <h1>{round.weekLabel}</h1>
           <p className="lede">
-            <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span> · Cut-off{' '}
+            <span className={`badge ${round.status === 'OPEN' ? 'open' : round.status === 'CLOSED' ? 'closed' : ''}`}>
+              {round.status}
+            </span>{' '}
+            · Cut-off{' '}
             {formatDateTime(round.cutOffAt)}
             {round.status === 'OPEN' ? (
               <>
@@ -259,7 +262,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                   return;
                 }
                 return run('distribute', async () => {
-                  const { results } = await api.distribute(round.id, true);
+                  const { results } = await api.distribute(round.id);
                   const sent = results.filter((r) => r.status === 'SENT').length;
                   const suppressed = results.filter((r) => r.status === 'SUPPRESSED').length;
                   const failed = results.filter((r) => r.status === 'FAILED').length;

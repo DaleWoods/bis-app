@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_KINDS, cardBlocksAutomatedDistribution, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
-import { sectionHeights } from '../pack/pptx.js';
 
 describe('labelsFor', () => {
   it('asks a different question of each kind of ticket', () => {
@@ -63,32 +62,6 @@ describe('draftIsEmpty', () => {
     const blank = { panelCurrent: '', panelImpacts: '', panelFuture: '', panelBenefits: '' };
     expect(draftIsEmpty(blank)).toBe(true);
     expect(draftIsEmpty({ ...blank, panelImpacts: 'something' })).toBe(false);
-  });
-});
-
-describe('sectionHeights', () => {
-  const sections = (...values: string[]) => values.map((value) => ({ value }));
-
-  it('gives a section with more bullets more room', () => {
-    const [one, three] = sectionHeights(sections('a', 'a\nb\nc'), 5.65, 10);
-    expect(three).toBeGreaterThan(one);
-  });
-
-  it('never overruns the space available, however much content there is', () => {
-    const long = 'x'.repeat(100);
-    const heights = sectionHeights(sections(`${long}\n${long}\n${long}`, `${long}\n${long}`, long), 5.65, 2.74);
-    const total = heights.reduce((sum, h) => sum + h, 0);
-    expect(total).toBeLessThanOrEqual(2.74 + 0.0001);
-  });
-
-  it('leaves the spare space at the bottom rather than padding the sections out', () => {
-    const heights = sectionHeights(sections('a', 'b', 'c'), 5.65, 2.74);
-    expect(heights.reduce((sum, h) => sum + h, 0)).toBeLessThan(2.74);
-  });
-
-  it('still reserves a row for an empty section, so its label is not orphaned', () => {
-    const [height] = sectionHeights(sections(''), 5.65, 10);
-    expect(height).toBeGreaterThan(0.4);
   });
 });
 

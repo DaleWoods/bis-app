@@ -364,10 +364,6 @@ export function GuidePage({ member }: { member: Member }) {
               a card can pass all of them and still be vague. They matter most when the round is running itself, because
               then a weak card goes out to the committee and gets scored with nobody having read it first.
             </p>
-            <p className="hint">
-              The pack is generated from exactly these fields and attached to the distribution email, so what a
-              committee member receives matches the card they see when they open the round to score it.
-            </p>
           </Section>
 
           <Section id="results" title="Reading the results">
@@ -558,11 +554,6 @@ export function GuidePage({ member }: { member: Member }) {
                 <strong>Categories</strong> — the {categories} are data, not code. Reword, reorder or retire them. Unticking
                 “Active” removes one from everybody's form. There is a “Restore the seven default categories” button if
                 you go too far.
-              </li>
-              <li>
-                <strong>Distribution pack</strong> — the organisation name, deck title, closing message and accent
-                colour on the PPTX pack attached to the distribution email. Nothing here reaches the app itself, only
-                what gets sent.
               </li>
               <li>
                 <strong>Cadence</strong> — two separate settings, each its own day, hour and minute (on the hour, or a

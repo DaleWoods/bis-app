@@ -122,6 +122,29 @@ describe('writeBackRound', () => {
     expect(writeBusinessScore).not.toHaveBeenCalled();
   });
 
+  it('explains a shortfall caused by non-Yes answers, not just a low count', async () => {
+    // The reported case: 4 people submitted, the gate said "3 of 5" with
+    // nothing to say why - it read as a bug (5 responses, still refused) when
+    // one of the 4 had actually answered "Unsure", which does not count as a
+    // response at all (§10.1).
+    const config = await getAppConfig(db);
+    const categories = await listCategories(db);
+    const scores = Object.fromEntries(categories.map((c) => [c.id, 5]));
+    const round = (await getRound(db, roundId))!;
+    const ticket = (await getTicket(db, ticketId))!;
+    const relevances: Array<'YES' | 'UNSURE'> = ['YES', 'YES', 'YES', 'UNSURE'];
+    for (const [i, relevance] of relevances.entries()) {
+      const member = await saveMember(db, { name: `Mix ${i}`, email: `mix${i}@example.com`, team: 'Trading', role: 'COMMITTEE' });
+      await saveSubmission(db, { round, ticket, member, payload: { relevance, scores: relevance === 'YES' ? scores : undefined }, config: config.scoring });
+    }
+
+    const [entry] = await writeBackRound(db, ACTOR, round);
+    expect(entry.status).toBe('SKIPPED');
+    expect(entry.reason).toContain('3 of the 5 responses needed');
+    expect(entry.reason).toContain('4 submitted in total');
+    expect(entry.reason).toContain('1 answered something other than "Yes"');
+  });
+
   it('writes it anyway when a coordinator overrides the gate', async () => {
     await scoreIt(2);
 

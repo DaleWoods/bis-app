@@ -285,8 +285,12 @@ th.num {
   border-color: var(--danger);
 }
 .badge.open {
-  color: var(--gold-text);
-  border-color: var(--gold);
+  color: var(--high);
+  border-color: var(--high);
+}
+.badge.closed {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* --- Ticket card: the §7 slide, rendered in-app ------------------------

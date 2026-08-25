@@ -169,19 +169,11 @@ const automationSchema = z.object({
   writeBack: z.boolean().optional(),
 });
 
-const packSchema = z.object({
-  organisation: z.string().optional(),
-  deckTitle: z.string().optional(),
-  closingMessage: z.string().optional(),
-  accentColour: z.string().optional(),
-});
-
 const sectionSchemas = {
   scoring: scoringSchema,
   cadence: cadenceSchema,
   automation: automationSchema,
   jira: jiraSchema,
-  pack: packSchema,
 } as const;
 
 router.put(

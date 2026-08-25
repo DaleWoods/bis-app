@@ -99,7 +99,9 @@ export function RoundsPage({ member }: { member: Member }) {
                   <Link to={`/rounds/${round.id}`}>{round.weekLabel}</Link>
                 </th>
                 <td>
-                  <span className={`badge ${round.status === 'OPEN' ? 'open' : ''}`}>{round.status}</span>
+                  <span className={`badge ${round.status === 'OPEN' ? 'open' : round.status === 'CLOSED' ? 'closed' : ''}`}>
+                    {round.status}
+                  </span>
                 </td>
                 <td>{formatDateTime(round.cutOffAt)}</td>
                 <td>{round.status === 'OPEN' ? <Countdown target={round.cutOffAt} /> : '—'}</td>

@@ -229,7 +229,6 @@ export interface AppConfig {
     transitionOnFinalise: boolean;
     transitionName: string;
   };
-  pack: { organisation: string; deckTitle: string; closingMessage: string; accentColour: string };
 }
 
 export interface FeedbackTicket {
@@ -384,10 +383,10 @@ export const api = {
     request<{ round: Round }>(`/api/rounds/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   finaliseRound: (id: string) =>
     request<{ round: Round; results: TicketResult[] }>(`/api/rounds/${id}/finalise`, { method: 'POST', body: '{}' }),
-  distribute: (id: string, attachPack: boolean) =>
+  distribute: (id: string) =>
     request<{ round: Round; results: Array<{ email: string; status: string; error?: string }> }>(
       `/api/rounds/${id}/distribute`,
-      { method: 'POST', body: JSON.stringify({ attachPack }) },
+      { method: 'POST', body: '{}' },
     ),
   remind: (id: string, escalation: boolean, memberIds?: string[]) =>
     request<{ results: Array<{ email: string; status: string; error?: string }> }>(`/api/rounds/${id}/remind`, {

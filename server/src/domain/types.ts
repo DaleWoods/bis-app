@@ -189,19 +189,11 @@ export interface JiraConfig {
   transitionName: string;
 }
 
-export interface PackConfig {
-  organisation: string;
-  deckTitle: string;
-  closingMessage: string;
-  accentColour: string;
-}
-
 export interface AppConfig {
   scoring: ScoringConfig;
   cadence: CadenceConfig;
   automation: AutomationConfig;
   jira: JiraConfig;
-  pack: PackConfig;
 }
 
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
@@ -269,19 +261,11 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   transitionName: '[RA] Rdy Estimation',
 };
 
-export const DEFAULT_PACK_CONFIG: PackConfig = {
-  organisation: 'WOSG',
-  deckTitle: 'Business Impact Scoring',
-  closingMessage: 'Thank you – please submit your scores before the cut-off.',
-  accentColour: '6D5646',
-};
-
 export const DEFAULT_APP_CONFIG: AppConfig = {
   scoring: DEFAULT_SCORING_CONFIG,
   cadence: DEFAULT_CADENCE_CONFIG,
   automation: DEFAULT_AUTOMATION_CONFIG,
   jira: DEFAULT_JIRA_CONFIG,
-  pack: DEFAULT_PACK_CONFIG,
 };
 
 /** The seven categories of §6. Seeded as data, editable thereafter. */

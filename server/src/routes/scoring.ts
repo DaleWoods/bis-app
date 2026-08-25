@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Db, getDb } from '../db/index.js';
 import { requireAuth } from '../auth/middleware.js';
 import { RELEVANCE_VALUES, canScore, isCoordinator } from '../domain/types.js';
+import { isValidSubmission } from '../domain/scoring.js';
 import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
 import { listActiveScorers } from '../services/memberService.js';
@@ -53,8 +54,16 @@ router.get(
       (await listRounds(db))
         .filter((r) => r.status === 'FINALISED')
         .sort((a, b) => (b.finalisedAt ?? b.cutOffAt).localeCompare(a.finalisedAt ?? a.cutOffAt))[0] ?? null;
+    /*
+      "Includes you" has to mean the same thing the feedback page means by it -
+      a real score given, not just a submission of any kind. A member who
+      answered "Unsure" or "No" on the round's only ticket had submitted
+      something, but the feedback page has nothing of theirs to show against
+      the committee, and the banner promising "see how your scores compared"
+      landed them on a page that told them they hadn't scored anything.
+    */
     const lastFinalisedIncludesYou = lastFinalised
-      ? (await listMemberSubmissions(db, lastFinalised.id, req.member!.id)).some((s) => !s.archived)
+      ? (await listMemberSubmissions(db, lastFinalised.id, req.member!.id)).some(isValidSubmission)
       : false;
     // Your own record over recent rounds - "you've completed 6 of the last 8"
     // is a small, positive nudge that costs nothing to compute here since it

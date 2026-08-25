@@ -73,8 +73,6 @@ function describe(entry: AuditEntry): string {
       return 'Released a held ticket to the committee';
     case 'round.export.csv':
       return 'Exported results as CSV';
-    case 'round.pack.pptx':
-      return 'Downloaded the distribution pack';
     case 'jira.import':
       return `Imported tickets from JIRA${typeof d.imported === 'number' ? ` (${d.imported})` : ''}`;
     case 'jira.writeback':
