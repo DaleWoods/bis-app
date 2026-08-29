@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import {
   api,
   formatDateTime,
+  toDatetimeLocalValue,
   type Category,
   type Member,
   type MemberProgress,
@@ -52,8 +53,13 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [emails, setEmails] = useState<
     Array<{ id: string; kind: string; toAddress: string; subject: string; status: string; error: string; sentAt: string }>
   >([]);
-  /** For a round created by hand with no opening time - the way to give it one after the fact. */
+  /**
+   * Reschedule a still-draft round's opening and cut-off - the way to fix one
+   * that was auto-created before a cadence change, or give a hand-created one
+   * an opening time, without deleting and starting over.
+   */
   const [opensAtInput, setOpensAtInput] = useState('');
+  const [cutOffAtInput, setCutOffAtInput] = useState('');
 
   /**
    * The four requests the page needs, in flight together and all awaited.
@@ -107,6 +113,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
       cancelled = true;
     };
   }, [load]);
+
+  // Keeps the reschedule fields showing the round's actual saved times,
+  // including right after a successful reschedule - not just on first load.
+  useEffect(() => {
+    if (!round) return;
+    setOpensAtInput(round.opensAt ? toDatetimeLocalValue(new Date(round.opensAt)) : '');
+    setCutOffAtInput(toDatetimeLocalValue(new Date(round.cutOffAt)));
+  }, [round?.id, round?.opensAt, round?.cutOffAt]);
 
   async function run(label: string, action: () => Promise<string>) {
     setBusy(label);
@@ -397,35 +411,83 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             {/*
               A round created from "New round" has no opening time unless one
               was given, which is exactly what stops automation ever opening
-              it - `describeNext` says so above, but only this fixes it.
+              it - `describeNext` says so above, but only this fixes it. Also
+              the only way to fix a round automation created before a cadence
+              change: its opens/cut-off are set once, from whatever the
+              cadence was at that moment, and never move on their own.
             */}
-            {round.status === 'DRAFT' && !round.opensAt ? (
-              <div className="row" style={{ marginBottom: '0.6rem' }}>
-                <div className="field grow" style={{ maxWidth: 260 }}>
-                  <label htmlFor="opens-at-input">Give it an opening time</label>
-                  <input
-                    id="opens-at-input"
-                    type="datetime-local"
-                    value={opensAtInput}
-                    onChange={(e) => setOpensAtInput(e.target.value)}
-                  />
-                </div>
-                <div style={{ alignSelf: 'end' }}>
+            {round.status === 'DRAFT' ? (
+              <div style={{ marginBottom: '0.6rem' }}>
+                <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div className="field grow" style={{ maxWidth: 260 }}>
+                    <label htmlFor="opens-at-input">{round.opensAt ? 'Opens' : 'Give it an opening time'}</label>
+                    <input
+                      id="opens-at-input"
+                      type="datetime-local"
+                      value={opensAtInput}
+                      onChange={(e) => setOpensAtInput(e.target.value)}
+                    />
+                  </div>
+                  <div className="row" style={{ gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setOpensAtInput(toDatetimeLocalValue(new Date(Date.now() + 15 * 60_000)))}
+                    >
+                      In 15 min
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setOpensAtInput(toDatetimeLocalValue(new Date(Date.now() + 60 * 60_000)))}
+                    >
+                      In 1 hour
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        tomorrow.setHours(9, 0, 0, 0);
+                        setOpensAtInput(toDatetimeLocalValue(tomorrow));
+                      }}
+                    >
+                      Tomorrow 9am
+                    </button>
+                  </div>
+                  <div className="field grow" style={{ maxWidth: 260 }}>
+                    <label htmlFor="cut-off-at-input">Cut-off</label>
+                    <input
+                      id="cut-off-at-input"
+                      type="datetime-local"
+                      value={cutOffAtInput}
+                      onChange={(e) => setCutOffAtInput(e.target.value)}
+                    />
+                  </div>
                   <button
-                    className="secondary"
                     type="button"
-                    disabled={Boolean(busy) || !opensAtInput}
+                    disabled={Boolean(busy) || !cutOffAtInput}
                     onClick={() =>
-                      run('set-opens-at', async () => {
-                        await api.updateRound(round.id, { opensAt: new Date(opensAtInput).toISOString() });
-                        setOpensAtInput('');
-                        return 'Opening time set — automation can now open and distribute this round.';
+                      run('reschedule', async () => {
+                        await api.updateRound(round.id, {
+                          opensAt: opensAtInput ? new Date(opensAtInput).toISOString() : null,
+                          cutOffAt: new Date(cutOffAtInput).toISOString(),
+                        });
+                        return opensAtInput
+                          ? 'Times updated — automation now works from these.'
+                          : 'Cut-off updated. No opening time set, so automation still leaves this round alone.';
                       })
                     }
                   >
-                    Set
+                    {round.opensAt || round.status !== 'DRAFT' ? 'Reschedule' : 'Set'}
                   </button>
                 </div>
+                <p className="hint">
+                  A round automation created gets its opening and cut-off from Cadence at the moment it was
+                  created — changing Cadence afterwards does not move an existing round. Use this to line it up
+                  with a new cadence, or to set up a quick test window.
+                </p>
               </div>
             ) : null}
 

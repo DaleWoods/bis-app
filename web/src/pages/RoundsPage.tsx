@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, formatDateTime, isCoordinator, type Member, type Round } from '../api';
+import { api, formatDateTime, isCoordinator, toDatetimeLocalValue, type Member, type Round } from '../api';
 import { Link, useRouter } from '../router';
 import { Countdown } from '../components/Countdown';
 
@@ -63,6 +63,31 @@ export function RoundsPage({ member }: { member: Member }) {
                 {creating ? 'Creating…' : 'Create round'}
               </button>
             </div>
+          </div>
+          <div className="row" style={{ gap: '0.35rem', marginTop: '0.4rem' }}>
+            <span className="hint" style={{ alignSelf: 'center' }}>
+              Quick test window, both fields at once:
+            </span>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setOpensAt(toDatetimeLocalValue(new Date(Date.now() + 15 * 60_000)));
+                setCutOffAt(toDatetimeLocalValue(new Date(Date.now() + 30 * 60_000)));
+              }}
+            >
+              Opens in 15 min, closes in 30
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setOpensAt(toDatetimeLocalValue(new Date(Date.now() + 5 * 60_000)));
+                setCutOffAt(toDatetimeLocalValue(new Date(Date.now() + 10 * 60_000)));
+              }}
+            >
+              Opens in 5 min, closes in 10
+            </button>
           </div>
           <p className="hint">
             Leave &ldquo;Opens&rdquo; blank if you will open and distribute this round yourself. Set it if you want
@@ -144,6 +169,5 @@ function defaultCutOff(): string {
   const daysUntilTuesday = (2 - date.getDay() + 7) % 7 || 7;
   date.setDate(date.getDate() + daysUntilTuesday);
   date.setHours(17, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return toDatetimeLocalValue(date);
 }

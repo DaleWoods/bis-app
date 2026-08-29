@@ -582,6 +582,13 @@ export function GuidePage({ member }: { member: Member }) {
               distribute, chase or close a round it cannot see an opening time on), the same as if automation were
               switched off just for that round.
             </p>
+            <p className="hint">
+              Both times are set once and never move on their own — the opening and cut-off on the round page can be
+              changed at any point while it is still a draft, whether that is to line an already-created round up
+              with a cadence you have since changed, or to set up a short window to test the whole cycle. “In 15
+              min” / “In 1 hour” / “Tomorrow 9am” fill the opening time in one click on both the New Round form and
+              the round page, rather than working the date out by hand.
+            </p>
           </Section>
 
           <Section id="settings" title="Settings worth knowing about" index={10}>

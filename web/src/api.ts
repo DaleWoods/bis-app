@@ -551,3 +551,9 @@ export function formatDate(iso: string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return String(iso);
   return date.toLocaleDateString('en-GB', { dateStyle: 'medium' });
 }
+
+/** A Date as the local (not UTC) `YYYY-MM-DDTHH:mm` an `<input type="datetime-local">` expects. */
+export function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
