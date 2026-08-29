@@ -142,6 +142,22 @@ export function SettingsPage({ member }: { member: Member }) {
     return (compared || a.name.localeCompare(b.name, 'en-GB')) * direction;
   });
 
+  /**
+   * Why "Create next week's round" (and any override) is not about to fire -
+   * mirrors maybeCreateNextRound()'s exact checks so a coordinator can see
+   * this without waiting on a tick that will not do anything. Only one round
+   * runs at a time, and that is easy to forget is still blocking things once
+   * it is sitting quietly as a draft with a far-off opening time.
+   */
+  const blockingRound = rounds.find((r) => r.status !== 'FINALISED' && new Date(r.cutOffAt).getTime() > Date.now());
+  const createRoundsBlockedReason = !config.automation.enabled
+    ? 'automation is switched off above'
+    : !config.automation.createRounds
+      ? '"Create next week\'s round" is switched off above'
+      : blockingRound
+        ? `${blockingRound.weekLabel} (${blockingRound.status.toLowerCase()}, cut-off ${formatDateTime(blockingRound.cutOffAt)}) is still in progress — only one round runs at a time`
+        : null;
+
   async function saveMemberField(input: Parameters<typeof api.saveMember>[0]) {
     setMessage('');
     setError('');
@@ -883,6 +899,17 @@ EMAIL_REPLY_TO=<where replies should go>`}
                 <p className="notice">
                   Active — will open <strong>{formatDateTime(config.cadence.nextRoundOverride.opensAt)}</strong> and
                   close <strong>{formatDateTime(config.cadence.nextRoundOverride.cutOffAt)}</strong>.
+                  {createRoundsBlockedReason ? (
+                    <>
+                      {' '}
+                      <strong>Not yet, though</strong> — {createRoundsBlockedReason}. Nothing will be created until
+                      that clears, however long the override's opening time has already passed.
+                    </>
+                  ) : null}
+                </p>
+              ) : createRoundsBlockedReason ? (
+                <p className="hint">
+                  Setting one now would not fire immediately either — {createRoundsBlockedReason}.
                 </p>
               ) : null}
               <div className="row" style={{ gap: '0.35rem', marginBottom: '0.5rem' }}>
