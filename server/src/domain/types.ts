@@ -139,6 +139,14 @@ export interface CadenceConfig {
   reminderMinutesBeforeCutOff: number[];
   escalationMinutesBeforeCutOff: number | null;
   timezone: string;
+  /**
+   * Exact opens/cut-off for the very next round automation creates - set once
+   * to line a test cycle (or a genuinely one-off week) up with a real
+   * timestamp instead of the next weekly occurrence. `maybeCreateNextRound`
+   * clears this back to null the moment it uses it, so the recurring
+   * day/hour/minute pattern above governs every round after that one.
+   */
+  nextRoundOverride: { opensAt: string; cutOffAt: string } | null;
 }
 
 /**
@@ -222,6 +230,7 @@ export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   reminderMinutesBeforeCutOff: [2880, 1440, 240], // 48h, 24h, 4h
   escalationMinutesBeforeCutOff: 120, // 2h
   timezone: 'Europe/London',
+  nextRoundOverride: null,
 };
 
 /**

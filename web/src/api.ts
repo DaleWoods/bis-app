@@ -219,6 +219,7 @@ export interface AppConfig {
     reminderMinutesBeforeCutOff: number[];
     escalationMinutesBeforeCutOff: number | null;
     timezone: string;
+    nextRoundOverride: { opensAt: string; cutOffAt: string } | null;
   };
   jira: {
     queueJql: string;

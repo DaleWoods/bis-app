@@ -589,6 +589,13 @@ export function GuidePage({ member }: { member: Member }) {
               min” / “In 1 hour” / “Tomorrow 9am” fill the opening time in one click on both the New Round form and
               the round page, rather than working the date out by hand.
             </p>
+            <p className="hint">
+              Cadence itself also has a <strong>one-time override</strong> — an exact opens/cut-off used only for
+              the very next round automation creates, then cleared automatically. That is how automation
+              creates a round on a short test window (or a genuine one-off week) without touching the recurring
+              weekly pattern the rest of the time: setting the override does not change the day/hour/minute
+              fields, and every round after the one it applies to goes back to those.
+            </p>
           </Section>
 
           <Section id="settings" title="Settings worth knowing about" index={10}>

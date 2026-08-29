@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
-import { ensureDefaultConfig, ensureSeedCategories, saveConfigSection } from './configService.js';
+import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, saveConfigSection } from './configService.js';
 import { listAutomationLog, runDueAutomation } from './automationService.js';
 import { createRound, getRound, listRounds, listRoundTickets, setRoundStatus, updateRound } from './roundService.js';
 import { addTicketToRound } from './roundService.js';
@@ -297,6 +297,27 @@ describe('creating rounds', () => {
 
     await runDueAutomation(db, new Date('2026-08-07T10:00:00Z'));
     expect(await listRounds(db)).toHaveLength(1);
+  });
+
+  it('uses a one-time cadence override for the next round, then clears it', async () => {
+    await automation({ createRounds: true, importFromJira: false });
+    await saveConfigSection(
+      db,
+      'cadence',
+      { nextRoundOverride: { opensAt: '2026-08-05T10:15:00.000Z', cutOffAt: '2026-08-05T10:30:00.000Z' } },
+      'test',
+    );
+
+    await runDueAutomation(db, new Date('2026-08-05T10:00:00Z'));
+    const rounds = await listRounds(db);
+    expect(rounds).toHaveLength(1);
+    // The exact override timestamps, not the weekly Thursday-09:00 pattern.
+    expect(rounds[0].opensAt).toBe('2026-08-05T10:15:00.000Z');
+    expect(rounds[0].cutOffAt).toBe('2026-08-05T10:30:00.000Z');
+
+    // Used once - gone from config, so it cannot silently apply again.
+    const config = await getAppConfig(db);
+    expect(config.cadence.nextRoundOverride).toBeNull();
   });
 });
 

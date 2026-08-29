@@ -5,7 +5,7 @@ import { cardBlocksAutomatedDistribution, type CardCheckInput } from '../domain/
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { audit, AuditActor } from './auditService.js';
-import { getAppConfig } from './configService.js';
+import { getAppConfig, saveConfigSection } from './configService.js';
 import { sendDistribution, sendReminders } from './emailService.js';
 import { importQueue, writeBackRound } from './jiraService.js';
 import { listActiveScorers } from './memberService.js';
@@ -272,7 +272,15 @@ async function maybeCreateNextRound(
   const live = rounds.find((r) => r.status !== 'FINALISED' && new Date(r.cutOffAt).getTime() > now.getTime());
   if (live) return null;
 
-  const { opensAt, cutOffAt } = nextRoundWindow(config.cadence, now);
+  // A one-time override (set in Cadence) takes an exact timestamp instead of
+  // the next weekly occurrence - for a genuine one-off week, or to run the
+  // whole cycle end to end on a short test window without touching the
+  // recurring pattern. Cleared the moment it is used, below, so it never
+  // silently keeps overriding future rounds.
+  const override = config.cadence.nextRoundOverride;
+  const { opensAt, cutOffAt } = override
+    ? { opensAt: new Date(override.opensAt), cutOffAt: new Date(override.cutOffAt) }
+    : nextRoundWindow(config.cadence, now);
   const weekLabel = weekLabelFor(opensAt, config.cadence.timezone);
   if (rounds.some((r) => r.weekLabel === weekLabel)) return null;
 
@@ -280,10 +288,13 @@ async function maybeCreateNextRound(
     weekLabel,
     cutOffAt: cutOffAt.toISOString(),
     opensAt: opensAt.toISOString(),
-    notes: 'Created automatically from the cadence settings.',
+    notes: override
+      ? 'Created automatically from the one-time Cadence override.'
+      : 'Created automatically from the cadence settings.',
     createdBy: AUTOMATION_ACTOR.id ?? 'automation',
   });
-  await audit(db, AUTOMATION_ACTOR, 'round.create', 'round', round.id, { weekLabel, automated: true });
+  if (override) await saveConfigSection(db, 'cadence', { nextRoundOverride: null }, AUTOMATION_ACTOR.email ?? 'automation');
+  await audit(db, AUTOMATION_ACTOR, 'round.create', 'round', round.id, { weekLabel, automated: true, usedOverride: Boolean(override) });
   steps.push({ roundId: round.id, weekLabel, action: 'create', outcome: `Created ${weekLabel}` });
 
   const detail: string[] = [];

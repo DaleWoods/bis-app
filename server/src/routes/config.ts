@@ -142,6 +142,13 @@ const cadenceSchema = z.object({
   reminderMinutesBeforeCutOff: z.array(z.number().min(0)).optional(),
   escalationMinutesBeforeCutOff: z.number().min(0).nullable().optional(),
   timezone: z.string().optional(),
+  nextRoundOverride: z
+    .object({ opensAt: z.string(), cutOffAt: z.string() })
+    .refine((v) => new Date(v.cutOffAt).getTime() > new Date(v.opensAt).getTime(), {
+      message: 'Cut-off must be after the opening time',
+    })
+    .nullable()
+    .optional(),
 });
 
 const jiraSchema = z.object({

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ROLES, api, formatDateTime, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
+import { ROLES, api, formatDateTime, toDatetimeLocalValue, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
 import { formatDuration, nextRoundWindow } from '../cadence';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -82,6 +82,16 @@ export function SettingsPage({ member }: { member: Member }) {
    * "Save cadence" is pressed - which is the whole point of the preview.
    */
   const [cadenceForm, setCadenceForm] = useState<AppConfig['cadence'] | null>(null);
+  /** The one-time next-round override - kept separate from cadenceForm since saving it is its own action. */
+  const [overrideOpensInput, setOverrideOpensInput] = useState('');
+  const [overrideCutOffInput, setOverrideCutOffInput] = useState('');
+  const [savingOverride, setSavingOverride] = useState(false);
+
+  useEffect(() => {
+    const active = config?.cadence.nextRoundOverride;
+    setOverrideOpensInput(active ? toDatetimeLocalValue(new Date(active.opensAt)) : '');
+    setOverrideCutOffInput(active ? toDatetimeLocalValue(new Date(active.cutOffAt)) : '');
+  }, [config?.cadence.nextRoundOverride]);
 
   useEffect(() => {
     if (config) setCadenceForm(config.cadence);
@@ -858,6 +868,110 @@ EMAIL_REPLY_TO=<where replies should go>`}
                 Save cadence
               </button>
             </form>
+
+            <div
+              className="field"
+              style={{ marginTop: '1rem', border: '1px solid var(--border, #d8dee6)', borderRadius: 8, padding: '0.75rem 1rem' }}
+            >
+              <strong>One-time override for the next round</strong>
+              <p className="hint">
+                An exact opening and cut-off for the very next round automation creates — for a genuine one-off
+                week, or to run the whole cycle end to end on a short test window. Used once, then cleared
+                automatically; the day/hour/minute pattern above is untouched and governs every round after that.
+              </p>
+              {config.cadence.nextRoundOverride ? (
+                <p className="notice">
+                  Active — will open <strong>{formatDateTime(config.cadence.nextRoundOverride.opensAt)}</strong> and
+                  close <strong>{formatDateTime(config.cadence.nextRoundOverride.cutOffAt)}</strong>.
+                </p>
+              ) : null}
+              <div className="row" style={{ gap: '0.35rem', marginBottom: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setOverrideOpensInput(toDatetimeLocalValue(new Date(Date.now() + 15 * 60_000)));
+                    setOverrideCutOffInput(toDatetimeLocalValue(new Date(Date.now() + 30 * 60_000)));
+                  }}
+                >
+                  Opens in 15 min, closes in 30
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setOverrideOpensInput(toDatetimeLocalValue(new Date(Date.now() + 5 * 60_000)));
+                    setOverrideCutOffInput(toDatetimeLocalValue(new Date(Date.now() + 10 * 60_000)));
+                  }}
+                >
+                  Opens in 5 min, closes in 10
+                </button>
+              </div>
+              <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="field grow" style={{ maxWidth: 220 }}>
+                  <label htmlFor="override-opens">Opens</label>
+                  <input
+                    id="override-opens"
+                    type="datetime-local"
+                    value={overrideOpensInput}
+                    onChange={(e) => setOverrideOpensInput(e.target.value)}
+                  />
+                </div>
+                <div className="field grow" style={{ maxWidth: 220 }}>
+                  <label htmlFor="override-cutoff">Cut-off</label>
+                  <input
+                    id="override-cutoff"
+                    type="datetime-local"
+                    value={overrideCutOffInput}
+                    onChange={(e) => setOverrideCutOffInput(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={savingOverride || !overrideOpensInput || !overrideCutOffInput}
+                  onClick={async () => {
+                    setSavingOverride(true);
+                    try {
+                      await saveSection(
+                        'cadence',
+                        {
+                          nextRoundOverride: {
+                            opensAt: new Date(overrideOpensInput).toISOString(),
+                            cutOffAt: new Date(overrideCutOffInput).toISOString(),
+                          },
+                        },
+                        'Next-round override',
+                      );
+                    } finally {
+                      setSavingOverride(false);
+                    }
+                  }}
+                >
+                  Use for next round
+                </button>
+                {config.cadence.nextRoundOverride ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={savingOverride}
+                    onClick={async () => {
+                      setSavingOverride(true);
+                      try {
+                        await saveSection('cadence', { nextRoundOverride: null }, 'Next-round override cleared');
+                      } finally {
+                        setSavingOverride(false);
+                      }
+                    }}
+                  >
+                    Clear override
+                  </button>
+                ) : null}
+              </div>
+              <p className="hint">
+                Only takes effect if “Create next week’s round” is switched on above, and once the previous round
+                is finished — it does not jump the one-round-at-a-time queue.
+              </p>
+            </div>
           </>
         ) : null}
       </section>
@@ -1203,6 +1317,13 @@ function CadencePreview({ cadence }: { cadence: AppConfig['cadence'] }) {
       <strong>close {when(cutOffAt)}</strong> — {windowLength} to score. If that is not what you expected, it is
       usually the open day/hour above, not the close one, that needs changing: close always searches forward from
       open, so a close day earlier in the week than open pushes it into the following week.
+      {cadence.nextRoundOverride ? (
+        <>
+          {' '}
+          The <strong>very next</strong> round uses the one-time override below instead — this is what happens
+          from the round after that onward.
+        </>
+      ) : null}
     </div>
   );
 }
