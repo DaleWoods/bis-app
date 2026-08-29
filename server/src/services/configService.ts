@@ -60,12 +60,37 @@ function merge<T>(defaults: T, stored: unknown): T {
   return result as T;
 }
 
+/**
+ * `reminderHoursBeforeCutOff`/`escalationHoursBeforeCutOff` were renamed to
+ * their `...MinutesBeforeCutOff` equivalents when cadence gained
+ * quarter-hour-and-below precision. Unlike `transitionOnFinalise`
+ * (008_transition_on_finalise.sql), this can't be a literal SQL REPLACE: the
+ * reminders array is arbitrary per-installation data, not a fixed boolean, so
+ * there is no one literal string to match. Translating it here at read time -
+ * the same place `merge()` already reconciles stored config against the
+ * current shape - reaches every installation regardless of what it saved,
+ * without needing dialect-specific JSON functions in a migration.
+ */
+function migrateLegacyCadenceFields(stored: unknown): unknown {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
+  const obj = { ...(stored as Record<string, unknown>) };
+  if (Array.isArray(obj.reminderHoursBeforeCutOff) && obj.reminderMinutesBeforeCutOff === undefined) {
+    obj.reminderMinutesBeforeCutOff = obj.reminderHoursBeforeCutOff.map((hours) => Number(hours) * 60);
+  }
+  delete obj.reminderHoursBeforeCutOff;
+  if (obj.escalationHoursBeforeCutOff !== undefined && obj.escalationMinutesBeforeCutOff === undefined) {
+    obj.escalationMinutesBeforeCutOff = obj.escalationHoursBeforeCutOff === null ? null : Number(obj.escalationHoursBeforeCutOff) * 60;
+  }
+  delete obj.escalationHoursBeforeCutOff;
+  return obj;
+}
+
 export async function getAppConfig(db: Db): Promise<AppConfig> {
   const rows = await db.all<ConfigRow>('SELECT key, value FROM app_config');
   const stored = new Map(rows.map((r) => [r.key, safeParse(r.value)]));
   return {
     scoring: merge(DEFAULT_SCORING_CONFIG, stored.get('scoring')),
-    cadence: merge(DEFAULT_CADENCE_CONFIG, stored.get('cadence')),
+    cadence: merge(DEFAULT_CADENCE_CONFIG, migrateLegacyCadenceFields(stored.get('cadence'))),
     automation: merge(DEFAULT_AUTOMATION_CONFIG, stored.get('automation')),
     jira: merge(DEFAULT_JIRA_CONFIG, stored.get('jira')),
   };

@@ -135,9 +135,9 @@ export interface CadenceConfig {
   cutOffHour: number;
   /** Minutes past the hour: 0, 15, 30 or 45. */
   cutOffMinute: number;
-  /** Hours before cut-off at which reminders fire, e.g. [48, 24, 4]. */
-  reminderHoursBeforeCutOff: number[];
-  escalationHoursBeforeCutOff: number | null;
+  /** Minutes before cut-off at which reminders fire, e.g. [2880, 1440, 240] = 48h/24h/4h. */
+  reminderMinutesBeforeCutOff: number[];
+  escalationMinutesBeforeCutOff: number | null;
   timezone: string;
 }
 
@@ -219,8 +219,8 @@ export const DEFAULT_CADENCE_CONFIG: CadenceConfig = {
   cutOffDayOfWeek: 2, // Tuesday cut-off (COP Tue)
   cutOffHour: 17,
   cutOffMinute: 0,
-  reminderHoursBeforeCutOff: [48, 24, 4],
-  escalationHoursBeforeCutOff: 2,
+  reminderMinutesBeforeCutOff: [2880, 1440, 240], // 48h, 24h, 4h
+  escalationMinutesBeforeCutOff: 120, // 2h
   timezone: 'Europe/London',
 };
 

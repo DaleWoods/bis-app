@@ -153,8 +153,9 @@ describe('the automated cycle', () => {
     // Open it, so there is a round to be reminded about.
     await runDueAutomation(db, new Date('2026-08-06T08:05:00Z'));
 
-    // Default cadence: escalationHoursBeforeCutOff = 2. Cut-off is 16:00, so
-    // 15:00 is inside the escalation window and past the ordinary 4-hour one.
+    // Default cadence: escalationMinutesBeforeCutOff = 120 (2h). Cut-off is
+    // 16:00, so 15:00 is inside the escalation window and past the ordinary
+    // 4-hour (240-minute) one.
     const run = await runDueAutomation(db, new Date('2026-08-11T15:00:00Z'));
     const escalated = run.steps.find((s) => s.action.startsWith('escalate:'));
     expect(escalated).toBeTruthy();

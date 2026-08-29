@@ -61,3 +61,25 @@ export function nextRoundWindow(cadence: CadenceLike, from: Date = new Date()): 
   const cutOffAt = nextOccurrence(opensAt, cadence.cutOffDayOfWeek, cadence.cutOffHour, cadence.cutOffMinute, offset);
   return { opensAt, cutOffAt };
 }
+
+/**
+ * A span of time in whichever of minutes/hours/days reads most naturally, not
+ * a decimal in one fixed unit - "0.3 hours" for an 18-minute window is
+ * technically correct and useless to read at a glance.
+ */
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.round(ms / 60_000);
+  if (totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  const remainderMinutes = totalMinutes % 60;
+  if (totalHours < 48) {
+    const hourPart = `${totalHours} hour${totalHours === 1 ? '' : 's'}`;
+    return remainderMinutes ? `${hourPart} ${remainderMinutes} minute${remainderMinutes === 1 ? '' : 's'}` : hourPart;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  const remainderHours = totalHours % 24;
+  const dayPart = `${totalDays} day${totalDays === 1 ? '' : 's'}`;
+  return remainderHours ? `${dayPart} ${remainderHours} hour${remainderHours === 1 ? '' : 's'}` : dayPart;
+}

@@ -535,6 +535,14 @@ export function GuidePage({ member }: { member: Member }) {
               <strong>Settings → Run the round automatically.</strong> Off until you switch it on. Every step is its own
               switch, so you can let the app create and chase a round long before you let it write to JIRA.
             </p>
+            <p className="hint">
+              <strong>“Create next week’s round” fires as soon as the previous one is finished</strong> — closed and
+              past its cut-off, or finalised — not on the distribution day itself. That gives you the days in between
+              to import from JIRA, write the cards and check them before it actually opens, rather than everything
+              happening at once on the morning it goes out. A round created this way still only opens, and the
+              committee only gets emailed, at the time Cadence says — check the <strong>Opens</strong> column on
+              Rounds to see exactly when a draft that has already appeared will go out.
+            </p>
             <p>
               <strong>Nothing here takes a button away.</strong> Doing a step yourself just means automation finds it
               already done — closing a round early is not an error, and finalising by hand still gets the scores pushed
@@ -598,8 +606,9 @@ export function GuidePage({ member }: { member: Member }) {
                 day earlier in the week than the open day pushes the round into the following week — Settings shows a
                 live preview of exactly when the next automatically-created round would open and close, so you can
                 see the effect before saving rather than after. Automation works from these; a round created by hand
-                can use them too, or set its own opening time. A “Final reminder” hour, on top of the ordinary
-                reminders, sends one sharper-worded last chase before the cut-off — leave it blank to turn it off.
+                can use them too, or set its own opening time. Reminders and the “Final reminder” are set in minutes
+                before the cut-off, so a short test window still gets chased in time — the final reminder sends one
+                sharper-worded last chase on top of the ordinary reminders; leave it blank to turn it off.
               </li>
               <li>
                 <strong>Committee</strong> — who can sign in, and which of the two roles they have.{' '}

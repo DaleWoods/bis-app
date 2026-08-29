@@ -216,8 +216,8 @@ export interface AppConfig {
     cutOffDayOfWeek: number;
     cutOffHour: number;
     cutOffMinute: number;
-    reminderHoursBeforeCutOff: number[];
-    escalationHoursBeforeCutOff: number | null;
+    reminderMinutesBeforeCutOff: number[];
+    escalationMinutesBeforeCutOff: number | null;
     timezone: string;
   };
   jira: {

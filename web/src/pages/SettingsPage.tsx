@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ROLES, api, formatDateTime, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
-import { nextRoundWindow } from '../cadence';
+import { formatDuration, nextRoundWindow } from '../cadence';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MINUTE_OPTIONS = [0, 15, 30, 45];
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => hour);
 
 /**
  * §14 config-driven: categories, weights, thresholds (16 / 5 / 6 / 1.8), cadence,
@@ -171,8 +172,13 @@ export function SettingsPage({ member }: { member: Member }) {
       const { config } = await api.saveConfig(section, value);
       setConfig(config);
       setMessage(`${label} saved.`);
+      // The confirmation banner lives at the top of a long page, so a save
+      // from a section further down (Cadence, JIRA, the committee) would
+      // otherwise land off-screen and look like nothing happened.
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
@@ -631,7 +637,11 @@ EMAIL_REPLY_TO=<where replies should go>`}
           <div className="switches">
             {(
               [
-                ['createRounds', 'Create next week’s round', 'On the distribution day, so one always exists to fill.'],
+                [
+                  'createRounds',
+                  'Create next week’s round',
+                  'As soon as the previous one is done (not on the distribution day) — so there is time to fill it and check it before it opens. See the Opens column on Rounds for exactly when.',
+                ],
                 ['importFromJira', 'Fill it from the JIRA queue', 'Imports whatever is sitting in the configured queue.'],
                 [
                   'rollOverUnscored',
@@ -639,7 +649,7 @@ EMAIL_REPLY_TO=<where replies should go>`}
                   'Carries forward anything that finalised on too few responses.',
                 ],
                 ['distribute', 'Open it and email the committee', 'At the opening time on the round.'],
-                ['remind', 'Chase non-responders', 'At the reminder hours set in Cadence.'],
+                ['remind', 'Chase non-responders', 'At the reminder minutes set in Cadence.'],
                 ['close', 'Close scoring at the cut-off', 'Nobody can score after this.'],
                 ['finalise', 'Finalise and freeze the results', 'Opens the anonymised feedback view.'],
                 ['writeBack', 'Write the scores to JIRA', 'And transition the ticket, if that is switched on under JIRA.'],
@@ -700,11 +710,11 @@ EMAIL_REPLY_TO=<where replies should go>`}
                     cutOffDayOfWeek: cadenceForm.cutOffDayOfWeek,
                     cutOffHour: cadenceForm.cutOffHour,
                     cutOffMinute: cadenceForm.cutOffMinute,
-                    reminderHoursBeforeCutOff: String(form.get('reminderHoursBeforeCutOff'))
+                    reminderMinutesBeforeCutOff: String(form.get('reminderMinutesBeforeCutOff'))
                       .split(',')
                       .map((value) => Number(value.trim()))
                       .filter((value) => Number.isFinite(value)),
-                    escalationHoursBeforeCutOff: cadenceForm.escalationHoursBeforeCutOff,
+                    escalationMinutesBeforeCutOff: cadenceForm.escalationMinutesBeforeCutOff,
                   },
                   'Cadence',
                 );
@@ -729,14 +739,17 @@ EMAIL_REPLY_TO=<where replies should go>`}
                   </div>
                   <div className="grow field">
                     <label htmlFor="distributionHour">Hour (24h)</label>
-                    <input
+                    <select
                       id="distributionHour"
-                      type="number"
-                      min={0}
-                      max={23}
                       value={cadenceForm.distributionHour}
                       onChange={(e) => setCadenceForm({ ...cadenceForm, distributionHour: Number(e.target.value) })}
-                    />
+                    >
+                      {HOUR_OPTIONS.map((hour) => (
+                        <option key={hour} value={hour}>
+                          {String(hour).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="grow field">
                     <label htmlFor="distributionMinute">Minute</label>
@@ -774,14 +787,17 @@ EMAIL_REPLY_TO=<where replies should go>`}
                   </div>
                   <div className="grow field">
                     <label htmlFor="cutOffHour">Hour (24h)</label>
-                    <input
+                    <select
                       id="cutOffHour"
-                      type="number"
-                      min={0}
-                      max={23}
                       value={cadenceForm.cutOffHour}
                       onChange={(e) => setCadenceForm({ ...cadenceForm, cutOffHour: Number(e.target.value) })}
-                    />
+                    >
+                      {HOUR_OPTIONS.map((hour) => (
+                        <option key={hour} value={hour}>
+                          {String(hour).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="grow field">
                     <label htmlFor="cutOffMinute">Minute</label>
@@ -802,27 +818,31 @@ EMAIL_REPLY_TO=<where replies should go>`}
 
               <div className="row">
                 <div className="field grow" style={{ maxWidth: 320 }}>
-                  <label htmlFor="reminderHoursBeforeCutOff">Reminders (hours before cut-off)</label>
+                  <label htmlFor="reminderMinutesBeforeCutOff">Reminders (minutes before cut-off)</label>
                   <input
-                    id="reminderHoursBeforeCutOff"
-                    name="reminderHoursBeforeCutOff"
+                    id="reminderMinutesBeforeCutOff"
+                    name="reminderMinutesBeforeCutOff"
                     type="text"
-                    defaultValue={config.cadence.reminderHoursBeforeCutOff.join(', ')}
+                    defaultValue={config.cadence.reminderMinutesBeforeCutOff.join(', ')}
                   />
+                  <p className="hint">
+                    Comma-separated, e.g. "2880, 1440, 240" for 48h/24h/4h, or a handful of minutes to run a whole
+                    cycle quickly while testing.
+                  </p>
                 </div>
                 <div className="field grow" style={{ maxWidth: 220 }}>
-                  <label htmlFor="escalationHoursBeforeCutOff">Final reminder (hours before cut-off)</label>
+                  <label htmlFor="escalationMinutesBeforeCutOff">Final reminder (minutes before cut-off)</label>
                   <input
-                    id="escalationHoursBeforeCutOff"
+                    id="escalationMinutesBeforeCutOff"
                     type="number"
                     min={0}
-                    step={0.5}
-                    value={cadenceForm.escalationHoursBeforeCutOff ?? ''}
+                    step={1}
+                    value={cadenceForm.escalationMinutesBeforeCutOff ?? ''}
                     placeholder="Off"
                     onChange={(e) =>
                       setCadenceForm({
                         ...cadenceForm,
-                        escalationHoursBeforeCutOff: e.target.value === '' ? null : Number(e.target.value),
+                        escalationMinutesBeforeCutOff: e.target.value === '' ? null : Number(e.target.value),
                       })
                     }
                   />
@@ -1175,8 +1195,7 @@ function CadencePreview({ cadence }: { cadence: AppConfig['cadence'] }) {
       minute: '2-digit',
       timeZone: cadence.timezone,
     });
-  const hoursOpen = Math.round(((cutOffAt.getTime() - opensAt.getTime()) / 3600_000) * 10) / 10;
-  const windowLength = hoursOpen < 48 ? `${hoursOpen} hour${hoursOpen === 1 ? '' : 's'}` : `${Math.round((hoursOpen / 24) * 10) / 10} days`;
+  const windowLength = formatDuration(cutOffAt.getTime() - opensAt.getTime());
 
   return (
     <div className="notice">

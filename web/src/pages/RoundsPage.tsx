@@ -81,6 +81,7 @@ export function RoundsPage({ member }: { member: Member }) {
             <tr>
               <th scope="col">Round</th>
               <th scope="col">Status</th>
+              <th scope="col">Opens</th>
               <th scope="col">Cut-off</th>
               <th scope="col">Time left</th>
               <th scope="col" className="num">
@@ -103,6 +104,13 @@ export function RoundsPage({ member }: { member: Member }) {
                     {round.status}
                   </span>
                 </td>
+                <td>
+                  {round.status === 'DRAFT'
+                    ? round.opensAt
+                      ? formatDateTime(round.opensAt)
+                      : "Manual — won't open on its own"
+                    : '—'}
+                </td>
                 <td>{formatDateTime(round.cutOffAt)}</td>
                 <td>{round.status === 'OPEN' ? <Countdown target={round.cutOffAt} /> : '—'}</td>
                 <td className="num">{round.ticketCount}</td>
@@ -115,7 +123,7 @@ export function RoundsPage({ member }: { member: Member }) {
             ))}
             {!rounds.length ? (
               <tr>
-                <td colSpan={7}>No rounds yet.</td>
+                <td colSpan={8}>No rounds yet.</td>
               </tr>
             ) : null}
           </tbody>

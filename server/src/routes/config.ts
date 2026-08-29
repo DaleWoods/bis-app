@@ -139,8 +139,8 @@ const cadenceSchema = z.object({
   cutOffDayOfWeek: z.number().int().min(0).max(6).optional(),
   cutOffHour: z.number().int().min(0).max(23).optional(),
   cutOffMinute: cadenceMinute.optional(),
-  reminderHoursBeforeCutOff: z.array(z.number().min(0)).optional(),
-  escalationHoursBeforeCutOff: z.number().min(0).nullable().optional(),
+  reminderMinutesBeforeCutOff: z.array(z.number().min(0)).optional(),
+  escalationMinutesBeforeCutOff: z.number().min(0).nullable().optional(),
   timezone: z.string().optional(),
 });
 

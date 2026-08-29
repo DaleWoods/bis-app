@@ -399,20 +399,20 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
 
   // --- Reminders ----------------------------------------------------------
   if (automation.remind && state.status === 'OPEN') {
-    // The escalation hour is a reminder point like any other, just later and
+    // The escalation point is a reminder point like any other, just later and
     // sharper-worded - so it runs through the same claim/send/record path
     // rather than a separate one that could drift from it.
-    const points: Array<{ hours: number; escalation: boolean }> = [
-      ...config.cadence.reminderHoursBeforeCutOff.map((hours) => ({ hours, escalation: false })),
-      ...(config.cadence.escalationHoursBeforeCutOff !== null
-        ? [{ hours: config.cadence.escalationHoursBeforeCutOff, escalation: true }]
+    const points: Array<{ minutes: number; escalation: boolean }> = [
+      ...config.cadence.reminderMinutesBeforeCutOff.map((minutes) => ({ minutes, escalation: false })),
+      ...(config.cadence.escalationMinutesBeforeCutOff !== null
+        ? [{ minutes: config.cadence.escalationMinutesBeforeCutOff, escalation: true }]
         : []),
-    ].sort((a, b) => b.hours - a.hours);
+    ].sort((a, b) => b.minutes - a.minutes);
 
-    for (const { hours, escalation } of points) {
-      const due = cutOff - hours * 60 * 60 * 1000;
+    for (const { minutes, escalation } of points) {
+      const due = cutOff - minutes * 60 * 1000;
       if (now.getTime() < due || now.getTime() >= cutOff) continue;
-      const action = escalation ? `escalate:${hours}` : `remind:${hours}`;
+      const action = escalation ? `escalate:${minutes}` : `remind:${minutes}`;
       if (!(await claim(db, round.id, action, now))) continue;
       try {
         const scorers = await listActiveScorers(db);
@@ -430,7 +430,7 @@ async function runRound(db: Db, round: Round, config: AppConfig, now: Date, step
         const outcome = `Chased ${sent} of ${targets.length} outstanding member(s)`;
         await record(db, round.id, action, outcome);
         await audit(db, AUTOMATION_ACTOR, escalation ? 'round.escalate' : 'round.remind', 'round', round.id, {
-          hours,
+          minutes,
           sent,
           automated: true,
         });
