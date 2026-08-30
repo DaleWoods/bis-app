@@ -86,6 +86,7 @@ export function SettingsPage({ member }: { member: Member }) {
   const [overrideOpensInput, setOverrideOpensInput] = useState('');
   const [overrideCutOffInput, setOverrideCutOffInput] = useState('');
   const [savingOverride, setSavingOverride] = useState(false);
+  const [deletingBlocker, setDeletingBlocker] = useState(false);
 
   useEffect(() => {
     const active = config?.cadence.nextRoundOverride;
@@ -911,6 +912,40 @@ EMAIL_REPLY_TO=<where replies should go>`}
                 <p className="hint">
                   Setting one now would not fire immediately either — {createRoundsBlockedReason}.
                 </p>
+              ) : null}
+              {blockingRound ? (
+                <div className="row" style={{ gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={deletingBlocker}
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          `Delete ${blockingRound.weekLabel} and every score in it, to clear the way for the next round? This cannot be undone.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      setDeletingBlocker(true);
+                      setMessage('');
+                      setError('');
+                      try {
+                        await api.deleteRound(blockingRound.id);
+                        setMessage(`${blockingRound.weekLabel} deleted.`);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        await load();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Could not delete the round');
+                      } finally {
+                        setDeletingBlocker(false);
+                      }
+                    }}
+                  >
+                    {deletingBlocker ? 'Deleting…' : `Delete ${blockingRound.weekLabel} to unblock`}
+                  </button>
+                  <span className="hint">Or open it and finish it properly if it has real scores in it.</span>
+                </div>
               ) : null}
               <div className="row" style={{ gap: '0.35rem', marginBottom: '0.5rem' }}>
                 <button
