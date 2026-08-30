@@ -159,6 +159,10 @@ export function GuidePage({ member }: { member: Member }) {
             The Score page shows how many of the committee have completed the round so far — a count, never who, so
             you can see the round moving without anyone's individual answers being visible early.
           </li>
+          <li>
+            When a round has more than one ticket, a bar at the top shows every ticket as a badge — green once you
+            have scored it — so you can jump straight to whichever one is left instead of scrolling to find it.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks

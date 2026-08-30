@@ -197,6 +197,39 @@ export function ScorePage({ member, roundId }: Props) {
         </div>
       ) : null}
 
+      {scoringOpen && tickets.length > 1 ? (
+        <nav className="progress-rail" aria-label="Tickets in this round">
+          <div className="progress-rail-badges">
+            {tickets.map((ticket) => {
+              const isDone = submissions.some((s) => s.ticketId === ticket.id);
+              return (
+                <button
+                  key={ticket.id}
+                  type="button"
+                  className={`progress-badge${isDone ? ' done' : ''}`}
+                  onClick={() => document.getElementById(`ticket-${ticket.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  title={`${ticket.jiraId} — ${isDone ? 'scored' : 'not yet scored'}`}
+                >
+                  {ticket.jiraId}
+                </button>
+              );
+            })}
+          </div>
+          {outstanding > 0 ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                const next = tickets.find((t) => !submissions.some((s) => s.ticketId === t.id));
+                if (next) document.getElementById(`ticket-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              Jump to next unscored ({outstanding} left)
+            </button>
+          ) : null}
+        </nav>
+      ) : null}
+
       {tickets.map((ticket) => {
         const submission = submissions.find((s) => s.ticketId === ticket.id);
         return (

@@ -739,6 +739,42 @@ legend {
   background: #fdf0ef;
 }
 
+.progress-rail {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.progress-rail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex: 1;
+}
+.progress-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  color: var(--muted);
+  cursor: pointer;
+}
+.progress-badge.done {
+  background: #e3f2e8;
+  border-color: var(--high);
+  color: var(--high);
+}
+
 .bar {
   background: #e9e4dd;
   border-radius: 999px;
