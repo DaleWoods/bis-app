@@ -19,12 +19,11 @@ interface Props {
   }) => Promise<void>;
 }
 
-/** How far along its own scale a score sits, for the slider's filled track. */
-function fillPercent(category: Category, value: number): number {
-  const span = category.scaleMax - category.scaleMin;
-  if (span <= 0) return 0;
-  const clamped = Math.min(Math.max(value, category.scaleMin), category.scaleMax);
-  return ((clamped - category.scaleMin) / span) * 100;
+/** Every whole number on a category's scale, for one button per score. */
+function scoreOptions(category: Category): number[] {
+  const options: number[] = [];
+  for (let n = category.scaleMin; n <= category.scaleMax; n += 1) options.push(n);
+  return options;
 }
 
 /**
@@ -137,46 +136,42 @@ export function ScoreForm({
       ) : null}
 
       {relevance === 'YES' && categories.length > 0 ? (
-        <fieldset disabled={disabled}>
+        <fieldset disabled={readOnly}>
           <legend>Impact scores (0–10)</legend>
           <div className="score-grid">
             {categories.map((category) => {
               const inputId = `score-${ticket.id}-${category.id}`;
+              const current = scores[category.id] ?? 0;
               return (
                 <div className="score-row" key={category.id}>
-                  <label htmlFor={inputId} className="cat-name">
+                  <span id={`${inputId}-label`} className="cat-name">
                     {category.name}
                     <span className="cat-desc">{category.description}</span>
-                  </label>
-                  {/* The ends of the scale belong at the ends of the slider.
-                      They used to be a third line of small print under every
-                      category name, seven times per ticket. */}
-                  <div className="score-slider">
-                    <input
-                      id={inputId}
-                      type="range"
-                      min={category.scaleMin}
-                      max={category.scaleMax}
-                      step={1}
-                      value={scores[category.id] ?? 0}
-                      /*
-                       * The filled part of the track is how a row of sliders
-                       * can be read at a glance. WebKit gives no equivalent of
-                       * Firefox's ::-moz-range-progress, so the proportion is
-                       * handed to CSS and painted as a gradient.
-                       */
-                      style={{ '--fill': `${fillPercent(category, scores[category.id] ?? 0)}%` } as React.CSSProperties}
-                      onChange={(event) => setScores({ ...scores, [category.id]: Number(event.target.value) })}
-                      aria-describedby={`${inputId}-out`}
-                    />
+                  </span>
+                  {/* One click, not a drag-to-land-on-a-number - the slider
+                      this replaced was real friction across seven categories
+                      a ticket, and worse on a phone. */}
+                  <div className="score-picker">
+                    <div className="score-buttons" role="group" aria-labelledby={`${inputId}-label`}>
+                      {scoreOptions(category).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          id={n === category.scaleMin ? inputId : undefined}
+                          className={`score-btn${current === n ? ' selected' : ''}`}
+                          aria-pressed={current === n}
+                          disabled={readOnly}
+                          onClick={() => setScores({ ...scores, [category.id]: n })}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
                     <div className="scale-ends" aria-hidden="true">
                       <span>{category.zeroLabel}</span>
                       <span>{category.maxLabel}</span>
                     </div>
                   </div>
-                  <output id={`${inputId}-out`} htmlFor={inputId}>
-                    {scores[category.id] ?? 0}
-                  </output>
                 </div>
               );
             })}
@@ -188,7 +183,7 @@ export function ScoreForm({
       ) : null}
 
       {relevance === 'NO_CLOSE' || relevance === 'NO_NOT_RELEVANT_TODAY' ? (
-        <fieldset disabled={disabled}>
+        <fieldset disabled={readOnly}>
           <legend>{relevance === 'NO_CLOSE' ? 'Reason for closure' : 'Why is it not relevant today?'}</legend>
           <div className="field">
             <label htmlFor={`reason-${ticket.id}`}>Reason</label>

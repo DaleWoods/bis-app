@@ -625,7 +625,7 @@ legend {
 }
 .score-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 2fr) 3rem;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(220px, 2fr);
   gap: 0.9rem;
   align-items: center;
   padding: 0.55rem 0;
@@ -650,9 +650,9 @@ legend {
   line-height: 1.35;
 }
 
-.score-slider {
+.score-picker {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.3rem;
 }
 /* The ends of the scale, sized so they inform without competing. */
 .scale-ends {
@@ -667,74 +667,47 @@ legend {
 }
 
 /*
- * The slider is the one control on this page, and the browser default is a
- * blue that belongs to no part of this app. Track and thumb are styled to the
- * brand, with a thumb big enough to be a comfortable target.
+ * One button per whole number on the scale - a click lands exactly on a
+ * number every time, which a drag never quite guaranteed, and the touch
+ * target is a fixed size regardless of hand or screen instead of a few
+ * pixels of slider thumb.
  */
-.score-row input[type='range'] {
-  width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  height: 1.35rem;
-  margin: 0;
+.score-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.score-btn {
+  min-width: 2.15rem;
+  height: 2.15rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
   cursor: pointer;
 }
-.score-row input[type='range']::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--brand) 0 var(--fill, 0%),
-    #ddd3c8 var(--fill, 0%) 100%
-  );
+.score-btn:hover:not(:disabled) {
+  border-color: var(--brand);
 }
-.score-row input[type='range']::-moz-range-track {
-  height: 5px;
-  border-radius: 999px;
-  background: #ddd3c8;
+.score-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
-.score-row input[type='range']::-moz-range-progress {
-  height: 5px;
-  border-radius: 999px;
+.score-btn.selected {
   background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
-.score-row input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 50%;
-  background: var(--brand);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
-  margin-top: -0.35rem;
+.score-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
-.score-row input[type='range']::-moz-range-thumb {
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 50%;
-  background: var(--brand);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(16, 34, 51, 0.35);
-}
-.score-row input[type='range']:disabled::-webkit-slider-thumb {
-  background: var(--muted);
-}
-.score-row input[type='range']:disabled::-moz-range-thumb {
-  background: var(--muted);
-}
-
-.score-row output {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 1rem;
-  text-align: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.3rem 0;
-  background: var(--panel-alt);
-  color: var(--brand);
+.score-btn.selected:disabled {
+  opacity: 0.85;
 }
 .total-line {
   font-weight: 700;
