@@ -175,6 +175,20 @@ export interface MemberProgress {
   complete: boolean;
 }
 
+/**
+ * This round's completion, plus the reader's own record within it. `completed`
+ * and `total` are a count and never who; `yourPosition` and `streak` are the
+ * reader's own and nobody else's.
+ */
+export interface Participation {
+  completed: number;
+  total: number;
+  /** Where you came in among those who have finished; null until you have. */
+  yourPosition: number | null;
+  /** Finalised rounds in a row you finished, before this one. */
+  streak: number;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -337,8 +351,8 @@ export const api = {
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
-      /** How many of the committee have finished so far - a count, never who. */
-      participation?: { completed: number; total: number };
+      /** How many of the committee have finished so far, and your own record. */
+      participation?: Participation;
     }>('/api/my/round'),
   roundParticipation: (limit = 8) =>
     request<{
@@ -352,7 +366,7 @@ export const api = {
       tickets: Ticket[];
       submissions: Submission[];
       categories: Category[];
-      participation?: { completed: number; total: number };
+      participation?: Participation;
     }>(`/api/rounds/${roundId}/my-submissions`),
   saveSubmission: (
     roundId: string,

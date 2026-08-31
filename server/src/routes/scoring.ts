@@ -8,9 +8,18 @@ import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
 import { listActiveScorers } from '../services/memberService.js';
 import { getActiveRound, getRound, isScoringOpen, listRoundTickets, listRounds } from '../services/roundService.js';
-import { listMemberSubmissions, roundProgress, saveSubmission } from '../services/submissionService.js';
+import { listMemberSubmissions, memberStreak, roundProgress, saveSubmission } from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
+
+interface ParticipationSummary {
+  completed: number;
+  total: number;
+  /** Where this member came in among those who have finished; null until they have. */
+  yourPosition: number | null;
+  /** Finalised rounds in a row they finished, before this one. */
+  streak: number;
+}
 
 /**
  * How many of the committee have finished this round so far - a count, never
@@ -18,11 +27,30 @@ import { actorOf, asyncHandler } from './helpers.js';
  * committee while a round is open (§9); a completion count is not that, and
  * seeing that other people are getting on with it is most of what keeps a
  * round from being ignored until the last day.
+ *
+ * The position and the streak are the reader's own record and nobody else's:
+ * being told you came fourth says no more about the other three than the count
+ * already did, and both give somebody who has finished a reason to do it again
+ * - which is the actual problem here, not the scoring.
  */
-async function participationSummary(db: Db, roundId: string, ticketCount: number): Promise<{ completed: number; total: number }> {
+async function participationSummary(
+  db: Db,
+  roundId: string,
+  ticketCount: number,
+  memberId: string,
+): Promise<ParticipationSummary> {
   const scorers = await listActiveScorers(db);
   const progress = await roundProgress(db, roundId, scorers, ticketCount);
-  return { completed: progress.filter((p) => p.complete).length, total: progress.length };
+  const finishers = progress
+    .filter((p) => p.complete && p.lastSubmittedAt)
+    .sort((a, b) => a.lastSubmittedAt!.localeCompare(b.lastSubmittedAt!));
+  const position = finishers.findIndex((p) => p.memberId === memberId);
+  return {
+    completed: progress.filter((p) => p.complete).length,
+    total: progress.length,
+    yourPosition: position === -1 ? null : position + 1,
+    streak: await memberStreak(db, memberId),
+  };
 }
 
 const router = Router();
@@ -91,7 +119,7 @@ router.get(
       tickets,
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
       categories: await listCategories(db),
-      participation: await participationSummary(db, round.id, tickets.length),
+      participation: await participationSummary(db, round.id, tickets.length, req.member!.id),
     });
   }),
 );
@@ -118,7 +146,7 @@ router.get(
       tickets,
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
       categories: await listCategories(db),
-      participation: await participationSummary(db, round.id, tickets.length),
+      participation: await participationSummary(db, round.id, tickets.length, req.member!.id),
     });
   }),
 );

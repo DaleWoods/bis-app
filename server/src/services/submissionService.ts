@@ -335,6 +335,49 @@ export async function outstandingTicketsByMember(
   );
 }
 
+/**
+ * How many finalised rounds in a row, counting back from the most recent, this
+ * member finished - stopping at the first one they left unfinished.
+ *
+ * A run of rounds you have kept up is the one number that makes missing the
+ * next one cost something, which is most of why it is here: an average of five
+ * of twelve scoring is not a comprehension problem, it is nobody minding
+ * whether they do. It counts back rather than totalling, because "you have
+ * done the last four" is a thing to keep going and "you have done 23 in your
+ * time here" is not.
+ *
+ * A held ticket never reached the committee, so requiring it would break the
+ * run of everyone who scored everything they were actually shown. Rounds with
+ * nothing in them teach nothing either way and are skipped without breaking
+ * the run - and so, harmlessly, are the rounds before a member joined, since
+ * the walk stops at the first round they did not complete.
+ */
+export async function memberStreak(db: Db, memberId: string, limit = 52): Promise<number> {
+  const rounds = await db.all<{ id: string; ticket_count: number }>(
+    `SELECT r.id, (SELECT COUNT(*) FROM round_tickets rt WHERE rt.round_id = r.id AND rt.held = 0) AS ticket_count
+     FROM rounds r WHERE r.status = 'FINALISED' ORDER BY r.cut_off_at DESC LIMIT ?`,
+    [limit],
+  );
+  const considered = rounds.filter((r) => Number(r.ticket_count) > 0);
+  if (!considered.length) return 0;
+
+  const roundIds = considered.map((r) => r.id);
+  const placeholders = roundIds.map(() => '?').join(',');
+  const rows = await db.all<{ round_id: string; submitted: number }>(
+    `SELECT round_id, COUNT(*) AS submitted FROM submissions
+     WHERE member_id = ? AND round_id IN (${placeholders}) AND archived = 0 GROUP BY round_id`,
+    [memberId, ...roundIds],
+  );
+  const submittedByRound = new Map(rows.map((r) => [r.round_id, Number(r.submitted)]));
+
+  let streak = 0;
+  for (const round of considered) {
+    if ((submittedByRound.get(round.id) ?? 0) < Number(round.ticket_count)) break;
+    streak += 1;
+  }
+  return streak;
+}
+
 export interface MemberParticipation {
   memberId: string;
   memberName: string;

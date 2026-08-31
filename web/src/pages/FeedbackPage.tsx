@@ -50,6 +50,20 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
   const typicalGap = scoredByYou.length
     ? scoredByYou.reduce((sum, t) => sum + Math.abs(t.yourTotal! - t.businessScore!), 0) / scoredByYou.length
     : 0;
+  /*
+    The two things worth reading on this page were both buried: which tickets
+    the room actually disagreed about, and which one you personally were
+    furthest from everyone else on. Both were recoverable from the table by
+    anyone willing to scan seven columns, which is nobody. A round nobody reads
+    the result of is a round people stop scoring, so they lead now.
+  */
+  const split = tickets.filter((t) => t.discussionRequired);
+  const furthest = scoredByYou.reduce<(typeof scoredByYou)[number] | null>(
+    (worst, t) =>
+      !worst || Math.abs(t.yourTotal! - t.businessScore!) > Math.abs(worst.yourTotal! - worst.businessScore!) ? t : worst,
+    null,
+  );
+  const furthestGap = furthest ? furthest.yourTotal! - furthest.businessScore! : 0;
 
   return (
     <>
@@ -60,6 +74,49 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
       </p>
 
       <h2>The round at a glance</h2>
+
+      <div className="takeaways">
+        <div className="takeaway">
+          <h3>What split the room</h3>
+          {split.length ? (
+            <>
+              <p>
+                {split.length === 1 ? 'One ticket' : `${split.length} tickets`} had scores too far apart to average, so{' '}
+                {split.length === 1 ? 'it went' : 'they went'} to a discussion rather than straight to a number.
+              </p>
+              <ul>
+                {split.map((ticket) => (
+                  <li key={ticket.jiraId}>
+                    <strong>{ticket.jiraId}</strong> — spread {ticket.stdDev === null ? '—' : ticket.stdDev.toFixed(1)}
+                    {ticket.discussionOutcome ? `, settled as ${ticket.discussionOutcome.toLowerCase()}` : ', still to be talked through'}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>
+              Nobody was far apart on anything this round — every ticket was close enough to average straight to a
+              score.
+            </p>
+          )}
+        </div>
+
+        <div className="takeaway">
+          <h3>Your furthest call</h3>
+          {furthest && Math.abs(furthestGap) > 0 ? (
+            <p>
+              <strong>{furthest.jiraId}</strong> — you had it at {furthest.yourTotal}, the committee at{' '}
+              {furthest.businessScore}. You were <strong>{Math.abs(furthestGap)} points {furthestGap > 0 ? 'above' : 'below'}</strong>{' '}
+              them. That is not a mistake to correct; it is the disagreement the spread exists to find.
+            </p>
+          ) : scoredByYou.length ? (
+            <p>You landed on the committee's number on every ticket you scored this round.</p>
+          ) : (
+            <p>You didn't score anything in this round, so there is nothing of yours to compare.</p>
+          )}
+        </div>
+      </div>
+
       <div className="card">
         {scoredByYou.length ? (
           <p className="lede" style={{ marginTop: 0 }}>

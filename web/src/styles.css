@@ -775,6 +775,161 @@ legend {
   color: var(--high);
 }
 
+/* How much of the committee has finished - a count made visible, never who. */
+.committee-progress {
+  margin-top: 0.6rem;
+}
+.committee-bar {
+  background: #e9e4dd;
+  border-radius: 999px;
+  height: 0.5rem;
+  overflow: hidden;
+  margin-bottom: 0.3rem;
+}
+.committee-bar span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.streak {
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+  color: var(--gold-text);
+  font-weight: 600;
+}
+
+/* Finishing the round. Deliberately not a .notice - it is the one thing on
+   this page that is an achievement rather than an instruction. */
+.round-done {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--high);
+  border-left: 4px solid var(--high);
+  background: #f1f8f3;
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+}
+.round-done h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: var(--high);
+}
+.round-done p {
+  margin: 0 0 0.4rem;
+}
+.round-done .hint {
+  margin-bottom: 0;
+}
+.round-done.celebrate {
+  animation: round-done-pop 0.45s ease-out;
+}
+@keyframes round-done-pop {
+  from {
+    transform: scale(0.97);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti span {
+  position: absolute;
+  top: -12px;
+  width: 7px;
+  height: 11px;
+  border-radius: 1px;
+  opacity: 0;
+  animation: confetti-fall 1.5s ease-in forwards;
+}
+.confetti span:nth-child(3n) {
+  background: var(--gold);
+}
+.confetti span:nth-child(3n + 1) {
+  background: var(--brand);
+}
+.confetti span:nth-child(3n + 2) {
+  background: var(--high);
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(150px) rotate(320deg);
+  }
+}
+
+/* One click for "none of this touches my area", above the seven rows. */
+.quick-score {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+.quick-score .hint {
+  margin: 0;
+}
+
+/* The two things worth reading on the feedback page, before the tables. */
+.takeaways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.takeaway {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+.takeaway h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.takeaway p,
+.takeaway ul {
+  margin: 0 0 0.5rem;
+}
+.takeaway ul {
+  padding-left: 1.1rem;
+}
+.takeaway p:last-child,
+.takeaway ul:last-child {
+  margin-bottom: 0;
+}
+
+/* None of the motion above carries meaning of its own. */
+@media (prefers-reduced-motion: reduce) {
+  .round-done.celebrate {
+    animation: none;
+  }
+  .confetti {
+    display: none;
+  }
+  .committee-bar span {
+    transition: none;
+  }
+}
+
 .bar {
   background: #e9e4dd;
   border-radius: 999px;

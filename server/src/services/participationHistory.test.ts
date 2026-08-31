@@ -5,7 +5,7 @@ import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, listCategories
 import { addTicketToRound, createRound, setRoundStatus, type Round } from './roundService.js';
 import { getTicket, upsertTicket } from './ticketService.js';
 import { saveMember, type Member } from './memberService.js';
-import { participationHistory, saveSubmission } from './submissionService.js';
+import { memberStreak, participationHistory, saveSubmission } from './submissionService.js';
 
 let db: Db;
 let alice: Member;
@@ -86,5 +86,63 @@ describe('participationHistory', () => {
     // Not finalised, and has no tickets - neither should count.
     const history = await participationHistory(db, [alice], 8);
     expect(history[0]).toMatchObject({ roundsCompleted: 0, roundsConsidered: 0 });
+  });
+});
+
+describe('memberStreak', () => {
+  /** `count` finalised rounds of one ticket each, oldest first, scored by whoever `scoredBy` says. */
+  async function finalisedRounds(count: number, scoredBy: (index: number) => Member[]): Promise<void> {
+    for (let i = 0; i < count; i += 1) {
+      const round = await openRound(`Week ${i}`, 1, `2099-0${i + 1}-01T00:00:00.000Z`);
+      const [{ ticket_id }] = await db.all<{ ticket_id: string }>(
+        'SELECT ticket_id FROM round_tickets WHERE round_id = ?',
+        [round.id],
+      );
+      for (const member of scoredBy(i)) await score(round, member, ticket_id);
+      await finalise(round);
+    }
+  }
+
+  it('counts back from the most recent round and stops at the first one missed', async () => {
+    // Alice scores rounds 0, 2, 3 - so counting back from the newest her run is 2, not 3.
+    await finalisedRounds(4, (i) => (i === 1 ? [] : [alice]));
+    expect(await memberStreak(db, alice.id)).toBe(2);
+  });
+
+  it('is zero for somebody who missed the most recent round, however many they did before', async () => {
+    await finalisedRounds(3, (i) => (i === 2 ? [] : [alice]));
+    expect(await memberStreak(db, alice.id)).toBe(0);
+  });
+
+  it('does not count a round that is still open', async () => {
+    await finalisedRounds(1, () => [alice]);
+    const open = await openRound('This week', 1);
+    const [{ ticket_id }] = await db.all<{ ticket_id: string }>('SELECT ticket_id FROM round_tickets WHERE round_id = ?', [
+      open.id,
+    ]);
+    await score(open, alice, ticket_id);
+    // The round she just finished has not finalised, so it is not part of the run yet.
+    expect(await memberStreak(db, alice.id)).toBe(1);
+  });
+
+  it('does not break a run on a ticket the committee was never shown', async () => {
+    await finalisedRounds(2, () => [alice]);
+    const round = await openRound('Held week', 2, '2099-09-01T00:00:00.000Z');
+    const tickets = await db.all<{ ticket_id: string }>('SELECT ticket_id FROM round_tickets WHERE round_id = ?', [
+      round.id,
+    ]);
+    // One ticket is held back, so only the other one ever reached her.
+    await db.run('UPDATE round_tickets SET held = 1 WHERE round_id = ? AND ticket_id = ?', [
+      round.id,
+      tickets[1].ticket_id,
+    ]);
+    await score(round, alice, tickets[0].ticket_id);
+    await finalise(round);
+    expect(await memberStreak(db, alice.id)).toBe(3);
+  });
+
+  it('is zero when nothing has finalised yet', async () => {
+    await openRound('This week', 1);
+    expect(await memberStreak(db, alice.id)).toBe(0);
   });
 });

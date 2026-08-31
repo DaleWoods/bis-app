@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { api, formatDateTime, isCoordinator, type Category, type Member, type Relevance, type Round, type Submission, type Ticket } from '../api';
+import {
+  api,
+  formatDateTime,
+  isCoordinator,
+  type Category,
+  type Member,
+  type Participation,
+  type Relevance,
+  type Round,
+  type Submission,
+  type Ticket,
+} from '../api';
 import { Link } from '../router';
 import { TicketCard } from '../components/TicketCard';
 import { ScoreForm } from '../components/ScoreForm';
@@ -8,6 +19,69 @@ import { Countdown } from '../components/Countdown';
 interface Props {
   member: Member;
   roundId?: string;
+}
+
+/**
+ * What the work left actually costs, in minutes, so somebody deciding whether
+ * to start now has the number in front of them instead of guessing high. A
+ * minute a ticket is a display estimate and decides nothing, so it stays a
+ * constant here rather than becoming another setting to maintain.
+ */
+const SECONDS_PER_TICKET = 60;
+
+function estimatedMinutes(ticketCount: number): string {
+  const minutes = Math.max(1, Math.round((ticketCount * SECONDS_PER_TICKET) / 60));
+  return minutes === 1 ? 'about a minute' : `about ${minutes} minutes`;
+}
+
+function ordinal(n: number): string {
+  const teens = n % 100;
+  if (teens >= 11 && teens <= 13) return `${n}th`;
+  if (n % 10 === 1) return `${n}st`;
+  if (n % 10 === 2) return `${n}nd`;
+  if (n % 10 === 3) return `${n}rd`;
+  return `${n}th`;
+}
+
+/**
+ * The committee's progress as a bar rather than a sentence. Still a count and
+ * never who - but a round that is visibly half done is harder to leave than
+ * the same fact in prose, and being last is the thing people notice.
+ */
+function CommitteeBar({ completed, total }: { completed: number; total: number }) {
+  if (total <= 0) return null;
+  const percent = Math.round((completed / total) * 100);
+  return (
+    <div className="committee-progress">
+      <div
+        className="committee-bar"
+        role="img"
+        aria-label={`${completed} of ${total} committee members have finished this round`}
+      >
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      {/* The noun follows the group, the verb follows the count: "1 of 5
+          members has finished", "3 of 5 members have". */}
+      <span className="hint">
+        {completed} of {total} {total === 1 ? 'member' : 'members'} {completed === 1 ? 'has' : 'have'} finished this
+        round
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Purely decorative, and shown once - at the moment the last ticket goes in,
+ * never again on a revisit. Finishing should feel like finishing.
+ */
+function Confetti() {
+  return (
+    <div className="confetti" aria-hidden="true">
+      {Array.from({ length: 14 }, (_, i) => (
+        <span key={i} style={{ left: `${i * 7 + 3}%`, animationDelay: `${(i % 5) * 0.12}s` }} />
+      ))}
+    </div>
+  );
 }
 
 /** The committee member's view: score the open round, see only your own answers (§9). */
@@ -25,9 +99,11 @@ export function ScorePage({ member, roundId }: Props) {
   /** The round to look back at, whether or not one is currently open. */
   const [lastFinalised, setLastFinalised] = useState<Round | null>(null);
   const [lastFinalisedIncludesYou, setLastFinalisedIncludesYou] = useState(false);
-  /** How many of the committee have finished so far - a count, never who. */
-  const [participation, setParticipation] = useState<{ completed: number; total: number } | null>(null);
+  /** This round's completion count, and the reader's own position and run. */
+  const [participation, setParticipation] = useState<Participation | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  /** True only for the visit in which the last ticket was submitted. */
+  const [justFinished, setJustFinished] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +139,20 @@ export function ScorePage({ member, roundId }: Props) {
       cancelled = true;
     };
   }, [roundId]);
+
+  /**
+   * Re-read just the counts after a submission. A failure here costs the
+   * reader a stale number on a panel, which is not worth an error message
+   * over the score they successfully gave.
+   */
+  async function refreshParticipation() {
+    try {
+      const data = roundId ? await api.myRoundSubmissions(roundId) : await api.myRound();
+      setParticipation(('participation' in data && data.participation) || null);
+    } catch {
+      /* keep the number that is already on screen */
+    }
+  }
 
   if (loading) return <p>Loading…</p>;
   if (error) return <p className="status error">{error}</p>;
@@ -147,6 +237,9 @@ export function ScorePage({ member, roundId }: Props) {
 
   const done = submissions.length;
   const outstanding = Math.max(tickets.length - done, 0);
+  // The scale is configurable, so the lede reads it rather than claiming 0-10.
+  const scaleMin = categories[0]?.scaleMin ?? 0;
+  const scaleMax = categories[0]?.scaleMax ?? 10;
 
   // An empty round is not a finished one. "0 of 0 — all done, thank you" read
   // as "you have nothing left to do" when it actually meant the coordinator had
@@ -172,24 +265,57 @@ export function ScorePage({ member, roundId }: Props) {
       <h1>{round.weekLabel}</h1>
       {feedbackBanner}
       <p className="lede">
-        Score each ticket 0–10 across the seven categories. Cut-off <strong>{formatDateTime(round.cutOffAt)}</strong>{' '}
-        <Countdown target={round.cutOffAt} /> — take your time before submitting each one, since a score is given
-        once and cannot be changed. Nobody else sees your individual scores while the round is open.
+        Score each ticket {scaleMin}–{scaleMax} across the {categories.length} categories. Cut-off{' '}
+        <strong>{formatDateTime(round.cutOffAt)}</strong> <Countdown target={round.cutOffAt} /> — take your time before
+        submitting each one, since a score is given once and cannot be changed. Nobody else sees your individual scores
+        while the round is open.
       </p>
 
-      <div className="notice" role="status">
-        You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong>{' '}
-        {tickets.length === 1 ? 'ticket' : 'tickets'}
-        {outstanding > 0 ? ` — ${outstanding} to go.` : '.'}
-        {participation && participation.total > 0 ? (
-          <>
-            {' '}
-            <span className="hint">
-              {participation.completed} of {participation.total} committee members have completed this round so far.
-            </span>
-          </>
-        ) : null}
-      </div>
+      {outstanding === 0 ? (
+        /*
+          Finishing is the only part of this that is anybody's own achievement,
+          and it used to read the same as being half way through. The run and
+          the finishing position are the reader's own record - the point is to
+          give somebody who has just finished a reason to do it again, which is
+          the actual problem here rather than the scoring itself.
+        */
+        <div className={`round-done${justFinished ? ' celebrate' : ''}`} role="status">
+          {justFinished ? <Confetti /> : null}
+          <h2>That is {round.weekLabel} done.</h2>
+          <p>
+            {tickets.length === 1 ? 'The ticket is scored' : `All ${tickets.length} tickets scored`}
+            {participation?.yourPosition ? (
+              <>
+                {' '}
+                — you were <strong>{ordinal(participation.yourPosition)}</strong> of {participation.total} to finish
+              </>
+            ) : null}
+            .{' '}
+            {participation && participation.streak > 0 ? (
+              <>
+                That is <strong>{participation.streak + 1} rounds in a row</strong>, counting this one.
+              </>
+            ) : null}
+          </p>
+          {participation ? <CommitteeBar completed={participation.completed} total={participation.total} /> : null}
+          <p className="hint">
+            Nothing else is outstanding from you. You will get an email when the round is finalised, and the feedback
+            for it shows how your scores sat against the committee's.
+          </p>
+        </div>
+      ) : (
+        <div className="notice" role="status">
+          You have scored <strong>{done}</strong> of <strong>{tickets.length}</strong>{' '}
+          {tickets.length === 1 ? 'ticket' : 'tickets'} — <strong>{outstanding} to go</strong>,{' '}
+          {estimatedMinutes(outstanding)}.
+          {participation ? <CommitteeBar completed={participation.completed} total={participation.total} /> : null}
+          {participation && participation.streak >= 2 ? (
+            <p className="streak">
+              You have finished the last <strong>{participation.streak}</strong> rounds in a row.
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {!scoringOpen ? (
         <div className="notice warn">
@@ -246,16 +372,18 @@ export function ScorePage({ member, roundId }: Props) {
               disabledReason="Scoring is closed for this round."
               onSave={async (payload) => {
                 const { submission: saved } = await api.saveSubmission(round.id, ticket.id, payload);
-                setSubmissions((current) => {
-                  const next = [...current.filter((s) => s.ticketId !== ticket.id), saved];
-                  // The "that's everything" notice and the confirmation live at
-                  // the top of the page - easy to miss if the last ticket
-                  // scored was the one at the bottom of a long list.
-                  if (next.length === tickets.length && current.length < tickets.length) {
-                    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-                  }
-                  return next;
-                });
+                const next = [...submissions.filter((s) => s.ticketId !== ticket.id), saved];
+                // The "that's everything" panel lives at the top of the page -
+                // easy to miss if the last ticket scored was the one at the
+                // bottom of a long list, and it is the whole payoff.
+                if (next.length === tickets.length && submissions.length < tickets.length) {
+                  setJustFinished(true);
+                  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+                }
+                setSubmissions(next);
+                // The committee's count moves while you are on the page, and
+                // your own finishing position only exists once you finish.
+                refreshParticipation();
               }}
             />
           </TicketCard>

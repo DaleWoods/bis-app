@@ -167,6 +167,19 @@ export function GuidePage({ member }: { member: Member }) {
             If you get pulled away mid-ticket, your picks for that ticket are kept on this device until you come back
             — nothing is submitted until you press "Submit my score", so an interruption never means starting over.
           </li>
+          <li>
+            The top of the page says how many you have left and roughly how long that will take, and shows how much of
+            the committee has finished — a count, never who.
+          </li>
+          <li>
+            If a ticket genuinely doesn't touch your area, there is a button above the marks that sets them all to the
+            lowest in one go. It is a real answer, not a shortcut past one — you still submit it yourself, and you can
+            change any of the marks first.
+          </li>
+          <li>
+            Finish everything in a round and the page says so, along with where you came in and how many rounds you
+            have finished in a row.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks
