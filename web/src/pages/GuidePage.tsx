@@ -163,6 +163,10 @@ export function GuidePage({ member }: { member: Member }) {
             When a round has more than one ticket, a bar at the top shows every ticket as a badge — green once you
             have scored it — so you can jump straight to whichever one is left instead of scrolling to find it.
           </li>
+          <li>
+            If you get pulled away mid-ticket, your picks for that ticket are kept on this device until you come back
+            — nothing is submitted until you press "Submit my score", so an interruption never means starting over.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks

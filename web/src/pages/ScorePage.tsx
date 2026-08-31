@@ -236,6 +236,7 @@ export function ScorePage({ member, roundId }: Props) {
           <TicketCard ticket={ticket} key={ticket.id}>
             <ScoreForm
               ticket={ticket}
+              roundId={round.id}
               categories={categories}
               relevanceOptions={relevanceOptions}
               closureReasons={closureReasons}

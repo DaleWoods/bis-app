@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Category, Relevance, Submission, Ticket } from '../api';
 
 interface Props {
   ticket: Ticket;
+  roundId: string;
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
   closureReasons: string[];
@@ -26,12 +27,57 @@ function scoreOptions(category: Category): number[] {
   return options;
 }
 
+interface Draft {
+  relevance: Relevance;
+  scores: Record<string, number>;
+  closureReason: string;
+  closureInfo: string;
+  moreInfo: string;
+}
+
+function draftKey(roundId: string, ticketId: string, memberEmail: string): string {
+  return `bis-draft-${roundId}-${ticketId}-${memberEmail.toLowerCase()}`;
+}
+
+/*
+  Getting through a round rarely happens in one sitting - a member starts on
+  their phone between meetings, gets pulled away mid-ticket, and comes back
+  later to a blank form. Nothing here is submitted or scored; it is just
+  today's un-submitted picks, kept on this device only, so starting over is
+  never the price of an interruption.
+*/
+function loadDraft(key: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(key: string, draft: Draft): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    // Private browsing or a full quota - the draft just does not persist.
+  }
+}
+
+function clearDraft(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * The native in-app scoring form that replaces the Microsoft Form: the §8
  * relevance question first, then 0–10 for each category (§6), plus notes.
  */
 export function ScoreForm({
   ticket,
+  roundId,
   categories,
   relevanceOptions,
   closureReasons,
@@ -41,15 +87,33 @@ export function ScoreForm({
   disabledReason,
   onSave,
 }: Props) {
-  const [relevance, setRelevance] = useState<Relevance>(submission?.relevance ?? 'YES');
-  const [scores, setScores] = useState<Record<string, number>>(() => {
-    const initial: Record<string, number> = {};
-    for (const category of categories) initial[category.id] = submission?.scores?.[category.id] ?? 0;
-    return initial;
-  });
-  const [closureReason, setClosureReason] = useState(submission?.closureReason ?? '');
-  const [closureInfo, setClosureInfo] = useState(submission?.closureInfo ?? '');
-  const [moreInfo, setMoreInfo] = useState(submission?.moreInfo ?? '');
+  const key = draftKey(roundId, ticket.id, memberEmail);
+  // Read once, at mount - not on every render, and never once a submission exists.
+  const [draftAtMount] = useState<Draft | null>(() => (submission ? null : loadDraft(key)));
+  // The starting point every field is measured against - a resumed draft, a
+  // submission's own answer, or the plain defaults. Kept alongside the live
+  // state so the save effect can tell "still exactly what was there at
+  // mount" from "the member changed something" without depending on which
+  // render an effect happens to fire on - React 18 Strict Mode runs mount
+  // effects twice in development, and a "first write" flag would only catch
+  // one of those two runs.
+  const [initialDraft] = useState<Draft>(() => ({
+    relevance: draftAtMount?.relevance ?? submission?.relevance ?? 'YES',
+    scores: (() => {
+      const initial: Record<string, number> = {};
+      for (const category of categories)
+        initial[category.id] = draftAtMount?.scores?.[category.id] ?? submission?.scores?.[category.id] ?? 0;
+      return initial;
+    })(),
+    closureReason: draftAtMount?.closureReason ?? submission?.closureReason ?? '',
+    closureInfo: draftAtMount?.closureInfo ?? submission?.closureInfo ?? '',
+    moreInfo: draftAtMount?.moreInfo ?? submission?.moreInfo ?? '',
+  }));
+  const [relevance, setRelevance] = useState<Relevance>(initialDraft.relevance);
+  const [scores, setScores] = useState<Record<string, number>>(initialDraft.scores);
+  const [closureReason, setClosureReason] = useState(initialDraft.closureReason);
+  const [closureInfo, setClosureInfo] = useState(initialDraft.closureInfo);
+  const [moreInfo, setMoreInfo] = useState(initialDraft.moreInfo);
   const [status, setStatus] = useState<{ tone: 'saved' | 'error' | ''; message: string }>({ tone: '', message: '' });
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +128,23 @@ export function ScoreForm({
   */
   const locked = Boolean(submission) && !submission?.archived;
   const readOnly = disabled || locked;
+
+  // A draft can only outlive its own submission if something saved it after
+  // the submit already cleared it (a second tab, an earlier device) - rare,
+  // but worth sweeping up rather than leaving a dead entry in storage.
+  useEffect(() => {
+    if (submission) clearDraft(key);
+  }, [key, submission]);
+
+  // Only write once something differs from where the form started - an
+  // untouched ticket never gets a "draft" of its own blank defaults, so the
+  // resume hint only ever appears where something was actually left mid-way.
+  useEffect(() => {
+    if (locked) return;
+    const current: Draft = { relevance, scores, closureReason, closureInfo, moreInfo };
+    if (JSON.stringify(current) === JSON.stringify(initialDraft)) return;
+    saveDraft(key, current);
+  }, [key, locked, relevance, scores, closureReason, closureInfo, moreInfo, initialDraft]);
 
   const isRequestor = Boolean(ticket.originalRequestor) && ticket.originalRequestor.toLowerCase() === memberEmail.toLowerCase();
   const total = useMemo(
@@ -83,6 +164,7 @@ export function ScoreForm({
         closureInfo: closureInfo || undefined,
         moreInfo: moreInfo || undefined,
       });
+      clearDraft(key);
       setStatus({ tone: 'saved', message: 'Scored. That is your answer for this round.' });
     } catch (err) {
       setStatus({ tone: 'error', message: err instanceof Error ? err.message : 'Could not save' });
@@ -101,6 +183,10 @@ export function ScoreForm({
           independently is what makes the spread worth reading. If yours needs correcting, ask whoever is running the
           round to exclude it and you can score it again.
         </div>
+      ) : null}
+
+      {!locked && draftAtMount ? (
+        <p className="hint">Picked up where you left off on this ticket — nothing here is submitted yet.</p>
       ) : null}
 
       <fieldset disabled={readOnly}>
