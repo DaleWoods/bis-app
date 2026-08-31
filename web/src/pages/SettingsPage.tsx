@@ -426,6 +426,14 @@ export function SettingsPage({ member }: { member: Member }) {
               position. Ranking uses the Business Score field below and the effort fields from the scoring section,
               so those need to be set too.
             </p>
+            <p className="hint">
+              Include a status for a ticket that needs both sides of the work, not just the frontend- and
+              backend-only ones — it usually has its own status ("Rdy Development", "Ready For Development") rather
+              than sitting under the frontend one and the backend one at once. Leave it out of the JQL and that
+              ticket does not appear in the wrong queue, it disappears from the hopper entirely. Which queue it lands
+              in is decided by the effort fields, not the status name — anything scored on both sides shows up in
+              both automatically.
+            </p>
           </div>
           <label htmlFor="queueEnabled" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
             <input id="queueEnabled" name="queueEnabled" type="checkbox" defaultChecked={config.queue.enabled} />

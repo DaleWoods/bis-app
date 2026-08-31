@@ -316,6 +316,10 @@ export function GuidePage({ member }: { member: Member }) {
             A ticket that has been scored but has no effort estimate on either side is not in a queue at all. It is
             listed separately rather than hidden, because "it has vanished" is the thing people notice.
           </li>
+          <li>
+            "Where's my ticket?" at the top jumps straight to it — type or pick a JIRA key and it tells you exactly
+            where it stands, with a "show me" link that scrolls to and briefly highlights the row.
+          </li>
         </ul>
         <p>
           The results for a round also show where that round's tickets have landed, ranked against everything waiting

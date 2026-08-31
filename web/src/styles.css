@@ -1387,3 +1387,88 @@ button.linkish:disabled {
   cursor: default;
   color: var(--muted);
 }
+
+/* The queue's leader-board touches: medal ranks, a proximity bar, the lookup box. */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.rank-badge.medal-gold {
+  background: #fbf1d7;
+  border-color: var(--gold);
+  color: var(--gold-text);
+  box-shadow: 0 0 0 2px #fbf1d7;
+}
+.rank-badge.medal-silver {
+  background: #eef0f2;
+  border-color: #9aa0a6;
+  color: #5f6368;
+}
+.rank-badge.medal-bronze {
+  background: #f7e9de;
+  border-color: #a9673a;
+  color: #8a5230;
+}
+
+.proximity {
+  min-width: 130px;
+}
+.proximity-bar {
+  background: #e9e4dd;
+  border-radius: 999px;
+  height: 0.45rem;
+  overflow: hidden;
+  margin-bottom: 0.2rem;
+}
+.proximity-bar span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+/* A row somebody just looked up, so the eye finds it in a long table. */
+.row-highlight {
+  animation: row-flash 2.5s ease-out;
+}
+@keyframes row-flash {
+  0% {
+    background: #fbf1d7;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.lookup {
+  border-top: 3px solid var(--gold);
+}
+.lookup label {
+  font-size: 1rem;
+}
+.lookup-result {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-highlight {
+    animation: none;
+    background: #fbf1d7;
+  }
+  .proximity-bar span {
+    transition: none;
+  }
+}

@@ -269,9 +269,15 @@ export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
 };
 
 export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
-  // The shape, with this site's project and statuses as the starting point.
-  // Both are expected to be corrected in Settings before it is switched on.
-  hopperJql: 'project = "ECOM" AND status in ("Rdy BE Dev", "Rdy FE Dev") AND "Business Score" is not EMPTY',
+  // The shape, with this site's project and statuses as the starting point -
+  // corrected in Settings before it is switched on. Four statuses, not two:
+  // a ticket needing only one side of the work sits in "Rdy FE Dev" or "Rdy BE
+  // Dev", but one needing both sits in "Rdy Development" or "Ready For
+  // Development" instead - a single status covering both queues, not a
+  // frontend one plus a backend one. Leaving those two out does not put the
+  // ticket in the wrong queue, it drops it out of the hopper entirely.
+  hopperJql:
+    'project = "ECOM" AND status in ("Rdy BE Dev", "Rdy FE Dev", "Rdy Development", "Ready For Development") AND "Business Score" is not EMPTY',
   // A queue built on the wrong statuses is worse than no queue - it would tell
   // the committee a confident position that means nothing - so it stays off
   // until somebody has checked the JQL against their own workflow.
