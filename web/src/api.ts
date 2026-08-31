@@ -199,6 +199,37 @@ export interface MemberRecord {
   sentForEstimation: number;
 }
 
+export type QueueName = 'FRONTEND' | 'BACKEND';
+
+export interface RankedTicket {
+  key: string;
+  summary: string;
+  status: string;
+  businessScore: number;
+  frontendEffort: number;
+  backendEffort: number;
+  /** Standard competition rank - ties share a place and the next one skips. */
+  rank: number;
+}
+
+/**
+ * Where the scored tickets currently sit in the dev queue. Never stored -
+ * recomputed from JIRA on every read, because a position stops being true the
+ * moment anything is built or estimated.
+ */
+export interface QueueView {
+  available: boolean;
+  reason?: 'DISABLED' | 'JIRA_NOT_CONFIGURED' | 'FIELDS_NOT_SET';
+  split: {
+    frontend: RankedTicket[];
+    backend: RankedTicket[];
+    /** Scored and waiting, but with no effort on either side, so in no queue. */
+    notQueued: Array<Omit<RankedTicket, 'rank'>>;
+  };
+  unscored: number;
+  fetchedAt: string;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -244,6 +275,10 @@ export interface AppConfig {
     escalationMinutesBeforeCutOff: number | null;
     timezone: string;
     nextRoundOverride: { opensAt: string; cutOffAt: string } | null;
+  };
+  queue: {
+    hopperJql: string;
+    enabled: boolean;
   };
   jira: {
     queueJql: string;
@@ -351,6 +386,7 @@ export const api = {
   me: () => request<{ member: Member }>('/api/me'),
 
   scoringModel: () => request<ScoringModel>('/api/scoring-model'),
+  queue: () => request<QueueView>('/api/queue'),
   myRound: () =>
     request<{
       round: Round | null;

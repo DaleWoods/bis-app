@@ -401,6 +401,47 @@ export function SettingsPage({ member }: { member: Member }) {
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>The queue</h2>
+        <p className="hint">
+          The Queue tab shows the committee where the tickets they have scored currently sit, waiting to be built.
+          Positions are read live from JIRA each time the page is opened, and are never stored.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            saveSection(
+              'queue',
+              { hopperJql: String(form.get('hopperJql')), enabled: form.get('queueEnabled') === 'on' },
+              'Queue configuration',
+            );
+          }}
+        >
+          <div className="field">
+            <label htmlFor="hopperJql">Which tickets are waiting to be built (JQL)</label>
+            <input id="hopperJql" name="hopperJql" type="text" defaultValue={config.queue.hopperJql} />
+            <p className="hint">
+              It has to select tickets that have a business score and are in a status meaning “waiting to be built” —
+              a list of statuses is fine. Anything already built, or not yet scored, does not belong in a queue
+              position. Ranking uses the Business Score field below and the effort fields from the scoring section,
+              so those need to be set too.
+            </p>
+          </div>
+          <label htmlFor="queueEnabled" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input id="queueEnabled" name="queueEnabled" type="checkbox" defaultChecked={config.queue.enabled} />
+            Show the Queue tab to everyone
+          </label>
+          <p className="hint">
+            Off until the JQL above matches your own workflow. A queue built on the wrong statuses does not look
+            broken — it gives confident positions that mean nothing, which is worse.
+          </p>
+          <div className="row" style={{ marginTop: '0.6rem' }}>
+            <button type="submit">Save the queue settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>JIRA</h2>
         <p className="hint">
           {integrations?.jiraConfigured

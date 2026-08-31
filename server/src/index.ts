@@ -17,6 +17,7 @@ import auditRoutes from './routes/audit.js';
 import configRoutes from './routes/config.js';
 import memberRoutes from './routes/members.js';
 import roundRoutes from './routes/rounds.js';
+import queueRoutes from './routes/queue.js';
 import scoringRoutes from './routes/scoring.js';
 import ticketRoutes from './routes/tickets.js';
 import { errorHandler } from './routes/helpers.js';
@@ -85,6 +86,7 @@ export async function createApp() {
   app.use('/api', ticketRoutes);
   app.use('/api', roundRoutes);
   app.use('/api', scoringRoutes);
+  app.use('/api', queueRoutes);
   app.use('/api', auditRoutes);
 
   // Single-deployment mode: serve the built React app if it is present.

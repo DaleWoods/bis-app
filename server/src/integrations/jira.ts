@@ -160,6 +160,82 @@ export async function getIssue(
   return mapIssue(issue, jiraConfig, effortFields);
 }
 
+export interface HopperIssue {
+  key: string;
+  summary: string;
+  status: string;
+  businessScore: number | null;
+  frontendEffort: number;
+  backendEffort: number;
+}
+
+/** Generous for a hopper, and still bounded if the JQL is pointed at everything. */
+const HOPPER_PAGE_SIZE = 100;
+const HOPPER_MAX_PAGES = 20;
+
+/**
+ * Every scored ticket waiting to be built, for the queue view.
+ *
+ * Unlike `searchQueue` this reads to the end of the results. A queue position
+ * counts everything ahead of you, so a hopper truncated at one page would
+ * report confident positions that are simply wrong. On this endpoint
+ * `maxResults` is a page size rather than a total, and paging is by
+ * `nextPageToken` - `startAt` is not honoured.
+ */
+export async function searchHopper(
+  jql: string,
+  fieldIds: { businessScoreFieldId: string; backendFieldId: string; frontendFieldId: string },
+): Promise<HopperIssue[]> {
+  const fields = [
+    'summary',
+    'status',
+    fieldIds.businessScoreFieldId,
+    fieldIds.backendFieldId,
+    fieldIds.frontendFieldId,
+  ].filter(Boolean);
+
+  const issues: JiraIssue[] = [];
+  let nextPageToken: string | undefined;
+  for (let page = 0; page < HOPPER_MAX_PAGES; page += 1) {
+    const body = JSON.stringify({
+      jql,
+      fields,
+      maxResults: HOPPER_PAGE_SIZE,
+      ...(nextPageToken ? { nextPageToken } : {}),
+    });
+    let response: SearchResponse;
+    try {
+      response = await jiraFetch<SearchResponse>('/rest/api/3/search/jql', { method: 'POST', body });
+    } catch (err) {
+      if (err instanceof JiraApiError && (err.status === 404 || err.status === 410)) {
+        response = await jiraFetch<SearchResponse>('/rest/api/3/search', { method: 'POST', body });
+      } else {
+        throw err;
+      }
+    }
+    issues.push(...(response.issues ?? []));
+    nextPageToken = response.nextPageToken;
+    if (!nextPageToken || response.isLast) break;
+  }
+
+  return issues.map((issue) => ({
+    key: issue.key,
+    summary: String(issue.fields?.summary ?? ''),
+    status: String(issue.fields?.status?.name ?? ''),
+    businessScore: numericField(issue.fields?.[fieldIds.businessScoreFieldId]),
+    frontendEffort: numericField(issue.fields?.[fieldIds.frontendFieldId]) ?? 0,
+    backendEffort: numericField(issue.fields?.[fieldIds.backendFieldId]) ?? 0,
+  }));
+}
+
+/** A JIRA number field arrives as a number, a numeric string, or `{ value }`. */
+function numericField(raw: unknown): number | null {
+  if (raw === null || raw === undefined) return null;
+  const value = typeof raw === 'object' ? (raw as { value?: unknown }).value : raw;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Newest comments last, so the drafter reads the thread in the order it happened. */
 export function commentsToText(fields: Record<string, any>, maxComments = 20): string {
   const raw = Array.isArray(fields?.comment?.comments) ? fields.comment.comments : [];

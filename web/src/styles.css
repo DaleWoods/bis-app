@@ -1357,3 +1357,33 @@ th button.sort .arrow.on {
   color: var(--medium);
   font-weight: 500;
 }
+
+/* Queue positions for one round's tickets, on the feedback view. */
+.placements {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.placements li {
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+}
+.placements li:first-child {
+  border-top: 0;
+}
+
+/* A button that reads as a link - used for "Refresh" inside a sentence. */
+button.linkish {
+  all: unset;
+  cursor: pointer;
+  color: var(--brand);
+  text-decoration: underline;
+}
+button.linkish:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+button.linkish:disabled {
+  cursor: default;
+  color: var(--muted);
+}

@@ -294,6 +294,33 @@ export function GuidePage({ member }: { member: Member }) {
           finalised round shows the same figures for good — later changes to settings or to anyone's submission do not
           rewrite history. Reopening a round for more scoring releases them again.
         </p>
+
+        <h3>Where a ticket goes next: the Queue tab</h3>
+        <p>
+          Once a score reaches JIRA, the <strong>Queue</strong> tab shows where that ticket is sitting while it waits
+          to be built. It reads JIRA directly every time you open it, so it is current rather than remembered — the
+          order changes as things get built and estimated.
+        </p>
+        <ul>
+          <li>
+            There are two queues, not one. A ticket goes into the <strong>Frontend</strong> queue if it has frontend
+            effort on it, the <strong>Backend</strong> queue if it has backend effort, and into both if it has both —
+            ranked separately in each, because it is waiting on two different people.
+          </li>
+          <li>
+            Each queue is ordered by business score, highest first. Tickets on the same score{' '}
+            <strong>share a place</strong>, and the next one down skips accordingly — two tickets level on 40 are both
+            second, and the next is fourth.
+          </li>
+          <li>
+            A ticket that has been scored but has no effort estimate on either side is not in a queue at all. It is
+            listed separately rather than hidden, because "it has vanished" is the thing people notice.
+          </li>
+        </ul>
+        <p>
+          The results for a round also show where that round's tickets have landed, ranked against everything waiting
+          — not just against each other.
+        </p>
       </Section>
 
       {coordinator ? (

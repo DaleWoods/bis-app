@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api, formatDateTime, type FeedbackTicket, type Round } from '../api';
+import { api, formatDateTime, type FeedbackTicket, type QueueView, type Round } from '../api';
+import { Link } from '../router';
+import { ordinal } from './QueuePage';
 
 /**
  * §9 post-round feedback view - visible to the whole committee once a round is
@@ -18,6 +20,8 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
   const [round, setRound] = useState<Round | null>(null);
   const [tickets, setTickets] = useState<FeedbackTicket[]>([]);
   const [error, setError] = useState('');
+  /** Live queue positions, if the queue is switched on. Never fatal. */
+  const [queue, setQueue] = useState<QueueView | null>(null);
 
   useEffect(() => {
     api
@@ -27,6 +31,12 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
         setTickets(data.tickets);
       })
       .catch((err) => setError(err.message));
+    // The queue is read live from JIRA and is a nice-to-have here: if it is
+    // off or unreachable, the round's own results still stand on their own.
+    api
+      .queue()
+      .then(setQueue)
+      .catch(() => setQueue(null));
   }, [roundId]);
 
   if (error) return <p className="status error">{error}</p>;
@@ -75,6 +85,22 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
     (t) => t.yourTotal !== null && t.minSubmissions !== undefined && t.responsesCount === t.minSubmissions,
   );
 
+  /*
+    Where this round's tickets have landed in the dev queue.
+
+    Ranked against the whole hopper, not just this round - a position within
+    the round would be a different number that looks like the same one, and
+    "3rd" has to mean third in the queue rather than third of the four we
+    happened to score this week.
+  */
+  const roundKeys = new Set(tickets.map((t) => t.jiraId));
+  const placements = queue?.available
+    ? [
+        ...queue.split.frontend.filter((t) => roundKeys.has(t.key)).map((t) => ({ ...t, queue: 'Frontend' as const })),
+        ...queue.split.backend.filter((t) => roundKeys.has(t.key)).map((t) => ({ ...t, queue: 'Backend' as const })),
+      ].sort((a, b) => a.key.localeCompare(b.key) || a.queue.localeCompare(b.queue))
+    : [];
+
   return (
     <>
       <h1>How the committee scored – {round.weekLabel}</h1>
@@ -95,6 +121,33 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
           {carried.map((t) => t.jiraId).join(', ')} reached the minimum number of responses exactly — one fewer and{' '}
           {carried.length === 1 ? 'it' : 'they'} would have rolled over to another week undecided.
         </div>
+      ) : null}
+
+      {placements.length ? (
+        <section className="card" aria-labelledby="round-queue">
+          <div className="row between">
+            <h2 id="round-queue" style={{ margin: 0 }}>
+              Where this round's tickets are now
+            </h2>
+            <Link to="/queue">See the whole queue</Link>
+          </div>
+          <p className="hint">
+            Read from JIRA just now, and ranked against everything waiting — not just this round.
+          </p>
+          <ul className="placements">
+            {placements.map((placement) => (
+              <li key={`${placement.key}-${placement.queue}`}>
+                <span className="jira-id">{placement.key}</span>{' '}
+                <strong>
+                  Currently {ordinal(placement.rank)} in the {placement.queue} queue
+                </strong>{' '}
+                <span className="hint">
+                  of {placement.queue === 'Frontend' ? queue!.split.frontend.length : queue!.split.backend.length}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <div className="takeaways">

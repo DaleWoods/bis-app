@@ -4,6 +4,7 @@ import { Link, matchRoute, useRouter } from './router';
 import { LoginPage } from './pages/LoginPage';
 import { ScorePage } from './pages/ScorePage';
 import { RoundsPage } from './pages/RoundsPage';
+import { QueuePage } from './pages/QueuePage';
 import { RoundDetailPage } from './pages/RoundDetailPage';
 import { FeedbackPage } from './pages/FeedbackPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -43,6 +44,7 @@ export function App() {
         <nav aria-label="Main">
           {scorer ? <Link to="/">Score</Link> : null}
           <Link to="/rounds">Rounds</Link>
+          <Link to="/queue">Queue</Link>
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
           <Link to="/guide">Guide</Link>
@@ -95,6 +97,7 @@ function Routes({
   if (score) return <ScorePage member={member} roundId={score.id} />;
 
   if (path === '/rounds') return <RoundsPage member={member} />;
+  if (path === '/queue') return <QueuePage />;
 
   const round = matchRoute('/rounds/:id', path);
   if (round) {

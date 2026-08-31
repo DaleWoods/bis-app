@@ -197,11 +197,28 @@ export interface JiraConfig {
   transitionName: string;
 }
 
+/**
+ * The hopper: scored tickets that are waiting to be built. Which tickets those
+ * are is a JQL question and differs per site, so it is a setting rather than a
+ * literal - same as the scoring queue above it.
+ */
+export interface QueueConfig {
+  /**
+   * Must select tickets that have a business score and are in a status that
+   * means "waiting to be built". Anything already built, or not yet scored,
+   * does not belong in a queue position.
+   */
+  hopperJql: string;
+  /** Off until somebody has pointed the JQL at their own statuses. */
+  enabled: boolean;
+}
+
 export interface AppConfig {
   scoring: ScoringConfig;
   cadence: CadenceConfig;
   automation: AutomationConfig;
   jira: JiraConfig;
+  queue: QueueConfig;
 }
 
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
@@ -251,6 +268,16 @@ export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
   writeBack: true,
 };
 
+export const DEFAULT_QUEUE_CONFIG: QueueConfig = {
+  // The shape, with this site's project and statuses as the starting point.
+  // Both are expected to be corrected in Settings before it is switched on.
+  hopperJql: 'project = "ECOM" AND status in ("Rdy BE Dev", "Rdy FE Dev") AND "Business Score" is not EMPTY',
+  // A queue built on the wrong statuses is worse than no queue - it would tell
+  // the committee a confident position that means nothing - so it stays off
+  // until somebody has checked the JQL against their own workflow.
+  enabled: false,
+};
+
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   // The requirements quoted the status as "WOSG: Business Scoring"; on the live
   // site it is just "Business Scoring". Editable in Settings either way.
@@ -275,6 +302,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   cadence: DEFAULT_CADENCE_CONFIG,
   automation: DEFAULT_AUTOMATION_CONFIG,
   jira: DEFAULT_JIRA_CONFIG,
+  queue: DEFAULT_QUEUE_CONFIG,
 };
 
 /** The seven categories of §6. Seeded as data, editable thereafter. */

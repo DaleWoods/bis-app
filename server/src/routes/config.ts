@@ -176,11 +176,17 @@ const automationSchema = z.object({
   writeBack: z.boolean().optional(),
 });
 
+const queueSchema = z.object({
+  hopperJql: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
 const sectionSchemas = {
   scoring: scoringSchema,
   cadence: cadenceSchema,
   automation: automationSchema,
   jira: jiraSchema,
+  queue: queueSchema,
 } as const;
 
 router.put(
