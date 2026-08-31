@@ -189,6 +189,16 @@ export interface Participation {
   streak: number;
 }
 
+/**
+ * What somebody's scoring has moved, across every finalised round. The answer
+ * to "does any of this actually go anywhere".
+ */
+export interface MemberRecord {
+  roundsScored: number;
+  ticketsScored: number;
+  sentForEstimation: number;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -251,6 +261,8 @@ export interface FeedbackTicket {
   title: string;
   type: string;
   responsesCount: number;
+  /** The minimum in force when the round was decided; absent on older rounds. */
+  minSubmissions?: number;
   businessScore: number | null;
   stdDev: number | null;
   discussionRequired: boolean;
@@ -353,6 +365,7 @@ export const api = {
       categories: Category[];
       /** How many of the committee have finished so far, and your own record. */
       participation?: Participation;
+      record?: MemberRecord;
     }>('/api/my/round'),
   roundParticipation: (limit = 8) =>
     request<{

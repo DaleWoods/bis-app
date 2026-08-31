@@ -180,6 +180,10 @@ export function GuidePage({ member }: { member: Member }) {
             Finish everything in a round and the page says so, along with where you came in and how many rounds you
             have finished in a row.
           </li>
+          <li>
+            You are also told what your scoring has added up to — how many tickets you have scored, and how many of
+            them went on to be estimated for building. Between rounds that is the whole of this page.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks
@@ -261,6 +265,8 @@ export function GuidePage({ member }: { member: Member }) {
           A ticket needs a minimum number of responses{minSubmissions === undefined ? '' : ` — ${minSubmissions} at
           the moment`}{' '}
           before it counts at all. Below that it rolls over to the next round rather than being decided by two people.
+          Where a ticket reached that minimum exactly, the results say so, because every answer on it was the reason it
+          was decided rather than held over.
         </p>
         <p>
           After the round is finalised you can see the results. It opens with the round as a table: every ticket in

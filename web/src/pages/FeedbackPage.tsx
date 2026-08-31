@@ -64,6 +64,16 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
     null,
   );
   const furthestGap = furthest ? furthest.yourTotal! - furthest.businessScore! : 0;
+  /*
+    A ticket under the minimum is not decided - it rolls over and waits another
+    week. So a ticket that landed on exactly the minimum got there on its last
+    answer, and everyone who gave one is a reason it was decided at all.
+    "Nothing would have gone differently if I had skipped it" is the belief
+    that keeps people from scoring, and for these tickets it is untrue.
+  */
+  const carried = tickets.filter(
+    (t) => t.yourTotal !== null && t.minSubmissions !== undefined && t.responsesCount === t.minSubmissions,
+  );
 
   return (
     <>
@@ -74,6 +84,18 @@ export function FeedbackPage({ roundId }: { roundId: string }) {
       </p>
 
       <h2>The round at a glance</h2>
+
+      {carried.length ? (
+        <div className="notice carried" role="status">
+          <strong>
+            {carried.length === 1
+              ? 'One ticket was decided because you answered.'
+              : `${carried.length} tickets were decided because you answered.`}
+          </strong>{' '}
+          {carried.map((t) => t.jiraId).join(', ')} reached the minimum number of responses exactly — one fewer and{' '}
+          {carried.length === 1 ? 'it' : 'they'} would have rolled over to another week undecided.
+        </div>
+      ) : null}
 
       <div className="takeaways">
         <div className="takeaway">

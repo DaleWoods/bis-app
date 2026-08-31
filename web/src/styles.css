@@ -884,6 +884,33 @@ legend {
   margin: 0;
 }
 
+/* What somebody's scoring has added up to. */
+.record-line {
+  margin: 0.6rem 0 0;
+  font-size: 0.92rem;
+}
+.record-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.record-card h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* A ticket that only got decided because this reader answered. */
+.notice.carried {
+  border-color: var(--gold);
+  background: #fbf5e6;
+}
+
 /* The two things worth reading on the feedback page, before the tables. */
 .takeaways {
   display: grid;

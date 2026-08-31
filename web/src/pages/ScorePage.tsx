@@ -5,6 +5,7 @@ import {
   isCoordinator,
   type Category,
   type Member,
+  type MemberRecord,
   type Participation,
   type Relevance,
   type Round,
@@ -71,6 +72,34 @@ function CommitteeBar({ completed, total }: { completed: number; total: number }
 }
 
 /**
+ * What this member's scoring has actually moved.
+ *
+ * The reason given for not scoring is rarely that it is hard - it is that it
+ * does not appear to lead anywhere. Answers go in, and nothing visible comes
+ * back. This is the answer to that, and it is the one number here that gets
+ * better the longer somebody keeps turning up.
+ */
+function RecordLine({ record }: { record: MemberRecord }) {
+  if (record.ticketsScored === 0) return null;
+  return (
+    <p className="record-line">
+      You have scored <strong>{record.ticketsScored}</strong>{' '}
+      {record.ticketsScored === 1 ? 'ticket' : 'tickets'} across{' '}
+      <strong>
+        {record.roundsScored} {record.roundsScored === 1 ? 'round' : 'rounds'}
+      </strong>
+      {record.sentForEstimation > 0 ? (
+        <>
+          , and <strong>{record.sentForEstimation}</strong> of them went on to be estimated for building.
+        </>
+      ) : (
+        '.'
+      )}
+    </p>
+  );
+}
+
+/**
  * Purely decorative, and shown once - at the moment the last ticket goes in,
  * never again on a revisit. Finishing should feel like finishing.
  */
@@ -104,6 +133,8 @@ export function ScorePage({ member, roundId }: Props) {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   /** True only for the visit in which the last ticket was submitted. */
   const [justFinished, setJustFinished] = useState(false);
+  /** What this member's scoring has moved, across every finalised round. */
+  const [record, setRecord] = useState<MemberRecord | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +159,7 @@ export function ScorePage({ member, roundId }: Props) {
         setCategories(data.categories);
         setSubmissions(data.submissions);
         setParticipation(('participation' in data && data.participation) || null);
+        setRecord(('record' in data && data.record) || null);
         setError('');
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the round');
@@ -192,6 +224,18 @@ export function ScorePage({ member, roundId }: Props) {
             ? 'There is no open scoring round at the moment. You will get an email when the next round opens.'
             : 'There is no open scoring round at the moment.'}
         </div>
+        {/*
+          Between rounds this page was a dead end - the one screen that told a
+          member nothing at all. It is the natural place to say what their
+          scoring has added up to, which is the question the ones who have
+          stopped scoring are really asking.
+        */}
+        {record ? (
+          <div className="record-card">
+            <h2>Your record</h2>
+            <RecordLine record={record} />
+          </div>
+        ) : null}
         {/*
           Without this, a member who signed in the day after a round was
           finalised was told there was nothing open and left with nowhere to
@@ -298,6 +342,7 @@ export function ScorePage({ member, roundId }: Props) {
             ) : null}
           </p>
           {participation ? <CommitteeBar completed={participation.completed} total={participation.total} /> : null}
+          {record ? <RecordLine record={record} /> : null}
           <p className="hint">
             Nothing else is outstanding from you. You will get an email when the round is finalised, and the feedback
             for it shows how your scores sat against the committee's.

@@ -103,6 +103,24 @@ describe('a finalised round', () => {
     expect(after).toBe(true);
   });
 
+  it('keeps the minimum it was judged against when that is changed afterwards', async () => {
+    await score(members[0], 5);
+    await score(members[1], 5);
+    await saveConfigSection(db, 'scoring', { minSubmissions: 2 }, 'test');
+
+    const finalised = await finalise();
+    expect((await roundResults(db, finalised))[0].aggregate.minSubmissions).toBe(2);
+
+    // The feedback view tells a member their answer is why a ticket was
+    // decided rather than held over, which is only true against the minimum
+    // that was actually in force. Moving it later must not rewrite that.
+    await saveConfigSection(db, 'scoring', { minSubmissions: 9 }, 'test');
+
+    const after = await buildFeedbackView(db, (await getRound(db, round.id))!);
+    expect(after[0].minSubmissions).toBe(2);
+    expect(after[0].responsesCount).toBe(2);
+  });
+
   it('shows the committee the same frozen numbers in the feedback view', async () => {
     await score(members[0], 10);
     await score(members[1], 10);

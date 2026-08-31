@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
-import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, listCategories } from './configService.js';
-import { addTicketToRound, createRound, setRoundStatus, type Round } from './roundService.js';
+import {
+  ensureDefaultConfig,
+  ensureSeedCategories,
+  getAppConfig,
+  listCategories,
+  saveConfigSection,
+} from './configService.js';
+import { addTicketToRound, createRound, getRound, setRoundStatus, type Round } from './roundService.js';
 import { getTicket, upsertTicket } from './ticketService.js';
 import { saveMember, type Member } from './memberService.js';
-import { memberStreak, participationHistory, saveSubmission } from './submissionService.js';
+import { memberRecord, memberStreak, participationHistory, saveSubmission } from './submissionService.js';
+import { snapshotRoundResults } from './resultService.js';
 
 let db: Db;
 let alice: Member;
@@ -144,5 +151,70 @@ describe('memberStreak', () => {
   it('is zero when nothing has finalised yet', async () => {
     await openRound('This week', 1);
     expect(await memberStreak(db, alice.id)).toBe(0);
+  });
+});
+
+describe('memberRecord', () => {
+  it('counts only what was scored in a round that finalised', async () => {
+    const finished = await openRound('Week 1', 2);
+    const stillOpen = await openRound('Week 2', 1, '2099-06-01T00:00:00.000Z');
+    for (const round of [finished, stillOpen]) {
+      const tickets = await db.all<{ ticket_id: string }>('SELECT ticket_id FROM round_tickets WHERE round_id = ?', [
+        round.id,
+      ]);
+      for (const { ticket_id } of tickets) await score(round, alice, ticket_id);
+    }
+    await finalise(finished);
+    await snapshotRoundResults(db, (await getRound(db, finished.id))!);
+
+    // The open round's two answers are real, but nothing has been decided yet.
+    expect(await memberRecord(db, alice.id)).toMatchObject({ roundsScored: 1, ticketsScored: 2 });
+  });
+
+  it('reports how many of the tickets you scored went on for estimation', async () => {
+    // Two scorers is a decision only if the minimum says so, and nothing is
+    // sent for estimation below it.
+    await saveConfigSection(db, 'scoring', { minSubmissions: 2 }, 'test');
+    const round = await openRound('Week 1', 2);
+    const tickets = await db.all<{ ticket_id: string }>('SELECT ticket_id FROM round_tickets WHERE round_id = ?', [
+      round.id,
+    ]);
+    for (const { ticket_id } of tickets) {
+      await score(round, alice, ticket_id);
+      await score(round, bob, ticket_id);
+    }
+    await finalise(round);
+    await snapshotRoundResults(db, (await getRound(db, round.id))!);
+    // Only one of the two was sent on; the record follows the frozen result.
+    await db.run('UPDATE ticket_results SET send_for_estimation = 0 WHERE round_id = ? AND ticket_id = ?', [
+      round.id,
+      tickets[1].ticket_id,
+    ]);
+
+    expect(await memberRecord(db, alice.id)).toMatchObject({ ticketsScored: 2, sentForEstimation: 1 });
+  });
+
+  it('ignores an excluded answer and a "no" answer', async () => {
+    const round = await openRound('Week 1', 2);
+    const tickets = await db.all<{ ticket_id: string }>('SELECT ticket_id FROM round_tickets WHERE round_id = ?', [
+      round.id,
+    ]);
+    await score(round, alice, tickets[0].ticket_id);
+    await saveSubmission(db, {
+      round,
+      ticket: (await getTicket(db, tickets[1].ticket_id))!,
+      member: alice,
+      payload: { relevance: 'NO_CLOSE', closureReason: 'No Longer Required' },
+      config: (await getAppConfig(db)).scoring,
+    });
+    await finalise(round);
+    await snapshotRoundResults(db, (await getRound(db, round.id))!);
+
+    // The "no" is an answer but not a score, so it is not part of the record.
+    expect(await memberRecord(db, alice.id)).toMatchObject({ roundsScored: 1, ticketsScored: 1 });
+  });
+
+  it('is all zeros for somebody who has never scored', async () => {
+    expect(await memberRecord(db, bob.id)).toMatchObject({ roundsScored: 0, ticketsScored: 0, sentForEstimation: 0 });
   });
 });

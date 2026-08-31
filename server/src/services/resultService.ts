@@ -173,6 +173,12 @@ export interface FeedbackTicket {
   title: string;
   type: string;
   responsesCount: number;
+  /**
+   * The minimum in force when this round was decided. Absent on rounds
+   * finalised before it was recorded, in which case nothing should be claimed
+   * about whether a ticket only just cleared it.
+   */
+  minSubmissions?: number;
   businessScore: number | null;
   stdDev: number | null;
   discussionRequired: boolean;
@@ -262,6 +268,7 @@ export async function buildFeedbackView(
     title: ticket.title,
     type: ticket.type,
     responsesCount: aggregate.responsesCount,
+    minSubmissions: aggregate.minSubmissions,
     businessScore: aggregate.businessScore,
     stdDev: aggregate.stdDev,
     discussionRequired: aggregate.discussionRequired,

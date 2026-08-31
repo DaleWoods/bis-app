@@ -8,7 +8,13 @@ import { audit } from '../services/auditService.js';
 import { getScoringConfig, listCategories } from '../services/configService.js';
 import { listActiveScorers } from '../services/memberService.js';
 import { getActiveRound, getRound, isScoringOpen, listRoundTickets, listRounds } from '../services/roundService.js';
-import { listMemberSubmissions, memberStreak, roundProgress, saveSubmission } from '../services/submissionService.js';
+import {
+  listMemberSubmissions,
+  memberRecord,
+  memberStreak,
+  roundProgress,
+  saveSubmission,
+} from '../services/submissionService.js';
 import { getTicket } from '../services/ticketService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
@@ -103,6 +109,7 @@ router.get(
         submissions: [],
         categories: await listCategories(db),
         canScore: canScore(req.member!.role),
+        record: await memberRecord(db, req.member!.id),
       });
       return;
     }
@@ -120,6 +127,7 @@ router.get(
       submissions: await listMemberSubmissions(db, round.id, req.member!.id),
       categories: await listCategories(db),
       participation: await participationSummary(db, round.id, tickets.length, req.member!.id),
+      record: await memberRecord(db, req.member!.id),
     });
   }),
 );

@@ -62,6 +62,13 @@ export interface TicketAggregate {
    */
   sendForEstimation: boolean;
   minSubmissionsMet: boolean;
+  /**
+   * The minimum this aggregate was judged against, carried with it so a
+   * finalised round still means what it meant. The threshold is a setting, and
+   * one changed later would otherwise silently rewrite what a past round says
+   * about itself - the same drift `004_frozen_results` fixed for the numbers.
+   */
+  minSubmissions: number;
   categoryAverages: CategoryAggregate[];
   /** Anonymised spread for the post-round feedback view (§9). */
   totalsDistribution: number[];
@@ -203,6 +210,7 @@ export function aggregateTicket(input: AggregateInput, config: ScoringConfig): T
     // issue on in JIRA, and the badge and the action disagreed.
     sendForEstimation: minSubmissionsMet && !discussionRequired && !toClose,
     minSubmissionsMet,
+    minSubmissions: config.minSubmissions,
     categoryAverages,
     totalsDistribution: [...totals].sort((a, b) => a - b),
     excludedCounts,

@@ -378,6 +378,48 @@ export async function memberStreak(db: Db, memberId: string, limit = 52): Promis
   return streak;
 }
 
+export interface MemberRecord {
+  /** Finalised rounds this member gave at least one real score in. */
+  roundsScored: number;
+  /** Tickets they scored in those rounds - "Yes" answers, the ones that counted. */
+  ticketsScored: number;
+  /** How many of those tickets the committee sent on for estimation. */
+  sentForEstimation: number;
+}
+
+/**
+ * What somebody's scoring has actually moved, across every finalised round.
+ *
+ * The reason given for not scoring is never "it is hard", it is that it does
+ * not appear to matter - the answers go in and nothing visibly happens. This
+ * is the answer to that: the tickets you scored, and how many of them the
+ * committee sent on to be built. It reads the frozen `ticket_results` rather
+ * than recomputing, so it says what was actually decided at the time.
+ */
+export async function memberRecord(db: Db, memberId: string): Promise<MemberRecord> {
+  const scored = await db.get<{ rounds: number; tickets: number }>(
+    `SELECT COUNT(DISTINCT s.round_id) AS rounds, COUNT(*) AS tickets
+     FROM submissions s
+     JOIN rounds r ON r.id = s.round_id
+     WHERE s.member_id = ? AND s.archived = 0 AND s.relevance = 'YES' AND r.status = 'FINALISED'`,
+    [memberId],
+  );
+  const forward = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n
+     FROM submissions s
+     JOIN rounds r ON r.id = s.round_id
+     JOIN ticket_results tr ON tr.round_id = s.round_id AND tr.ticket_id = s.ticket_id
+     WHERE s.member_id = ? AND s.archived = 0 AND s.relevance = 'YES'
+       AND r.status = 'FINALISED' AND tr.send_for_estimation = 1`,
+    [memberId],
+  );
+  return {
+    roundsScored: Number(scored?.rounds ?? 0),
+    ticketsScored: Number(scored?.tickets ?? 0),
+    sentForEstimation: Number(forward?.n ?? 0),
+  };
+}
+
 export interface MemberParticipation {
   memberId: string;
   memberName: string;
