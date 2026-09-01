@@ -119,6 +119,7 @@ describe('writeBackRound', () => {
     expect(entry.status).toBe('SKIPPED');
     expect(entry.reason).toContain('2 of the 5 responses needed');
     expect(entry.businessScore).not.toBeNull();
+    expect(entry.overridable).toBe('MIN_SUBMISSIONS');
     expect(writeBusinessScore).not.toHaveBeenCalled();
   });
 
@@ -183,7 +184,28 @@ describe('writeBackRound', () => {
 
     expect(second.status).toBe('SKIPPED');
     expect(second.reason).toMatch(/already written/i);
+    expect(second.overridable).toBe('ALREADY_WRITTEN');
     expect(writeBusinessScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the score again under a force re-write, even though it is already written', async () => {
+    // The case a coordinator hits after resetting a test ticket by hand in
+    // JIRA: the app's own record still says SUCCESS, so a plain re-run stays
+    // SKIPPED forever with no way back short of `force`.
+    await scoreIt(5);
+    const round = (await getRound(db, roundId))!;
+
+    await writeBackRound(db, ACTOR, round);
+    const [forced] = await writeBackRound(db, ACTOR, round, { force: true });
+
+    expect(forced.status).toBe('SUCCESS');
+    expect(writeBusinessScore).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not mark a "nobody scored it" skip as overridable', async () => {
+    const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
+    expect(entry.status).toBe('SKIPPED');
+    expect(entry.overridable).toBeUndefined();
   });
 
   it('moves a ticket on later, without writing its score again', async () => {
@@ -295,6 +317,8 @@ describe('a ticket the committee was split on', () => {
     const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!, { ignoreMinSubmissions: true });
     expect(entry.status).toBe('SKIPPED');
     expect(entry.reason).toContain('0 to 70');
+    // Neither override does anything for a split ticket, so neither is offered.
+    expect(entry.overridable).toBeUndefined();
     expect(writeBusinessScore).not.toHaveBeenCalled();
     expect(transitionIssue).not.toHaveBeenCalled();
   });

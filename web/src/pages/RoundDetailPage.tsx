@@ -141,15 +141,24 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
    * gives the count; the table below gives the reasons, which is what a
    * coordinator actually needs when nothing was written.
    */
-  function writeBack(ignoreMinSubmissions: boolean) {
+  function writeBack(options: { ignoreMinSubmissions?: boolean; force?: boolean } = {}) {
     if (
-      ignoreMinSubmissions &&
+      options.force &&
+      !window.confirm(
+        'Send these scores to JIRA again, even though the app already has a record of writing them? Only do this if JIRA no longer shows it - for example, after resetting a ticket by hand for testing.',
+      )
+    ) {
+      return;
+    }
+    if (
+      options.ignoreMinSubmissions &&
+      !options.force &&
       !window.confirm('Write these scores to JIRA on fewer responses than the minimum? The score goes across as it stands.')
     ) {
       return;
     }
     return run('writeback', async () => {
-      const { entries } = await api.writeBack(round!.id, { ignoreMinSubmissions });
+      const { entries } = await api.writeBack(round!.id, options);
       setWriteBackEntries(entries);
       const ok = entries.filter((e) => e.status === 'SUCCESS').length;
       const skipped = entries.filter((e) => e.status === 'SKIPPED').length;
@@ -345,7 +354,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
               <Link className="button secondary" to={`/feedback/${round.id}`}>
                 Open feedback view
               </Link>
-              <button disabled={Boolean(busy)} onClick={() => writeBack(false)}>
+              <button disabled={Boolean(busy)} onClick={() => writeBack()}>
                 Write scores to JIRA
               </button>
               {/*
@@ -578,14 +587,41 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
             </table>
           </div>
 
-          {writeBackEntries.some((e) => e.status === 'SKIPPED' && e.businessScore !== null) ? (
+          {/*
+            Two different overrides for two different reasons a ticket can be
+            skipped - shown only when it actually applies. Offering "write
+            anyway" on a ticket that was skipped because it is *already*
+            written did nothing when pressed: the minimum-responses gate was
+            never what stopped it, so overriding that gate changed nothing,
+            and the ticket stayed skipped with the same reason on screen.
+          */}
+          {writeBackEntries.some((e) => e.overridable === 'MIN_SUBMISSIONS') ? (
             <div className="row" style={{ marginTop: '0.75rem' }}>
-              <button className="secondary" disabled={Boolean(busy)} onClick={() => writeBack(true)}>
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                onClick={() => writeBack({ ignoreMinSubmissions: true })}
+              >
                 Write the skipped scores anyway
               </button>
               <p className="hint" style={{ margin: 0 }}>
                 Overrides the minimum-responses gate. The score goes to JIRA as it stands, on fewer responses than the
                 settings ask for.
+              </p>
+            </div>
+          ) : null}
+          {writeBackEntries.some((e) => e.overridable === 'ALREADY_WRITTEN') ? (
+            <div className="row" style={{ marginTop: '0.75rem' }}>
+              <button
+                className="secondary"
+                disabled={Boolean(busy)}
+                onClick={() => writeBack({ force: true, ignoreMinSubmissions: true })}
+              >
+                Force re-write
+              </button>
+              <p className="hint" style={{ margin: 0 }}>
+                For a ticket the app already has a record of writing, but which no longer shows it in JIRA — after a
+                manual reset while testing, say. Sends the score again regardless.
               </p>
             </div>
           ) : null}

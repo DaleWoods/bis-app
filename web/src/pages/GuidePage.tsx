@@ -172,11 +172,6 @@ export function GuidePage({ member }: { member: Member }) {
             the committee has finished — a count, never who.
           </li>
           <li>
-            If a ticket genuinely doesn't touch your area, there is a button above the marks that sets them all to the
-            lowest in one go. It is a real answer, not a shortcut past one — you still submit it yourself, and you can
-            change any of the marks first.
-          </li>
-          <li>
             Finish everything in a round and the page says so, along with where you came in and how many rounds you
             have finished in a row.
           </li>
@@ -575,7 +570,9 @@ export function GuidePage({ member }: { member: Member }) {
                 <strong>Nobody scored it</strong>, or nobody answered “Yes” — there is no score to write.
               </li>
               <li>
-                <strong>Already written</strong> — the same score has gone across before. Running it twice is safe.
+                <strong>Already written</strong> — the same score has gone across before, so running it again does
+                nothing on purpose. If JIRA genuinely does not show it any more — after resetting a test ticket by
+                hand, say — <strong>Force re-write</strong> sends it regardless of that history.
               </li>
               <li>
                 <strong>Held for discussion</strong> — the committee was split and the meeting has not been recorded

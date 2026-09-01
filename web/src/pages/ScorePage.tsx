@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   api,
   formatDateTime,
@@ -135,6 +135,26 @@ export function ScorePage({ member, roundId }: Props) {
   const [justFinished, setJustFinished] = useState(false);
   /** What this member's scoring has moved, across every finalised round. */
   const [record, setRecord] = useState<MemberRecord | null>(null);
+  const progressRailRef = useRef<HTMLElement | null>(null);
+
+  /*
+    The progress rail is `position: sticky; top: 0`, so once you have scrolled
+    past it, it stays pinned over whatever `scrollIntoView` puts at the very
+    top of the viewport - the ticket heading lands right underneath it,
+    invisible, and what you actually see is however far down the card the
+    rail's own height happens to reach. Scrolling to `top - railHeight`
+    instead leaves room for it. Measured live rather than a fixed constant,
+    because the rail wraps to more than one line once a round has enough
+    tickets.
+  */
+  function scrollToTicket(ticketId: string) {
+    const target = document.getElementById(`ticket-${ticketId}`);
+    if (!target) return;
+    const railHeight = progressRailRef.current?.getBoundingClientRect().height ?? 0;
+    const gap = 16;
+    const top = target.getBoundingClientRect().top + window.scrollY - railHeight - gap;
+    window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -369,7 +389,7 @@ export function ScorePage({ member, roundId }: Props) {
       ) : null}
 
       {scoringOpen && tickets.length > 1 ? (
-        <nav className="progress-rail" aria-label="Tickets in this round">
+        <nav className="progress-rail" aria-label="Tickets in this round" ref={progressRailRef}>
           <div className="progress-rail-badges">
             {tickets.map((ticket) => {
               const isDone = submissions.some((s) => s.ticketId === ticket.id);
@@ -378,7 +398,7 @@ export function ScorePage({ member, roundId }: Props) {
                   key={ticket.id}
                   type="button"
                   className={`progress-badge${isDone ? ' done' : ''}`}
-                  onClick={() => document.getElementById(`ticket-${ticket.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onClick={() => scrollToTicket(ticket.id)}
                   title={`${ticket.jiraId} — ${isDone ? 'scored' : 'not yet scored'}`}
                 >
                   {ticket.jiraId}
@@ -392,7 +412,7 @@ export function ScorePage({ member, roundId }: Props) {
               className="secondary"
               onClick={() => {
                 const next = tickets.find((t) => !submissions.some((s) => s.ticketId === t.id));
-                if (next) document.getElementById(`ticket-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (next) scrollToTicket(next.id);
               }}
             >
               Jump to next unscored ({outstanding} left)

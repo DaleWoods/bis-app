@@ -135,6 +135,12 @@ export interface WriteBackEntry {
   status: 'SUCCESS' | 'FAILED' | 'SKIPPED';
   reason?: string;
   transitionedTo?: string;
+  /**
+   * Which override, if any, actually applies to this skip. `undefined` on a
+   * skip nothing can override - held for discussion, or no "Yes" answer to
+   * write at all - so the UI never offers a button that would do nothing.
+   */
+  overridable?: 'MIN_SUBMISSIONS' | 'ALREADY_WRITTEN';
 }
 
 /**
@@ -210,6 +216,7 @@ export async function writeBackRound(
         jiraId: ticket.jiraId,
         businessScore: aggregate.businessScore,
         status: 'SKIPPED',
+        overridable: 'MIN_SUBMISSIONS',
         // A finalised round writes from the snapshot taken at finalise time,
         // not from submissions as they stand now (§12.1) - a response that
         // arrived since, or a member re-scoring after "Reopen for scoring",
@@ -283,7 +290,9 @@ export async function writeBackRound(
         jiraId: ticket.jiraId,
         businessScore,
         status: 'SKIPPED',
-        reason: 'Already written with this score',
+        overridable: 'ALREADY_WRITTEN',
+        reason:
+          'Already written with this score. If JIRA does not currently show it, it was likely changed there directly since — "Force re-write" below sends it again.',
         transitionedTo: existing?.transitioned_to || undefined,
       });
       continue;

@@ -111,6 +111,8 @@ export interface WriteBackEntry {
   /** Why it was skipped or how it failed. The useful half of the answer. */
   reason?: string;
   transitionedTo?: string;
+  /** Which override, if any, actually applies to this skip. */
+  overridable?: 'MIN_SUBMISSIONS' | 'ALREADY_WRITTEN';
 }
 
 export interface AutomationStatus {

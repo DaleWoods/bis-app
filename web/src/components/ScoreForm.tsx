@@ -226,27 +226,6 @@ export function ScoreForm({
           <legend>
             Impact scores ({categories[0]?.scaleMin ?? 0}–{categories[0]?.scaleMax ?? 10})
           </legend>
-          {/*
-            "None of this touches my area" is a real answer, and a common one -
-            a ticket about the watch site says nothing about jewellery buying.
-            It was also seven clicks to give, which is how a legitimate zero
-            turns into a member not answering at all. One button gives it; it
-            still has to be submitted deliberately like any other score.
-          */}
-          {!readOnly ? (
-            <div className="quick-score">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  setScores(Object.fromEntries(categories.map((category) => [category.id, category.scaleMin])))
-                }
-              >
-                None of this affects my area
-              </button>
-              <span className="hint">Sets every category to its lowest mark — change any of them after.</span>
-            </div>
-          ) : null}
           <div className="score-grid">
             {categories.map((category) => {
               const inputId = `score-${ticket.id}-${category.id}`;

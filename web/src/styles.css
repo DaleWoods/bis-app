@@ -872,18 +872,6 @@ legend {
   }
 }
 
-/* One click for "none of this touches my area", above the seven rows. */
-.quick-score {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.9rem;
-}
-.quick-score .hint {
-  margin: 0;
-}
-
 /* What somebody's scoring has added up to. */
 .record-line {
   margin: 0.6rem 0 0;
