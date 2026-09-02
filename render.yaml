@@ -19,9 +19,13 @@ databases:
   - name: bis-db
     databaseName: bis
     user: bis
-    # free lets you trial it at no cost, but Render deletes free databases after
-    # 30 days. Move to basic-256mb before this holds scoring data you need.
-    plan: free
+    # basic-256mb (not free): Render deletes free-tier databases after 30
+    # days and free tier carries no automated backups. This holds the only
+    # copy of every round the committee has ever scored - see
+    # docs/plans/PLAN-1-data-durability.md for the full reasoning, and the
+    # nightly emailed export in backupService.ts as the independent
+    # second copy.
+    plan: basic-256mb
 
 services:
   - type: web

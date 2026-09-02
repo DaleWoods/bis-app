@@ -1,6 +1,7 @@
 import { getDb } from '../db/index.js';
 import { env } from '../config/env.js';
 import { runDueAutomation } from './automationService.js';
+import { runDailyBackupIfDue } from './backupService.js';
 
 /**
  * The clock behind the automated cycle (§11, §12.2).
@@ -47,7 +48,22 @@ async function tick(): Promise<void> {
   }
 }
 
+let backupTimer: NodeJS.Timeout | null = null;
+
 export function startScheduler(): void {
+  // The daily backup runs regardless of SCHEDULER_ENABLED - that flag is
+  // about the weekly round cycle, not about whether the only copy of the
+  // data gets backed up. Scoring can still happen by hand with automation
+  // off, and the data still needs protecting either way.
+  if (!backupTimer) {
+    backupTimer = setInterval(() => {
+      getDb()
+        .then((db) => runDailyBackupIfDue(db))
+        .catch((err) => console.error('[bis] backup tick failed:', err instanceof Error ? err.message : err));
+    }, TICK_MS);
+    backupTimer.unref?.();
+  }
+
   if (timer) return;
   if (!env.schedulerEnabled) {
     console.log('[bis] scheduler disabled (SCHEDULER_ENABLED=false) — every step stays manual.');
@@ -67,4 +83,6 @@ export function startScheduler(): void {
 export function stopScheduler(): void {
   if (timer) clearInterval(timer);
   timer = null;
+  if (backupTimer) clearInterval(backupTimer);
+  backupTimer = null;
 }

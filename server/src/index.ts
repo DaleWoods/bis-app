@@ -14,6 +14,7 @@ import { startScheduler, stopScheduler } from './services/scheduler.js';
 import { getMemberByEmail, saveMember } from './services/memberService.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
+import backupRoutes from './routes/backup.js';
 import configRoutes from './routes/config.js';
 import memberRoutes from './routes/members.js';
 import roundRoutes from './routes/rounds.js';
@@ -88,6 +89,7 @@ export async function createApp() {
   app.use('/api', scoringRoutes);
   app.use('/api', queueRoutes);
   app.use('/api', auditRoutes);
+  app.use('/api', backupRoutes);
 
   // Single-deployment mode: serve the built React app if it is present.
   const webDist = path.resolve(env.serverRoot, '..', 'web', 'dist');

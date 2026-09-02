@@ -566,6 +566,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ to }),
     }),
+  exportBackupNow: () =>
+    request<{ ok: boolean; recipients: number; error?: string }>('/api/backup/export', { method: 'POST' }),
 
   members: () => request<{ members: Member[] }>('/api/members'),
   saveMember: (input: { id?: string; name: string; email: string; team?: string; role?: Role; active?: boolean }) =>

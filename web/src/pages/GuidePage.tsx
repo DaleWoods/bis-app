@@ -689,6 +689,11 @@ export function GuidePage({ member }: { member: Member }) {
                 so a quiet drop-off is easy to spot rather than something you have to notice by memory.
               </li>
               <li>
+                <strong>Data</strong> — a full backup of the database, every round, ticket, score and the audit
+                trail, is emailed to every admin automatically once a day, and can be sent on demand with
+                "Export a backup now".
+              </li>
+              <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
                 or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
                 more than one round. One confirmation, naming the round. Anything already written to JIRA stays in

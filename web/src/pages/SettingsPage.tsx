@@ -63,6 +63,7 @@ export function SettingsPage({ member }: { member: Member }) {
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', email: '', team: '', role: 'COMMITTEE' as Role });
   const [sort, setSort] = useState<{ key: MemberSortKey; ascending: boolean }>({ key: 'name', ascending: true });
   const [resetPhrase, setResetPhrase] = useState('');
@@ -389,6 +390,39 @@ export function SettingsPage({ member }: { member: Member }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card">
+        <h2 style={{ marginTop: 0 }}>Data</h2>
+        <p className="hint">
+          A full export of everything in this app - every round, ticket, score and the audit trail - is emailed to
+          every admin automatically once a day, and logged in the audit log. Use this to send one right now, before
+          making a change you might want to undo.
+        </p>
+        <button
+          type="button"
+          className="secondary"
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            setError('');
+            setMessage('');
+            try {
+              const result = await api.exportBackupNow();
+              setMessage(
+                result.ok
+                  ? `Backup sent to ${result.recipients} admin${result.recipients === 1 ? '' : 's'}.`
+                  : `Backup was not sent: ${result.error ?? 'unknown error'}`,
+              );
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Could not export a backup');
+            } finally {
+              setExporting(false);
+            }
+          }}
+        >
+          {exporting ? 'Exporting…' : 'Export a backup now'}
+        </button>
       </section>
 
       <section className="card">
