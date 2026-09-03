@@ -241,6 +241,15 @@ export interface QueueView {
   fetchedAt: string;
 }
 
+export interface QueuePreviewIssue {
+  key: string;
+  summary: string;
+  status: string;
+  businessScore: number | null;
+  frontendEffort: number;
+  backendEffort: number;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -398,6 +407,11 @@ export const api = {
 
   scoringModel: () => request<ScoringModel>('/api/scoring-model'),
   queue: () => request<QueueView>('/api/queue'),
+  previewQueueJql: (jql: string) =>
+    request<{ issues: QueuePreviewIssue[] }>('/api/queue/preview', {
+      method: 'POST',
+      body: JSON.stringify({ jql }),
+    }),
   myRound: () =>
     request<{
       round: Round | null;

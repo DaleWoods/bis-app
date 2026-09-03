@@ -698,6 +698,12 @@ export function GuidePage({ member }: { member: Member }) {
                 "Export a backup now".
               </li>
               <li>
+                <strong>The queue</strong> — the JQL here decides which tickets the Queue tab shows as waiting to be
+                built; missing a status silently drops those tickets rather than showing them in the wrong place.
+                "Preview this JQL" shows exactly which tickets it currently matches, before you save it or switch the
+                tab on — use it whenever a workflow status changes.
+              </li>
+              <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
                 or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
                 more than one round. One confirmation, naming the round. Anything already written to JIRA stays in

@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ROLES, api, formatDateTime, toDatetimeLocalValue, type AppConfig, type Category, type Member, type Role, type Round } from '../api';
+import {
+  ROLES,
+  api,
+  formatDateTime,
+  toDatetimeLocalValue,
+  type AppConfig,
+  type Category,
+  type Member,
+  type QueuePreviewIssue,
+  type Role,
+  type Round,
+} from '../api';
 import { formatDuration, nextRoundWindow } from '../cadence';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -89,6 +100,11 @@ export function SettingsPage({ member }: { member: Member }) {
   const [savingOverride, setSavingOverride] = useState(false);
   const [deletingBlocker, setDeletingBlocker] = useState(false);
 
+  const [hopperJqlPreview, setHopperJqlPreview] = useState('');
+  const [previewResults, setPreviewResults] = useState<QueuePreviewIssue[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+
   useEffect(() => {
     const active = config?.cadence.nextRoundOverride;
     setOverrideOpensInput(active ? toDatetimeLocalValue(new Date(active.opensAt)) : '');
@@ -97,6 +113,10 @@ export function SettingsPage({ member }: { member: Member }) {
 
   useEffect(() => {
     if (config) setCadenceForm(config.cadence);
+  }, [config]);
+
+  useEffect(() => {
+    if (config) setHopperJqlPreview(config.queue.hopperJql);
   }, [config]);
 
   async function load() {
@@ -453,7 +473,13 @@ export function SettingsPage({ member }: { member: Member }) {
         >
           <div className="field">
             <label htmlFor="hopperJql">Which tickets are waiting to be built (JQL)</label>
-            <input id="hopperJql" name="hopperJql" type="text" defaultValue={config.queue.hopperJql} />
+            <input
+              id="hopperJql"
+              name="hopperJql"
+              type="text"
+              value={hopperJqlPreview}
+              onChange={(e) => setHopperJqlPreview(e.target.value)}
+            />
             <p className="hint">
               It has to select tickets that have a business score and are in a status meaning “waiting to be built” —
               a list of statuses is fine. Anything already built, or not yet scored, does not belong in a queue
@@ -468,6 +494,84 @@ export function SettingsPage({ member }: { member: Member }) {
               in is decided by the effort fields, not the status name — anything scored on both sides shows up in
               both automatically.
             </p>
+            <div className="row" style={{ marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={previewing || !hopperJqlPreview.trim()}
+                onClick={async () => {
+                  setPreviewing(true);
+                  setPreviewError('');
+                  setPreviewResults(null);
+                  try {
+                    const { issues } = await api.previewQueueJql(hopperJqlPreview);
+                    setPreviewResults(issues);
+                  } catch (err) {
+                    setPreviewError(err instanceof Error ? err.message : 'Could not preview this JQL');
+                  } finally {
+                    setPreviewing(false);
+                  }
+                }}
+              >
+                {previewing ? 'Checking…' : 'Preview this JQL'}
+              </button>
+              <span className="hint">Runs against JIRA now, without saving anything.</span>
+            </div>
+            {previewError ? <p className="status error">{previewError}</p> : null}
+            {previewResults ? (
+              <div style={{ marginTop: '0.6rem' }}>
+                {previewResults.length === 0 ? (
+                  <p className="hint">Matches nothing right now. If you expected tickets here, check the statuses and project key.</p>
+                ) : (
+                  <>
+                    {(() => {
+                      const scored = previewResults.filter((i) => i.businessScore !== null);
+                      const frontend = scored.filter((i) => i.frontendEffort > 0).length;
+                      const backend = scored.filter((i) => i.backendEffort > 0).length;
+                      const neither = scored.filter((i) => i.frontendEffort <= 0 && i.backendEffort <= 0).length;
+                      return (
+                        <p className="hint">
+                          {previewResults.length} matched, {scored.length} with a business score — {frontend} would be
+                          in the Frontend queue, {backend} in the Backend queue, {neither} in neither.
+                        </p>
+                      );
+                    })()}
+                    <div className="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th scope="col">Ticket</th>
+                            <th scope="col">Status</th>
+                            <th scope="col" className="num">
+                              Score
+                            </th>
+                            <th scope="col" className="num">
+                              FE
+                            </th>
+                            <th scope="col" className="num">
+                              BE
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewResults.map((issue) => (
+                            <tr key={issue.key}>
+                              <th scope="row" className="plain">
+                                <span className="jira-id">{issue.key}</span> {issue.summary}
+                              </th>
+                              <td>{issue.status}</td>
+                              <td className="num">{issue.businessScore ?? '—'}</td>
+                              <td className="num">{issue.frontendEffort}</td>
+                              <td className="num">{issue.backendEffort}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
           <label htmlFor="queueEnabled" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
             <input id="queueEnabled" name="queueEnabled" type="checkbox" defaultChecked={config.queue.enabled} />
