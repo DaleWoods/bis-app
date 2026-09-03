@@ -5,3 +5,7 @@ data/
 .env
 .env.local
 .DS_Store
+e2e/.auth/
+e2e/.tmp/
+e2e/playwright-report/
+e2e/test-results/
