@@ -2,13 +2,14 @@ import { Db } from '../db/index.js';
 import { env } from '../config/env.js';
 import { AppConfig, AutomationConfig, CadenceConfig } from '../domain/types.js';
 import { cardBlocksAutomatedDistribution, type CardCheckInput } from '../domain/card.js';
+import { sendMail } from '../integrations/mail.js';
 import { newId } from '../util/id.js';
 import { nowIso } from '../util/time.js';
 import { audit, AuditActor } from './auditService.js';
 import { getAppConfig, saveConfigSection } from './configService.js';
 import { sendDistribution, sendReminders } from './emailService.js';
 import { importQueue, writeBackRound } from './jiraService.js';
-import { listActiveScorers } from './memberService.js';
+import { listActiveScorers, listMembers } from './memberService.js';
 import { roundResults, snapshotRoundResults } from './resultService.js';
 import {
   Round,
@@ -146,6 +147,86 @@ export async function listAutomationLog(db: Db, roundId: string): Promise<Automa
     [roundId],
   );
   return rows.map((row) => ({ action: row.action, ranAt: row.ran_at, outcome: row.outcome, detail: row.detail }));
+}
+
+export interface StuckAutomationStep {
+  roundId: string;
+  weekLabel: string;
+  action: string;
+  outcome: string;
+  detail: string;
+  ranAt: string;
+}
+
+/**
+ * Every automated step, across every round, that has failed and used up its
+ * retries - `claim()`'s own definition of "not coming back on its own",
+ * kept in one place so this never drifts from what actually decides whether
+ * a step retries.
+ */
+export async function listStuckAutomationSteps(db: Db): Promise<StuckAutomationStep[]> {
+  const rows = await db.all<{
+    round_id: string;
+    week_label: string;
+    action: string;
+    outcome: string;
+    detail: string;
+    ran_at: string;
+  }>(
+    `SELECT l.round_id, r.week_label, l.action, l.outcome, l.detail, l.ran_at
+     FROM round_automation_log l
+     JOIN rounds r ON r.id = l.round_id
+     WHERE l.outcome LIKE 'Failed:%' AND l.attempts >= ?
+     ORDER BY l.ran_at DESC`,
+    [MAX_ATTEMPTS],
+  );
+  return rows.map((row) => ({
+    roundId: row.round_id,
+    weekLabel: row.week_label,
+    action: row.action,
+    outcome: row.outcome,
+    detail: row.detail,
+    ranAt: row.ran_at,
+  }));
+}
+
+/**
+ * Emails every active admin about a stuck step the first time it is seen,
+ * and never again for that exact occurrence - `roundId:action:ranAt` is the
+ * dedupe key because `ran_at` moves forward on every genuine retry attempt,
+ * so a step that fails, is retried by hand, and fails again later is
+ * correctly treated as a new occurrence worth a fresh alert. Safe to call on
+ * every scheduler tick: with nothing stuck, this is one cheap query.
+ */
+export async function alertOnStuckFailures(db: Db): Promise<void> {
+  const stuck = await listStuckAutomationSteps(db);
+  if (!stuck.length) return;
+
+  for (const step of stuck) {
+    const key = `${step.roundId}:${step.action}:${step.ranAt}`;
+    const already = await db.get<{ id: string }>(
+      `SELECT id FROM audit_log WHERE action = 'automation.failure.alerted' AND entity_id = ?`,
+      [key],
+    );
+    if (already) continue;
+
+    const admins = (await listMembers(db, false)).filter((m) => m.role === 'ADMIN');
+    if (admins.length) {
+      await sendMail({
+        to: admins.map((a) => a.email),
+        subject: `BIS automation stuck: ${step.weekLabel} — ${step.action}`,
+        html: `<p><strong>${step.action}</strong> on <strong>${step.weekLabel}</strong> has failed and stopped retrying.</p>
+<p>${step.outcome}</p>
+<p>${step.detail ? `Detail: ${step.detail}</p><p>` : ''}Open the round to see the full automation log and retry the matching action by hand.</p>`,
+      });
+    }
+    // Recorded even if there were no active admins to send to, so a stuck
+    // step with nobody to tell does not get re-checked forever - the same
+    // stuck step will still show on the in-app banner regardless. entity_id
+    // is the dedupe key itself (not just the round), since that is what the
+    // lookup above matches on.
+    await audit(db, AUTOMATION_ACTOR, 'automation.failure.alerted', 'round', key, { roundId: step.roundId, action: step.action });
+  }
 }
 
 // --- Cadence arithmetic ----------------------------------------------------

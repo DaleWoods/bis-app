@@ -31,7 +31,7 @@ import {
 import type { Ticket } from '../services/ticketService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
 import { discussionAgenda, listDiscussions, recordDiscussion } from '../services/discussionService.js';
-import { describeNext, listAutomationLog, runDueAutomation } from '../services/automationService.js';
+import { describeNext, listAutomationLog, listStuckAutomationSteps, runDueAutomation } from '../services/automationService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
 const router = Router();
@@ -184,6 +184,15 @@ router.post(
     const run = await runDueAutomation(db);
     await audit(db, actorOf(req), 'automation.run', 'round', '', { steps: run.steps.length });
     res.json(run);
+  }),
+);
+
+router.get(
+  '/automation/failures',
+  requireCoordinator,
+  asyncHandler(async (_req, res) => {
+    const db = await getDb();
+    res.json({ failures: await listStuckAutomationSteps(db) });
   }),
 );
 

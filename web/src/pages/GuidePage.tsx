@@ -631,6 +631,10 @@ export function GuidePage({ member }: { member: Member }) {
               this step by hand”, and stays that way until you do.
             </p>
             <p className="hint">
+              If an automated step fails twice, it stops retrying and stays that way until it is retried by hand. You
+              will get an email the first time this happens, and a banner stays on every page until it is resolved.
+            </p>
+            <p className="hint">
               A round automation created gets an opening time from the Cadence settings automatically. A round you
               create by hand only gets one if you give it one — set “Opens” on the New Round form, or add it
               afterwards from the round page — otherwise automation leaves it alone entirely (it will not open,

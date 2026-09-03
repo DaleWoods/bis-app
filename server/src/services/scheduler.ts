@@ -1,6 +1,6 @@
 import { getDb } from '../db/index.js';
 import { env } from '../config/env.js';
-import { runDueAutomation } from './automationService.js';
+import { alertOnStuckFailures, runDueAutomation } from './automationService.js';
 import { runDailyBackupIfDue } from './backupService.js';
 
 /**
@@ -40,6 +40,7 @@ async function tick(): Promise<void> {
     for (const step of run.steps) {
       console.log(`[bis] automation ${step.action} — ${step.weekLabel}: ${step.outcome}`);
     }
+    await alertOnStuckFailures(db);
   } catch (err) {
     // A failing tick must never take the web service down with it.
     console.error('[bis] automation tick failed:', err instanceof Error ? err.message : err);

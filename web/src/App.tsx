@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, canScore, isCoordinator, type Member } from './api';
+import { api, canScore, isCoordinator, type Member, type StuckAutomationStep } from './api';
 import { Link, matchRoute, useRouter } from './router';
 import { LoginPage } from './pages/LoginPage';
 import { ScorePage } from './pages/ScorePage';
@@ -15,6 +15,7 @@ export function App() {
   const { path, navigate } = useRouter();
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stuckSteps, setStuckSteps] = useState<StuckAutomationStep[]>([]);
 
   useEffect(() => {
     api
@@ -24,10 +25,19 @@ export function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  const coordinator = Boolean(member && isCoordinator(member.role));
+
+  useEffect(() => {
+    if (!coordinator) return;
+    api
+      .automationFailures()
+      .then(({ failures }) => setStuckSteps(failures))
+      .catch(() => {});
+  }, [coordinator]);
+
   if (loading) return <main>Loading…</main>;
   if (!member) return <LoginPage onSignedIn={setMember} />;
 
-  const coordinator = isCoordinator(member.role);
   const scorer = canScore(member.role);
 
   return (
@@ -70,6 +80,21 @@ export function App() {
       </header>
 
       <main id="main">
+        {coordinator && stuckSteps.length ? (
+          <div className="notice warn" role="alert" style={{ marginBottom: '1rem' }}>
+            <strong>
+              {stuckSteps.length === 1 ? 'One automated step is' : `${stuckSteps.length} automated steps are`} stuck
+              and needs attention:
+            </strong>
+            <ul style={{ margin: '0.4rem 0 0' }}>
+              {stuckSteps.map((step) => (
+                <li key={`${step.roundId}-${step.action}-${step.ranAt}`}>
+                  <Link to={`/rounds/${step.roundId}`}>{step.weekLabel}</Link> — {step.action}: {step.outcome}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <Routes path={path} member={member} coordinator={coordinator} scorer={scorer} />
       </main>
     </>

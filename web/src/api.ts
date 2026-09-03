@@ -123,6 +123,15 @@ export interface AutomationStatus {
   log: Array<{ action: string; ranAt: string; outcome: string; detail: string }>;
 }
 
+export interface StuckAutomationStep {
+  roundId: string;
+  weekLabel: string;
+  action: string;
+  outcome: string;
+  detail: string;
+  ranAt: string;
+}
+
 export interface Submission {
   id: string;
   roundId: string;
@@ -568,6 +577,7 @@ export const api = {
     }),
   exportBackupNow: () =>
     request<{ ok: boolean; recipients: number; error?: string }>('/api/backup/export', { method: 'POST' }),
+  automationFailures: () => request<{ failures: StuckAutomationStep[] }>('/api/automation/failures'),
 
   members: () => request<{ members: Member[] }>('/api/members'),
   saveMember: (input: { id?: string; name: string; email: string; team?: string; role?: Role; active?: boolean }) =>
