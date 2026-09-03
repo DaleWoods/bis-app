@@ -1,21 +1,94 @@
 # Business Impact Scoring (BIS)
 
-An application that replaces the manual WOSG weekly scoring process: it holds the scoring queue,
-distributes tickets to the committee, collects scores natively (no more Microsoft Form), aggregates
-them **exactly as the current spreadsheet does**, and writes the business score back to JIRA.
+[![CI](https://github.com/DaleWoods/bis-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DaleWoods/bis-app/actions/workflows/ci.yml)
 
-Built to `BIS App Requirements v0.2` (kept in [`docs/`](docs/) alongside the code). This repository
-contains **Phase 1 (Foundation)** plus the Phase 2 JIRA and Microsoft Graph adapters, coded against
-the real APIs.
+Replaces WOSG's manual weekly scoring process: it holds the scoring queue, distributes tickets to a
+committee, collects scores natively (no Microsoft Form), aggregates them **exactly as the current
+spreadsheet does**, writes the business score back to JIRA, and — since this document was last
+rewritten — can run that entire weekly cycle itself.
 
-The database plan in `render.yaml` is `free` so it can be trialled at no cost — Render deletes free
-databases after 30 days, so move it to `basic-256mb` before it holds scoring data you need to keep.
+Built to [`docs/BIS-App-Requirements-v0.2.md`](docs/BIS-App-Requirements-v0.2.md). Every deliberate
+departure from that spec is recorded, with its rationale, in [`docs/decisions.md`](docs/decisions.md);
+a section-by-section trace of what was built against it is in
+[`docs/requirements-traceability.md`](docs/requirements-traceability.md). This file is the map to all
+three, plus an honest answer to "what's actually live vs. still open."
+
+---
+
+## Status at a glance
+
+**Live and in daily use.** The full weekly cycle — create, fill, distribute, score, chase, close,
+finalise, write back to JIRA — runs end to end, by hand or unattended. 249 server-side tests, an
+end-to-end Playwright suite driving a real browser, and CI on every push all pass on `main`.
+
+| Area | Status |
+|---|---|
+| Scoring engine (§10), native scoring UI, RBAC, audit log | **Done.** Phase 1 foundation. |
+| JIRA read/write-back, idempotent, with a working-set of overrides | **Done.** |
+| AI card drafting from the raw ticket, with a non-AI fallback | **Done.** |
+| Unattended weekly automation (create → distribute → chase → close → finalise → write back) | **Done**, off by default per installation — see [Turning automation on](#letting-it-run-itself). |
+| Alerting when an automated step gets permanently stuck | **Done.** Email + in-app banner. |
+| Queue tab — where a scored ticket currently sits in the dev queue | **Done.** |
+| JQL self-check tool (preview a queue query before relying on it) | **Done.** |
+| Independent daily database backup, emailed to admins | **Done**, code side. **Pending:** the `bis-db` Render database itself still needs manually moving off the free plan in the Render dashboard — a `render.yaml` change alone can't do that for an already-provisioned database. |
+| CI (typecheck/test/build) + a persisted Playwright e2e suite | **Done.** |
+| Committee distribution pack (PPTX/PDF slide deck, §7) | **Built in Phase 1, then removed.** Scoring happens from the in-app ticket card now, and CSV export covers reporting — the deck was redundant. This departure from §7 isn't yet logged as a decision in `docs/decisions.md`; worth adding if the reasoning needs to survive independently of this README. |
+| Entra ID SSO (§4) | **Implemented, off by default.** Sign-in is currently a name/email picker — see [D1](docs/decisions.md#d1--sign-in-is-nameemail-not-entra-id-sso). Switching is a config change (`AUTH_MODE=entra` + an app registration), not a rewrite. |
+| Cross-round trend analytics (Phase 3) | **Not built**, deliberately. Every finalised round is snapshotted into `ticket_results` precisely so this has clean data to build on when wanted. |
+| RA's estimation tooling | **Not built.** Effort is read from JIRA or entered by a coordinator. |
+| Historic import from the old Microsoft Form process | **Not built**, by agreement — the app starts clean. |
+
+The five leverage-ranked plans that closed most of the gaps above (durability, CI, e2e tests, stuck-automation
+alerting, the JQL self-check) are recorded in [`docs/plans/`](docs/plans/), each with its own rationale,
+step-by-step build, and acceptance criteria — worth reading if you want to see *why* those five and not
+something else.
+
+---
+
+## Architecture, in one pass
+
+```
+web/   React + Vite SPA — scoring UI, coordinator dashboard, Settings, Queue, Guide
+server/  Node + TypeScript API (Express) — one process serves both the API and the built SPA
+         domain/      pure calculation + business rules, no I/O (the §10 maths lives here)
+         services/    orchestration over the domain layer and the database
+         routes/      HTTP + RBAC, thin — calls services, never contains business logic
+         integrations/  JIRA, SMTP/Graph mail, Anthropic — each swappable, none required to boot
+e2e/     Playwright suite against the built app + a stub JIRA, disposable SQLite database
+```
+
+- **One deployable, one origin.** The API serves the built React bundle and falls back to
+  `index.html` for any non-API route, so there is exactly one Render web service, not a
+  frontend/backend pair to keep in sync.
+- **Both SQL dialects, one schema.** PostgreSQL in production, SQLite for local dev and the e2e
+  suite — the same `schema.sql` and migrations run on both; `?` placeholders, the driver rewrites
+  them.
+- **Business rules are data, not literals.** Thresholds, categories, cadence, effort mapping and
+  every automation switch live in `app_config` and are edited in Settings — not hard-coded, and not
+  a deploy to change.
+- **Nothing external happens unattended without a way to see it and a way to stop it.** Automation
+  calls the same service functions the buttons call, with the same guards; every step can be paused,
+  every failure is visible, every write-back is idempotent and re-triggerable.
+
+### The decisions that shaped it
+
+Full rationale for each is in [`docs/decisions.md`](docs/decisions.md) — this is the one-line version:
+
+| # | Decision |
+|---|---|
+| D1 | Sign-in is a name/email picker, not Entra SSO — see [Signing in](#signing-in). Reversible by config. |
+| D1b | Coordinators/admins run the process; only `COMMITTEE` members score — kept as two separate jobs, not one role wearing both hats. |
+| D2 → D6 | *(D2 superseded)* The app doesn't just expose distribution/reminder endpoints for an external scheduler — it runs its own once-a-minute clock in-process, safe to run unattended: exactly-once per step, late-not-skipped, every manual override still works, failures stop rather than loop, and (as of this rewrite) alert someone when they do. |
+| D3 | Effort defaults to Backend + Frontend poker combined, with per-ticket manual override — a setting, not a guess baked into the maths. |
+| D4 | Cards are AI-drafted from the whole ticket when a key is configured, falling back to heading-parsing otherwise — never blocks an import, never auto-publishes. |
+| D5 | The ticket card is structured by *what kind* of ticket it is (problem/improvement/new capability), not the four fixed panels the spec sketches — the fixed panels didn't survive contact with a real "new capability" ticket. |
+| D7 | Two roles, not four (`ADMIN`, `COMMITTEE`) — `COORDINATOR` and `ADMIN` were identical in practice, `VIEWER` was unused. |
 
 ---
 
 ## Running it at a URL
 
-In the Render dashboard: **New → Blueprint → this repository**. Render reads `render.yaml`, creates a
+In the Render dashboard: **New → Blueprint → this repository.** Render reads `render.yaml`, creates a
 managed PostgreSQL database and the web service, and prompts for a handful of values.
 
 **Only one value is required:** `BOOTSTRAP_ADMIN_EMAIL`. Set it to your work email address — the app
@@ -23,8 +96,14 @@ creates you as an admin on first boot, because a fresh database has no members a
 Everything else can be left blank and filled in later from the Settings screen.
 
 That gives you the whole application on a real database: create a round, write ticket cards, open it
-for scoring, watch submissions land, see the aggregation, generate the pack, export CSV, finalise, and
-open the anonymised feedback view.
+for scoring, watch submissions land, see the aggregation, export CSV, finalise, and open the
+anonymised feedback view — with automation off until you deliberately turn it on.
+
+> **The database plan matters.** `render.yaml` provisions `bis-db` on `basic-256mb`, which carries
+> Render-managed automated backups. If you've re-provisioned on the free tier at any point — Render
+> deletes free databases after 30 days with no backup at all — move it to a paid plan in the Render
+> dashboard before it holds a single round of real data. This is on top of, not instead of, the
+> independent daily emailed backup described below.
 
 ### Signing in
 
@@ -33,15 +112,15 @@ The coordinator manages that list in Settings; `ALLOW_SELF_REGISTRATION=true` le
 themselves instead, and is off by default because a new scorer's submissions count toward the average
 and the minimum-responses gate.
 
-This is a deliberate departure from §4 of the requirements (Entra ID SSO) — recorded, with what it
-does and does not change, in [`docs/decisions.md`](docs/decisions.md). Moving to SSO later is
+This is a deliberate departure from §4 of the requirements (Entra ID SSO) — see D1 above and
+[`docs/decisions.md`](docs/decisions.md) for what it does and does not change. Moving to SSO later is
 configuration: set `AUTH_MODE=entra` and supply the app registration. The OIDC flow is implemented,
 and a production build refuses to start on `AUTH_MODE=entra` with an incomplete registration, so a
 half-finished switch fails at deploy rather than at someone's login.
 
-### JIRA and email, when you are ready
+### JIRA, email and AI, when you are ready
 
-Neither blocks the deployment, and neither needs a code change:
+None of the three blocks the deployment, and none needs a code change:
 
 | | Until it is configured | To switch it on |
 |---|---|---|
@@ -51,8 +130,9 @@ Neither blocks the deployment, and neither needs a code change:
 
 ### Turning on email
 
-Distribution and reminders go out over **SMTP**, which needs no approval from anyone: sign up with a
-provider, verify the single address you will send from, and set five environment variables.
+Distribution, reminders and the daily backup go out over **SMTP**, which needs no approval from
+anyone: sign up with a provider, verify the single address you will send from, and set five
+environment variables.
 
 | Provider | Host | Free allowance |
 |---|---|---|
@@ -113,7 +193,8 @@ Three things worth being clear about:
 ### Letting it run itself
 
 **Settings → Run the round automatically.** Off until you switch it on, and every step is separate,
-so you can let the app create and chase a round long before you let it write to JIRA:
+so you can let the app create and chase a round long before you let it write to JIRA — a sensible way
+to build trust in it gradually rather than switching the whole cycle on at once:
 
 | Step | What it does |
 |---|---|
@@ -134,6 +215,11 @@ so you can let the app create and chase a round long before you let it write to 
   recalculated when you finalise it again; anything already in JIRA stays until you write back again.
 - **Write the skipped scores anyway** overrides the minimum-responses gate for a round that will
   never reach quorum.
+
+**If a step fails twice, it stops retrying and stays that way** until retried by hand — every active
+admin gets an email the first time this happens, and a banner stays on every page until it's resolved,
+so a bad JIRA token or a rotated SMTP credential can't quietly break the cycle for weeks with nobody
+noticing.
 
 The round page always says what will happen next and shows what the app has already done, so the
 cycle is never a surprise. `SCHEDULER_ENABLED=false` stops an instance ticking at all.
@@ -173,19 +259,17 @@ A production build refuses to start when it would be unsafe, and each refusal na
 Sign-in mode, database and sample data are independent choices, so any combination is available
 without touching code.
 
-### Sample data locally
-
-`npm run seed --workspace server -- --demo` fills a local database with a committee and a round whose
-numbers reproduce the worked examples from the requirements: ECOM-1466 at 43 / 12.8 / ratio 2.69
-(Medium), ECOM-1422 at 13 / ratio 1.00 (Low), ECOM-915 with std dev 18.4 (Pending discussion). Useful
-for seeing the maths without scoring four tickets by hand first.
-
 ### Tests
 
 ```bash
-npm test --workspace server        # 33 tests over the §10 calculation module
 npm run typecheck                  # server + web
+npm test --workspace server        # vitest — 249 tests across the domain, services and routes
+npm run e2e                        # builds server + web, then a Playwright suite against a real browser
 ```
+
+CI (`.github/workflows/ci.yml`) runs the first two on every push and pull request, and the Playwright
+suite as a second job — see the badge at the top of this file. A failed e2e run uploads its HTML
+report as a downloadable artifact.
 
 ### Production build
 
@@ -202,14 +286,14 @@ npm start                          # API serves the built UI from the same origi
 |---|---|
 | §5 domain model | `server/src/db/schema.sql`, `server/src/services/*` |
 | §6 seven categories, stored as data | `categories` table, seeded from `domain/types.ts`, editable in Settings |
-| §7 ticket card / distribution pack | `web/src/components/TicketCard.tsx`, `server/src/pack/pptx.ts`, `pack/pdf.ts` |
+| §7 ticket card (the committee distribution pack was built then removed — see [Status](#status-at-a-glance)) | `web/src/components/TicketCard.tsx` |
 | §8 relevance & closure rules | `services/submissionService.ts` (server-enforced) |
 | §9 impartiality & feedback view | `routes/rounds.ts`, `services/resultService.ts`, `web/src/pages/FeedbackPage.tsx` |
 | §10 the maths | `server/src/domain/scoring.ts` + `scoring.test.ts` |
-| §11 cadence | `app_config.cadence`, Settings → Cadence |
+| §11 cadence | `app_config.cadence`, Settings → Cadence, driven by `services/scheduler.ts` (see D6) |
 | §12.1 JIRA | `integrations/jira.ts`, `services/jiraService.ts` |
-| §12.2 Graph mail | `integrations/graph.ts`, `services/emailService.ts` |
-| §12.3 auth / hosting | `auth/entra.ts`, `auth/session.ts`, `render.yaml`, `docker-compose.yml` (see D1 in `docs/decisions.md`) |
+| §12.2 mail | `integrations/smtp.ts`, `integrations/graph.ts`, `services/emailService.ts` |
+| §12.3 auth / hosting | `auth/entra.ts`, `auth/session.ts`, `render.yaml` (see D1 in `docs/decisions.md`) |
 | §14 audit, RBAC, config-driven, idempotent writes | `services/auditService.ts`, `auth/middleware.ts`, `app_config`, `jira_writebacks` |
 
 A section-by-section trace, including the deliberate decisions, is in
@@ -277,13 +361,13 @@ the server is the enforcement.
 ## Configuration
 
 Copy `.env.example` to `.env`. Business rules are **not** in there - they live in the database and are
-edited in Settings (thresholds, categories, cadence, effort mapping, JIRA field ids, pack branding).
+edited in Settings (thresholds, categories, cadence, effort mapping, JIRA field ids).
 
 ### Database
 
-Production targets Azure Database for PostgreSQL. Local development defaults to a SQLite file so the
-app runs with nothing installed. The schema is one SQL file valid on both dialects; both paths are
-exercised by the same migration and seed scripts.
+Production targets managed PostgreSQL on Render (`render.yaml`). Local development defaults to a
+SQLite file so the app runs with nothing installed. The schema is one SQL file valid on both dialects;
+both paths are exercised by the same migration and seed scripts, and by CI.
 
 ```bash
 docker compose up -d                     # local Postgres on :5432
@@ -300,34 +384,24 @@ Ticket Phase. Paste them into the settings form - they are stored as config, nev
 Write-back is idempotent: the key is round + ticket + score, so re-running after a partial failure
 retries only what did not land, and re-running after success is a no-op. Failures are visible on the
 round page and re-triggerable. Tickets below the minimum response count are skipped, not written -
-they roll over.
+they roll over. Before relying on the queue that feeds JIRA import, use
+**Settings → The queue → "Preview this JQL"** to see exactly which tickets a query currently matches —
+a JQL missing one status silently drops tickets from the queue with nothing on screen saying so, which
+has happened once already; this exists so it's visible before it ships, not after.
 
 ### Email
 
-Microsoft Graph with an app registration (`Mail.Send` application permission) sending as a shared
-mailbox or the coordinator. With `GRAPH_SEND_ENABLED=false` messages are rendered and logged but not
-sent, so the cadence can be rehearsed before go-live. Every send attempt lands in `email_log` with its
-status.
+SMTP (recommended, see above) or Microsoft Graph with an app registration (`Mail.Send` application
+permission), sending as a shared mailbox or the coordinator. With sending disabled, messages are
+rendered and logged but not sent, so the cadence can be rehearsed before go-live. Every send attempt
+lands in `email_log` with its status.
 
----
+### Data durability
 
-## Deployment (Azure)
-
-Build once and run the API - it serves the React bundle from the same origin, so one App Service is
-enough.
-
-| Setting | Value |
-|---|---|
-| `NODE_ENV` | `production` |
-| `AUTH_MODE` | `entra` (the server refuses `dev` in production) |
-| `DB_DRIVER` / `DATABASE_URL` | `postgres` / your Azure Database for PostgreSQL connection string |
-| `DATABASE_SSL` | `true` |
-| `SESSION_SECRET` | long random string |
-| `SESSION_COOKIE_SECURE` | `true` |
-| `ENTRA_*` | app registration, with `ENTRA_REDIRECT_URI` = `https://<host>/auth/callback` |
-
-Migrations run on boot and are idempotent. Members are provisioned by a coordinator; an Entra user who
-is not on the committee is refused rather than silently admitted.
+Beyond Render's own managed backups on the `basic-256mb` plan, the app emails a full JSON export of
+every table to every active admin once a day automatically, and on demand from
+**Settings → Data → "Export a backup now."** This is a second, independent copy — see
+[`docs/plans/PLAN-1-data-durability.md`](docs/plans/PLAN-1-data-durability.md) for the full reasoning.
 
 ---
 
@@ -337,6 +411,8 @@ is not on the committee is refused rather than silently admitted.
   precisely so that work has clean data to build on.
 - **Historic import.** The process starts clean, as agreed.
 - **RA's estimation tooling.** Effort is read from JIRA or entered by the coordinator.
-- **A scheduler process.** Distribution and reminders are exposed as endpoints and driven from the
-  round page; the cadence settings say when they should fire. Wiring them to Azure WebJobs / a timer
-  trigger is a small, deliberate next step rather than an assumption baked into the app.
+- **A broad security audit.** Checked directly and found solid: no `dangerouslySetInnerHTML`
+  anywhere in the frontend, a real CSP with no `unsafe-inline` on scripts, httpOnly/secure/SameSite
+  session cookies, server-side RBAC on every route, an append-only audit log, parameterised SQL
+  throughout. See [`docs/plans/README.md`](docs/plans/README.md) for the fuller reasoning on why this
+  wasn't prioritised as its own piece of work.

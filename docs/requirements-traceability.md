@@ -44,16 +44,16 @@ historic rounds keep their maths.
 
 ## §7 Distribution pack
 
-The in-app ticket card is the primary scoring surface, and `GET /api/rounds/:id/pack.pptx` (and
-`.pdf`) generates the circulating pack from the same fields: title slide, a how-to-score slide, one
-slide per ticket, closing thank-you slide.
+**Status: built, then removed.** A PPTX/PDF pack (`GET /api/rounds/:id/pack.pptx` / `.pdf`) existed in
+Phase 1 — title slide, a how-to-score slide, one slide per ticket, closing thank-you slide — and was
+later deleted from the codebase entirely. It is not currently on `docs/decisions.md` as a logged
+decision; add one there if the rationale needs to survive independently of this note.
 
-The ticket slide departs from the four fixed Current / Impacts / Future / Benefits panels the
-requirements sketch. It carries a kind chip (problem / improvement / new capability), a headline set
-large, three narrative sections whose labels follow that kind, a captioned screenshot beside
-quantified impact chips, an "if we fix it" line and a metadata strip - see docs/decisions.md D5 for
-why. The full JIRA description goes into the speaker notes, so detail is available without putting it
-on the slide.
+The in-app ticket card is now the only scoring surface, and it kept the departure the pack's ticket
+slide made from the four fixed Current / Impacts / Future / Benefits panels the requirements sketch:
+a kind chip (problem / improvement / new capability), a headline set large, three narrative sections
+whose labels follow that kind, a captioned screenshot beside quantified impact chips, an "if we fix
+it" line and a metadata strip - see `docs/decisions.md` D5 for why.
 
 Population is JIRA-field mapping plus AI drafting (D4) and coordinator authoring in
 `TicketEditor.tsx`. A JIRA re-sync refreshes the JIRA-owned fields but never overwrites authored
@@ -91,10 +91,13 @@ Two clarifications that the spec left implicit:
 Distribution day/hour, cut-off day/hour, reminder offsets and the escalation offset are configuration,
 defaulting to a Tuesday 17:00 cut-off. No weekday is hard-coded.
 
-**Deliberate gap:** the app exposes distribution and reminders as endpoints (and the round page drives
-them), but does not run its own scheduler process. On Azure, point a timer trigger / WebJob at those
-endpoints; the cadence settings tell it when. That is a wiring decision for your environment, so it is
-left explicit rather than assumed.
+**Superseded:** this section originally described a deliberate gap — the app exposed distribution and
+reminders as endpoints for an external scheduler to drive, but ran no clock of its own. `docs/decisions.md`
+D6 replaced that: the app now runs a once-a-minute in-process clock that drives the whole cycle itself
+(create → fill → roll over → distribute → remind → close → finalise → write back), off by default per
+installation, with every step still available as a manual button. The endpoints this section originally
+pointed at still exist and still work exactly as before; D6 put a clock in front of them, it did not
+replace them.
 
 ## §12 Integrations
 
@@ -131,7 +134,7 @@ left explicit rather than assumed.
 
 | Criterion | Verified by |
 |---|---|
-| Coordinator creates a round, adds tickets, generates the pack, opens the round | UI walkthrough; `pack.pptx` (152 KB) and `pack.pdf` (6 pages) generated from the demo round |
+| Coordinator creates a round, adds tickets, opens the round | UI walkthrough with the demo round. (The pack referenced by an earlier version of this row was removed — see §7 above.) |
 | Committee signs in, scores 0–10 across seven categories, answers relevance, adds notes, sees only their own | UI walkthrough as a committee member; RBAC responses checked against the API |
 | Correct `responses_count`, `business_score`, `std_dev`, `discussion_required`, `priority_ratio`, band and status label | `scoring.test.ts` (33 tests) and the seeded round reproducing §10.5 end to end |
 | < 5 valid submissions shows "Awaiting WOSG Responses"; Unsure/No excluded; "can be closed" flags "To Close?" | Tests plus API checks |

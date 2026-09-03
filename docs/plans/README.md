@@ -1,5 +1,9 @@
 # Next work, ranked by leverage
 
+**Status: all five complete and merged to `main`**, in the order below. Kept here as the record of
+*why* these five and not something else — read a plan file for the full build detail and acceptance
+criteria it shipped against.
+
 Five independent plans, produced by exploring the whole codebase, the
 decisions log (`docs/decisions.md`), the requirements traceability doc, and
 the actual state of the GitHub repository (zero open issues, zero pull
