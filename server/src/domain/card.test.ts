@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CARD_KINDS, cardBlocksAutomatedDistribution, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
+import { CARD_KINDS, CARD_LIMITS, cardBlocksAutomatedDistribution, cardLines, cardWarnings, draftIsEmpty, kindFromIssueType, labelsFor } from './card.js';
+
+describe('CARD_LIMITS', () => {
+  it('gives the drafter headroom past the target before a bullet gets clipped', () => {
+    // bulletTarget is what the prompt asks for; bullet is the hard cap clip()
+    // actually enforces. If these ever collapse to the same number, a bullet
+    // that just misses the target gets an ellipsis instead of the headroom
+    // this pair exists to give it.
+    expect(CARD_LIMITS.bullet).toBeGreaterThan(CARD_LIMITS.bulletTarget);
+  });
+});
 
 describe('labelsFor', () => {
   it('asks a different question of each kind of ticket', () => {

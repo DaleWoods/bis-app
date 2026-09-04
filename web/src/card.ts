@@ -59,7 +59,7 @@ export function labelsFor(kind: string | null | undefined): SectionLabels {
 /** Kept in step with CARD_LIMITS on the server. */
 export const CARD_LIMITS = {
   execSummary: 240,
-  panel: 300,
+  panel: 400,
   benefit: 200,
   impactFact: 62,
   screenshotCaption: 150,

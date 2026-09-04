@@ -42,13 +42,20 @@ export interface CardDraft {
 /**
  * Deliberately tight. The complaint about the old decks was that they were too
  * wordy; the answer to "it does not tell me enough" is more structure and a
- * bigger picture, not longer paragraphs.
+ * bigger picture, not longer paragraphs. `bulletTarget` vs `bullet` below is
+ * the same idea applied to the single most common failure of that tightness -
+ * a good bullet cut off mid-word.
  */
 export const CARD_LIMITS = {
   execSummary: 240,
-  panel: 300,
+  panel: 400,
   bulletsPerPanel: 3,
-  bullet: 100,
+  /** What the prompt asks the drafter to aim for - a bullet at exactly this length is a good bullet. */
+  bulletTarget: 100,
+  /** The real, hard cap: past this a bullet is cut at a word boundary and gets an ellipsis. Only exists
+   *  as headroom for the rare bullet the drafter can't trim past bulletTarget without losing the point -
+   *  not a second target. */
+  bullet: 130,
   benefit: 200,
   impactFacts: 4,
   impactFact: 62,

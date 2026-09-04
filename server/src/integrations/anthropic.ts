@@ -174,7 +174,12 @@ const SYSTEM = [
   '',
   'LENGTH - the standing complaint is that these are too wordy, and a wall of text gets skimmed:',
   `- Headline at most ${CARD_LIMITS.execSummary} characters. One or two sentences.`,
-  `- Each section at most ${CARD_LIMITS.bulletsPerPanel} bullets of at most ${CARD_LIMITS.bullet} characters. Two good bullets beat three padded ones.`,
+  `- Each section at most ${CARD_LIMITS.bulletsPerPanel} bullets. Aim for ${CARD_LIMITS.bulletTarget} characters ` +
+    `or fewer - that is the length of a good bullet. ${CARD_LIMITS.bullet} is the hard ceiling: anything longer ` +
+    'gets cut off mid-word with "…" appended, which reads worse than a shorter bullet ever would. If a bullet ' +
+    'is running long, cut the least important clause rather than let it be truncated - a bullet you shortened on ' +
+    'purpose always beats one the system shortened for you.',
+  '- Two good bullets beat three padded ones.',
   '- Bullets are fragments, not sentences. No trailing full stops, no sub-bullets, no bullet that restates another.',
   `- The closing line is one sentence, at most ${CARD_LIMITS.benefit} characters.`,
   '',
