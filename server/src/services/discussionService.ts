@@ -1,8 +1,11 @@
 import { Db } from '../db/index.js';
+import { sendMail } from '../integrations/mail.js';
 import { nowIso } from '../util/time.js';
 import { AuditActor, audit } from './auditService.js';
 import { DISCUSSION_OUTCOMES, DiscussionOutcome } from '../domain/types.js';
+import { AUTOMATION_ACTOR } from './automationService.js';
 import { listCategories } from './configService.js';
+import { listMembers } from './memberService.js';
 import { roundResults } from './resultService.js';
 import { HttpishError, Round, addTicketToRound, listRounds } from './roundService.js';
 import { listRoundSubmissions } from './submissionService.js';
@@ -116,6 +119,83 @@ export async function discussionAgenda(db: Db, round: Round): Promise<Discussion
     });
   }
   return items;
+}
+
+export interface PendingDiscussion {
+  roundId: string;
+  weekLabel: string;
+  ticketId: string;
+  jiraId: string;
+  title: string;
+  stdDev: number | null;
+}
+
+/**
+ * Every ticket, across every round, that is split enough to need a meeting
+ * and has no outcome recorded yet - live, not a stored flag. A ticket that
+ * narrows back under the threshold, or gets AGREED/RESCORE/CLOSE recorded
+ * against it, drops off on its own with nothing to clear.
+ */
+export async function listPendingDiscussions(db: Db): Promise<PendingDiscussion[]> {
+  const rounds = (await listRounds(db)).filter((r) => r.status !== 'DRAFT');
+  const pending: PendingDiscussion[] = [];
+  for (const round of rounds) {
+    const [results, discussions] = await Promise.all([roundResults(db, round), listDiscussions(db, round.id)]);
+    for (const { ticket, aggregate } of results) {
+      if (!aggregate.discussionRequired) continue;
+      if (discussions.get(ticket.id)?.outcome) continue;
+      pending.push({
+        roundId: round.id,
+        weekLabel: round.weekLabel,
+        ticketId: ticket.id,
+        jiraId: ticket.jiraId,
+        title: ticket.title,
+        stdDev: aggregate.stdDev,
+      });
+    }
+  }
+  return pending;
+}
+
+/**
+ * Emails every active admin the first time a ticket becomes split enough to
+ * need a decision, and never again for that same round+ticket - see
+ * alertOnStuckFailures in automationService.ts for the same audit_log
+ * dedup pattern. Safe to call on every tick: with nothing pending, this is a
+ * handful of cheap reads.
+ */
+export async function alertOnUnresolvedDiscussions(db: Db): Promise<void> {
+  const pending = await listPendingDiscussions(db);
+  if (!pending.length) return;
+
+  for (const item of pending) {
+    const key = `${item.roundId}:${item.ticketId}`;
+    const already = await db.get<{ id: string }>(
+      `SELECT id FROM audit_log WHERE action = 'discussion.alerted' AND entity_id = ?`,
+      [key],
+    );
+    if (already) continue;
+
+    const admins = (await listMembers(db, false)).filter((m) => m.role === 'ADMIN');
+    if (admins.length) {
+      await sendMail({
+        to: admins.map((a) => a.email),
+        subject: `BIS: ${item.jiraId} needs a discussion — ${item.weekLabel}`,
+        html: `<p><strong>${item.jiraId}</strong> — ${item.title}</p>
+<p>The committee's scores were split enough on this one (spread ${
+          item.stdDev !== null ? item.stdDev.toFixed(1) : '—'
+        }) that it needs a decision before a score can go to JIRA.</p>
+<p>Open the round's Discussions tab to book a meeting or record what was decided.</p>`,
+      });
+    }
+    // Recorded even with no active admins to send to, so a pending
+    // discussion with nobody to tell does not get re-checked forever - the
+    // banner still shows it regardless of whether the email went anywhere.
+    await audit(db, AUTOMATION_ACTOR, 'discussion.alerted', 'ticket', key, {
+      roundId: item.roundId,
+      ticketId: item.ticketId,
+    });
+  }
 }
 
 export interface DiscussionInput {

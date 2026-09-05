@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, canScore, isCoordinator, type Member, type StuckAutomationStep } from './api';
+import { api, canScore, isCoordinator, type Member, type PendingDiscussion, type StuckAutomationStep } from './api';
 import { Link, matchRoute, useRouter } from './router';
 import { LoginPage } from './pages/LoginPage';
 import { ScorePage } from './pages/ScorePage';
@@ -16,6 +16,7 @@ export function App() {
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [stuckSteps, setStuckSteps] = useState<StuckAutomationStep[]>([]);
+  const [pendingDiscussions, setPendingDiscussions] = useState<PendingDiscussion[]>([]);
 
   useEffect(() => {
     api
@@ -32,6 +33,10 @@ export function App() {
     api
       .automationFailures()
       .then(({ failures }) => setStuckSteps(failures))
+      .catch(() => {});
+    api
+      .pendingDiscussions()
+      .then(({ discussions }) => setPendingDiscussions(discussions))
       .catch(() => {});
   }, [coordinator]);
 
@@ -90,6 +95,21 @@ export function App() {
               {stuckSteps.map((step) => (
                 <li key={`${step.roundId}-${step.action}-${step.ranAt}`}>
                   <Link to={`/rounds/${step.roundId}`}>{step.weekLabel}</Link> — {step.action}: {step.outcome}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {coordinator && pendingDiscussions.length ? (
+          <div className="notice warn" role="alert" style={{ marginBottom: '1rem' }}>
+            <strong>
+              {pendingDiscussions.length === 1 ? 'One ticket needs' : `${pendingDiscussions.length} tickets need`} a
+              discussion:
+            </strong>
+            <ul style={{ margin: '0.4rem 0 0' }}>
+              {pendingDiscussions.map((item) => (
+                <li key={`${item.roundId}-${item.ticketId}`}>
+                  <Link to={`/rounds/${item.roundId}`}>{item.jiraId}</Link> — {item.title} ({item.weekLabel})
                 </li>
               ))}
             </ul>

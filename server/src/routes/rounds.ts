@@ -30,7 +30,7 @@ import {
 } from '../services/submissionService.js';
 import type { Ticket } from '../services/ticketService.js';
 import { listWriteBacks, writeBackRound } from '../services/jiraService.js';
-import { discussionAgenda, listDiscussions, recordDiscussion } from '../services/discussionService.js';
+import { discussionAgenda, listDiscussions, listPendingDiscussions, recordDiscussion } from '../services/discussionService.js';
 import { describeNext, listAutomationLog, listStuckAutomationSteps, runDueAutomation } from '../services/automationService.js';
 import { actorOf, asyncHandler } from './helpers.js';
 
@@ -193,6 +193,15 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
     res.json({ failures: await listStuckAutomationSteps(db) });
+  }),
+);
+
+router.get(
+  '/discussions/pending',
+  requireCoordinator,
+  asyncHandler(async (_req, res) => {
+    const db = await getDb();
+    res.json({ discussions: await listPendingDiscussions(db) });
   }),
 );
 

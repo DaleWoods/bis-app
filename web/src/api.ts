@@ -132,6 +132,15 @@ export interface StuckAutomationStep {
   ranAt: string;
 }
 
+export interface PendingDiscussion {
+  roundId: string;
+  weekLabel: string;
+  ticketId: string;
+  jiraId: string;
+  title: string;
+  stdDev: number | null;
+}
+
 export interface Submission {
   id: string;
   roundId: string;
@@ -592,6 +601,7 @@ export const api = {
   exportBackupNow: () =>
     request<{ ok: boolean; recipients: number; error?: string }>('/api/backup/export', { method: 'POST' }),
   automationFailures: () => request<{ failures: StuckAutomationStep[] }>('/api/automation/failures'),
+  pendingDiscussions: () => request<{ discussions: PendingDiscussion[] }>('/api/discussions/pending'),
 
   members: () => request<{ members: Member[] }>('/api/members'),
   saveMember: (input: { id?: string; name: string; email: string; team?: string; role?: Role; active?: boolean }) =>

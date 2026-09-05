@@ -504,6 +504,11 @@ export function GuidePage({ member }: { member: Member }) {
               <strong>Discussions</strong> list on the round page, and they are held out of the JIRA write-back — with
               no override, unlike the minimum-responses gate — until you record an outcome.
             </p>
+            <p className="hint">
+              You will get an email the first time a ticket splits like this, and a banner stays on every page —
+              naming the ticket and the round — until an outcome is recorded. This runs whether or not automation
+              itself is switched on, because a split ticket can turn up on a round scored entirely by hand too.
+            </p>
             <p>
               Book the meeting however you normally would. The list gives you what you need to run it: every total that
               was given (unattributed, as always), the lowest and highest, the spread against the threshold, and any

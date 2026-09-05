@@ -2,6 +2,7 @@ import { getDb } from '../db/index.js';
 import { env } from '../config/env.js';
 import { alertOnStuckFailures, runDueAutomation } from './automationService.js';
 import { runDailyBackupIfDue } from './backupService.js';
+import { alertOnUnresolvedDiscussions } from './discussionService.js';
 
 /**
  * The clock behind the automated cycle (§11, §12.2).
@@ -49,20 +50,26 @@ async function tick(): Promise<void> {
   }
 }
 
-let backupTimer: NodeJS.Timeout | null = null;
+let alwaysOnTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
-  // The daily backup runs regardless of SCHEDULER_ENABLED - that flag is
-  // about the weekly round cycle, not about whether the only copy of the
-  // data gets backed up. Scoring can still happen by hand with automation
-  // off, and the data still needs protecting either way.
-  if (!backupTimer) {
-    backupTimer = setInterval(() => {
+  // These two run regardless of SCHEDULER_ENABLED - that flag is about the
+  // weekly round cycle, not about whether the only copy of the data gets
+  // backed up or whether anyone finds out a ticket needs a decision. A round
+  // scored entirely by hand, with automation fully off, can still produce a
+  // split ticket nobody notices unless they go looking - the same problem
+  // the flag exists to solve for automation's own failures, just with a
+  // different trigger.
+  if (!alwaysOnTimer) {
+    alwaysOnTimer = setInterval(() => {
       getDb()
-        .then((db) => runDailyBackupIfDue(db))
-        .catch((err) => console.error('[bis] backup tick failed:', err instanceof Error ? err.message : err));
+        .then(async (db) => {
+          await runDailyBackupIfDue(db);
+          await alertOnUnresolvedDiscussions(db);
+        })
+        .catch((err) => console.error('[bis] background tick failed:', err instanceof Error ? err.message : err));
     }, TICK_MS);
-    backupTimer.unref?.();
+    alwaysOnTimer.unref?.();
   }
 
   if (timer) return;
@@ -84,6 +91,6 @@ export function startScheduler(): void {
 export function stopScheduler(): void {
   if (timer) clearInterval(timer);
   timer = null;
-  if (backupTimer) clearInterval(backupTimer);
-  backupTimer = null;
+  if (alwaysOnTimer) clearInterval(alwaysOnTimer);
+  alwaysOnTimer = null;
 }
