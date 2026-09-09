@@ -506,7 +506,32 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="discussions" title="Tickets the committee split on" index={7}>
+          <Section id="trends" title="Seeing it across rounds" index={7}>
+            <p>
+              The <strong>Trends</strong> tab reads nothing new — it is the same frozen numbers every finalised round
+              already keeps, just laid out across rounds instead of within one. It needs at least two finalised
+              rounds before there is a trend to draw.
+            </p>
+            <ul>
+              <li>
+                <strong>Business score over time</strong> — the average score across each round's tickets, so a run
+                of quiet rounds or a sudden spike is visible without opening each one.
+              </li>
+              <li>
+                <strong>Which categories drive the score</strong> — each category's own average across every ticket
+                actually scored, and how often it came out the highest or the lowest of a ticket's categories. A
+                category that is almost always the lowest is either genuinely a low-impact area, or a sign the
+                category itself needs a clearer description.
+              </li>
+              <li>
+                <strong>Participation over time</strong> — how many committee members took part in each round, and
+                how many of them answered the average ticket. A number sliding down here is the same drop-off shown
+                per-member on the Audit page's engagement table, seen as a trend instead of a snapshot.
+              </li>
+            </ul>
+          </Section>
+
+          <Section id="discussions" title="Tickets the committee split on" index={8}>
             <p>
               When the committee's totals for a ticket are further apart than the spread threshold, averaging them
               produces a number nobody in the room agreed with. Those tickets collect on the{' '}
@@ -550,7 +575,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="jira" title="Getting scores into JIRA" index={8}>
+          <Section id="jira" title="Getting scores into JIRA" index={9}>
             <p>
               <strong>Write scores to JIRA</strong> appears once a round is finalised. It writes each ticket's business
               score to the configured field and then moves the ticket on — to <em>Ready for Estimation</em> by default,
@@ -599,7 +624,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="automation" title="Letting it run itself" index={9}>
+          <Section id="automation" title="Letting it run itself" index={10}>
             <p>
               <strong>Settings → Run the round automatically.</strong> Off until you switch it on. Every step is its own
               switch, so you can let the app create and chase a round long before you let it write to JIRA.
@@ -671,7 +696,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="settings" title="Settings worth knowing about" index={10}>
+          <Section id="settings" title="Settings worth knowing about" index={11}>
             <ul>
               <li>
                 <strong>Minimum responses</strong> — below this a ticket rolls over instead of being scored.
@@ -736,7 +761,7 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="problems" title="When something looks wrong" index={11}>
+          <Section id="problems" title="When something looks wrong" index={12}>
             <div className="table-scroll">
               <table>
                 <caption className="visually-hidden">Common problems and what they mean</caption>

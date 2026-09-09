@@ -13,6 +13,7 @@ import { seedBase, seedDemo } from './db/seed.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
 import { getMemberByEmail, saveMember } from './services/memberService.js';
 import authRoutes from './routes/auth.js';
+import analyticsRoutes from './routes/analytics.js';
 import auditRoutes from './routes/audit.js';
 import backupRoutes from './routes/backup.js';
 import configRoutes from './routes/config.js';
@@ -90,6 +91,7 @@ export async function createApp() {
   app.use('/api', queueRoutes);
   app.use('/api', auditRoutes);
   app.use('/api', backupRoutes);
+  app.use('/api', analyticsRoutes);
 
   // Single-deployment mode: serve the built React app if it is present.
   const webDist = path.resolve(env.serverRoot, '..', 'web', 'dist');

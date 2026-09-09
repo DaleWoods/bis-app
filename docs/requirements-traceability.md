@@ -34,7 +34,10 @@ identity rather than one Microsoft vouched for.
 All entities present. Computed values (`business_score`, `std_dev`, `discussion_required`, `effort`,
 `priority_ratio`, `priority_band`, `status_label`) are derived on read from live submissions, and
 snapshotted into `ticket_results` at finalisation so a finalised round cannot drift and Phase 3 has
-clean history.
+clean history. Phase 3 itself has since landed in part: `analyticsService.ts` reads that same frozen
+history into the **Trends** tab — business score over time, which categories most often drive a
+ticket's score up or down, and participation over time. Consensus analytics and effort/priority
+automation refinements are the Phase 3 work still outstanding.
 
 ## §6 Categories
 
@@ -124,7 +127,7 @@ replace them.
 - **RBAC** — server-side, per route.
 - **Config-driven** — 16, 5, 6, 1.8, the categories, the cadence and the effort mapping are all data.
 - **Idempotent JIRA writes** — round + ticket + score idempotency key in `jira_writebacks`.
-- **Retention** — finalised rounds snapshotted for the Phase 3 trend work.
+- **Retention** — finalised rounds snapshotted for the Phase 3 trend work, now read by the Trends tab (§5 above).
 - **Accessibility** — semantic landmarks and headings, a skip link, every control labelled,
   fieldset/legend grouping for the relevance question and the score set, `output` elements bound to
   their sliders, `aria-live` status messaging, table captions and scoped headers, visible focus rings,

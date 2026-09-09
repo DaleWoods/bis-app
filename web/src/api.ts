@@ -185,6 +185,33 @@ export interface TicketResult {
   aggregate: Aggregate;
 }
 
+export interface RoundTrendPoint {
+  roundId: string;
+  weekLabel: string;
+  finalisedAt: string;
+  ticketCount: number;
+  avgBusinessScore: number | null;
+  sentForEstimation: number;
+  toClose: number;
+  discussionRequired: number;
+  scorers: number;
+  avgResponsesPerTicket: number | null;
+}
+
+export interface CategoryDriver {
+  categoryId: string;
+  name: string;
+  avgScore: number | null;
+  ticketsScored: number;
+  timesHighest: number;
+  timesLowest: number;
+}
+
+export interface AnalyticsSummary {
+  rounds: RoundTrendPoint[];
+  categoryDrivers: CategoryDriver[];
+}
+
 export interface MemberProgress {
   memberId: string;
   memberName: string;
@@ -637,6 +664,9 @@ export const api = {
     request<{ entries: Array<{ id: string; at: string; actorEmail: string; action: string; entityType: string; entityId: string; detail: unknown }> }>(
       `/api/audit?limit=${limit}`,
     ),
+
+  analytics: (limit?: number) =>
+    request<AnalyticsSummary>(`/api/analytics${limit ? `?limit=${limit}` : ''}`),
 };
 
 export function isCoordinator(role: Role | undefined): boolean {

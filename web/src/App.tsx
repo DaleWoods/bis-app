@@ -10,6 +10,7 @@ import { RoundDetailPage } from './pages/RoundDetailPage';
 import { FeedbackPage } from './pages/FeedbackPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuditPage } from './pages/AuditPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { GuidePage } from './pages/GuidePage';
 
 export function App() {
@@ -69,6 +70,7 @@ export function App() {
           {scorer ? <Link to="/">Score</Link> : null}
           <Link to="/rounds">Rounds</Link>
           <Link to="/queue">Queue</Link>
+          {coordinator ? <Link to="/trends">Trends</Link> : null}
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
           <Link to="/guide">Guide</Link>
@@ -170,6 +172,7 @@ function Routes({
 
   if (path === '/settings') return coordinator ? <SettingsPage member={member} /> : <Forbidden />;
   if (path === '/audit') return coordinator ? <AuditPage /> : <Forbidden />;
+  if (path === '/trends') return coordinator ? <AnalyticsPage /> : <Forbidden />;
 
   return (
     <>
