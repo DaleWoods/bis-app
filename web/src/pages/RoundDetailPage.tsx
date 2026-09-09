@@ -789,6 +789,10 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
           ...ticket,
           hasUnusedImage: ticket.attachments.some((a) => a.isImage),
         });
+        // The automated checks above catch what a card is missing mechanically;
+        // this is the scorers' own signal that the card itself was too thin to
+        // score from, which nothing mechanical can catch.
+        const unclearCount = submissions.filter((s) => s.ticketId === ticket.id && !s.archived && s.cardUnclear).length;
 
         const isEditing = editing === ticket.id;
 
@@ -871,6 +875,14 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
                 {ticket.backendPokerScore ?? '—'} · Frontend {ticket.frontendPokerScore ?? '—'} · Manual effort{' '}
                 {ticket.manualEffort ?? '—'}
               </p>
+
+              {unclearCount > 0 ? (
+                <p className="hint card-gaps" style={{ margin: '0.2rem 0 0' }}>
+                  {unclearCount === 1
+                    ? 'One scorer said this card didn’t give them enough to score it.'
+                    : `${unclearCount} scorers said this card didn’t give them enough to score it.`}
+                </p>
+              ) : null}
 
               {/*
                 Automation would not send this one unattended - the rest of the

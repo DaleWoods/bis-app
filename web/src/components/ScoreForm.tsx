@@ -17,6 +17,7 @@ interface Props {
     closureReason?: string;
     closureInfo?: string;
     moreInfo?: string;
+    cardUnclear?: boolean;
   }) => Promise<void>;
 }
 
@@ -33,6 +34,7 @@ interface Draft {
   closureReason: string;
   closureInfo: string;
   moreInfo: string;
+  cardUnclear: boolean;
 }
 
 function draftKey(roundId: string, ticketId: string, memberEmail: string): string {
@@ -108,12 +110,14 @@ export function ScoreForm({
     closureReason: draftAtMount?.closureReason ?? submission?.closureReason ?? '',
     closureInfo: draftAtMount?.closureInfo ?? submission?.closureInfo ?? '',
     moreInfo: draftAtMount?.moreInfo ?? submission?.moreInfo ?? '',
+    cardUnclear: draftAtMount?.cardUnclear ?? submission?.cardUnclear ?? false,
   }));
   const [relevance, setRelevance] = useState<Relevance>(initialDraft.relevance);
   const [scores, setScores] = useState<Record<string, number>>(initialDraft.scores);
   const [closureReason, setClosureReason] = useState(initialDraft.closureReason);
   const [closureInfo, setClosureInfo] = useState(initialDraft.closureInfo);
   const [moreInfo, setMoreInfo] = useState(initialDraft.moreInfo);
+  const [cardUnclear, setCardUnclear] = useState(initialDraft.cardUnclear);
   const [status, setStatus] = useState<{ tone: 'saved' | 'error' | ''; message: string }>({ tone: '', message: '' });
   const [saving, setSaving] = useState(false);
 
@@ -141,10 +145,10 @@ export function ScoreForm({
   // resume hint only ever appears where something was actually left mid-way.
   useEffect(() => {
     if (locked) return;
-    const current: Draft = { relevance, scores, closureReason, closureInfo, moreInfo };
+    const current: Draft = { relevance, scores, closureReason, closureInfo, moreInfo, cardUnclear };
     if (JSON.stringify(current) === JSON.stringify(initialDraft)) return;
     saveDraft(key, current);
-  }, [key, locked, relevance, scores, closureReason, closureInfo, moreInfo, initialDraft]);
+  }, [key, locked, relevance, scores, closureReason, closureInfo, moreInfo, cardUnclear, initialDraft]);
 
   const isRequestor = Boolean(ticket.originalRequestor) && ticket.originalRequestor.toLowerCase() === memberEmail.toLowerCase();
   const total = useMemo(
@@ -163,6 +167,7 @@ export function ScoreForm({
         closureReason: closureReason || undefined,
         closureInfo: closureInfo || undefined,
         moreInfo: moreInfo || undefined,
+        cardUnclear: cardUnclear || undefined,
       });
       clearDraft(key);
       setStatus({ tone: 'saved', message: 'Scored. That is your answer for this round.' });
@@ -300,6 +305,20 @@ export function ScoreForm({
           </div>
         </fieldset>
       ) : null}
+
+      <label className="relevance-option" htmlFor={`card-unclear-${ticket.id}`} style={{ marginTop: '0.75rem' }}>
+        <input
+          type="checkbox"
+          id={`card-unclear-${ticket.id}`}
+          checked={cardUnclear}
+          disabled={readOnly}
+          onChange={(e) => setCardUnclear(e.target.checked)}
+        />
+        <span>
+          The card didn&rsquo;t give me enough to score this
+          <span className="hint"> — flags it for whoever writes the cards, separately from any note below</span>
+        </span>
+      </label>
 
       <div className="field">
         <label htmlFor={`notes-${ticket.id}`}>Notes or questions (optional)</label>

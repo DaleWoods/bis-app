@@ -151,6 +151,7 @@ export interface Submission {
   closureReason: string;
   closureInfo: string;
   moreInfo: string;
+  cardUnclear: boolean;
   archived: boolean;
   scores: Record<string, number>;
   /** When the score was given. A score cannot be revised, so this is the score's own date. */
@@ -454,7 +455,14 @@ export const api = {
   saveSubmission: (
     roundId: string,
     ticketId: string,
-    payload: { relevance: Relevance; scores?: Record<string, number>; closureReason?: string; closureInfo?: string; moreInfo?: string },
+    payload: {
+      relevance: Relevance;
+      scores?: Record<string, number>;
+      closureReason?: string;
+      closureInfo?: string;
+      moreInfo?: string;
+      cardUnclear?: boolean;
+    },
   ) =>
     request<{ submission: Submission }>(`/api/rounds/${roundId}/tickets/${ticketId}/submission`, {
       method: 'PUT',

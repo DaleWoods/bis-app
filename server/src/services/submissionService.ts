@@ -25,6 +25,8 @@ export interface Submission {
   closureReason: string;
   closureInfo: string;
   moreInfo: string;
+  /** The scorer's own signal that the card, not the ticket, was too thin to score from. */
+  cardUnclear: boolean;
   archived: boolean;
   scores: Record<string, number>;
   submittedAt: string;
@@ -41,6 +43,7 @@ interface SubmissionRow {
   closure_reason: string;
   closure_info: string;
   more_info: string;
+  card_unclear: number;
   archived: number;
   submitted_at: string;
   updated_at: string;
@@ -57,6 +60,7 @@ function map(row: SubmissionRow, scores: Record<string, number>): Submission {
     closureReason: row.closure_reason,
     closureInfo: row.closure_info,
     moreInfo: row.more_info,
+    cardUnclear: Number(row.card_unclear) === 1,
     archived: Number(row.archived) === 1,
     scores,
     submittedAt: row.submitted_at,
@@ -120,6 +124,7 @@ export interface SubmissionPayload {
   closureReason?: string;
   closureInfo?: string;
   moreInfo?: string;
+  cardUnclear?: boolean;
 }
 
 /**
@@ -249,13 +254,14 @@ export async function saveSubmission(
       // sanctioned way to let somebody score again. Scoring again un-excludes
       // it, or the new answer would be recorded and still not count.
       await tx.run(
-        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, archived = 0, submitted_at = ?, updated_at = ?
+        `UPDATE submissions SET relevance = ?, closure_reason = ?, closure_info = ?, more_info = ?, card_unclear = ?, archived = 0, submitted_at = ?, updated_at = ?
          WHERE id = ?`,
         [
           payload.relevance,
           payload.closureReason ?? '',
           payload.closureInfo ?? '',
           payload.moreInfo ?? '',
+          payload.cardUnclear ? 1 : 0,
           now,
           now,
           id,
@@ -264,8 +270,8 @@ export async function saveSubmission(
       await tx.run('DELETE FROM submission_scores WHERE submission_id = ?', [id]);
     } else {
       await tx.run(
-        `INSERT INTO submissions (id, round_id, ticket_id, member_id, relevance, closure_reason, closure_info, more_info, archived, submitted_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        `INSERT INTO submissions (id, round_id, ticket_id, member_id, relevance, closure_reason, closure_info, more_info, card_unclear, archived, submitted_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
         [
           id,
           round.id,
@@ -275,6 +281,7 @@ export async function saveSubmission(
           payload.closureReason ?? '',
           payload.closureInfo ?? '',
           payload.moreInfo ?? '',
+          payload.cardUnclear ? 1 : 0,
           now,
           now,
         ],

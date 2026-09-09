@@ -165,6 +165,7 @@ const submissionSchema = z.object({
   closureReason: z.string().optional(),
   closureInfo: z.string().optional(),
   moreInfo: z.string().optional(),
+  cardUnclear: z.boolean().optional(),
 });
 
 /**
@@ -198,6 +199,7 @@ router.put(
       jiraId: ticket.jiraId,
       relevance: submission.relevance,
       scores: submission.scores,
+      cardUnclear: submission.cardUnclear,
     });
     res.json({ submission });
   }),
