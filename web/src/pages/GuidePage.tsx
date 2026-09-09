@@ -135,8 +135,10 @@ export function GuidePage({ member }: { member: Member }) {
         </p>
         <p>
           The cards are written for you, not for the team that raised the ticket. If one still leaves you guessing,
-          that is worth saying in the notes box rather than scoring around — the answer to a card nobody understood is
-          a better card, and the notes are how that gets back to whoever is running the round.
+          the answer to a card nobody understood is a better card, and there are two ways to say so: tick{' '}
+          <strong>“The card didn't give me enough to score this”</strong> below the score even if you still gave one —
+          it is a direct signal to whoever writes the cards, separate from your notes — or, if you genuinely cannot
+          judge it at all, answer “Unsure” instead of scoring.
         </p>
         <p>
           For each ticket, answer the relevance question first, then — if you answered yes — give it a mark out of{' '}
@@ -341,7 +343,9 @@ export function GuidePage({ member }: { member: Member }) {
               <li>
                 <strong>Check the cards.</strong> This is the part that decides whether the round is any good — see
                 below. A ticket with no effort figures yet is flagged “No effort set” as soon as it is in, rather than
-                only once the round is nearly over, so it can be chased alongside scoring.
+                only once the round is nearly over, so it can be chased alongside scoring. Past six tickets a search
+                box appears above the list, on this page and on Rounds, so a long round or a long history is still
+                findable by key or title.
               </li>
               <li>
                 <strong>Distribute to committee.</strong> This opens the round and emails everyone a link. Once
@@ -451,6 +455,11 @@ export function GuidePage({ member }: { member: Member }) {
               still reads technical. Those checks are mechanical, so they catch the obvious failures and nothing else;
               a card can pass all of them and still be vague. They matter most when the round is running itself, because
               then a weak card goes out to the committee and gets scored with nobody having read it first.
+            </p>
+            <p>
+              Below that, if any scorer ticked <strong>“The card didn't give me enough to score this”</strong>, the count
+              shows here too — the mechanical checks catch what a card is missing; this is what scorers actually
+              struggled with, which nothing mechanical can.
             </p>
           </Section>
 
@@ -701,6 +710,12 @@ export function GuidePage({ member }: { member: Member }) {
                 <strong>Data</strong> — a full backup of the database, every round, ticket, score and the audit
                 trail, is emailed to every admin automatically once a day, and can be sent on demand with
                 "Export a backup now".
+              </li>
+              <li>
+                <strong>Weekly digest</strong> — every admin gets an emailed roundup once a week: any round finalised
+                since the last one, how the open round is filling up, and anything waiting on you — a split ticket with
+                no meeting recorded yet, or an automated step that has failed and stopped retrying. It sends even in a
+                quiet week, saying so, rather than going quiet itself in a way that looks the same as having stopped.
               </li>
               <li>
                 <strong>The queue</strong> — the JQL here decides which tickets the Queue tab shows as waiting to be

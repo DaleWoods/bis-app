@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { alertOnStuckFailures, runDueAutomation } from './automationService.js';
 import { runDailyBackupIfDue } from './backupService.js';
 import { alertOnUnresolvedDiscussions } from './discussionService.js';
+import { runWeeklyDigestIfDue } from './digestService.js';
 
 /**
  * The clock behind the automated cycle (§11, §12.2).
@@ -53,12 +54,13 @@ async function tick(): Promise<void> {
 let alwaysOnTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
-  // These two run regardless of SCHEDULER_ENABLED - that flag is about the
+  // These run regardless of SCHEDULER_ENABLED - that flag is about the
   // weekly round cycle, not about whether the only copy of the data gets
-  // backed up or whether anyone finds out a ticket needs a decision. A round
-  // scored entirely by hand, with automation fully off, can still produce a
-  // split ticket nobody notices unless they go looking - the same problem
-  // the flag exists to solve for automation's own failures, just with a
+  // backed up, whether anyone finds out a ticket needs a decision, or
+  // whether admins hear from the app on a schedule at all. A round scored
+  // entirely by hand, with automation fully off, can still produce a split
+  // ticket nobody notices unless they go looking - the same problem the
+  // flag exists to solve for automation's own failures, just with a
   // different trigger.
   if (!alwaysOnTimer) {
     alwaysOnTimer = setInterval(() => {
@@ -66,6 +68,7 @@ export function startScheduler(): void {
         .then(async (db) => {
           await runDailyBackupIfDue(db);
           await alertOnUnresolvedDiscussions(db);
+          await runWeeklyDigestIfDue(db);
         })
         .catch((err) => console.error('[bis] background tick failed:', err instanceof Error ? err.message : err));
     }, TICK_MS);
