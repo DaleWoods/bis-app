@@ -7,6 +7,8 @@ export function RoundsPage({ member }: { member: Member }) {
   const { navigate } = useRouter();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [weekLabel, setWeekLabel] = useState(defaultWeekLabel());
   const [opensAt, setOpensAt] = useState('');
   const [cutOffAt, setCutOffAt] = useState(defaultCutOff());
@@ -36,6 +38,10 @@ export function RoundsPage({ member }: { member: Member }) {
       setCreating(false);
     }
   }
+
+  const filteredRounds = rounds
+    .filter((round) => (statusFilter ? round.status === statusFilter : true))
+    .filter((round) => round.weekLabel.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <>
@@ -99,6 +105,31 @@ export function RoundsPage({ member }: { member: Member }) {
 
       {error ? <p className="status error">{error}</p> : null}
 
+      {rounds.length > 6 ? (
+        <div className="row" style={{ marginBottom: '0.6rem', gap: '0.6rem' }}>
+          <div className="field grow" style={{ maxWidth: 280 }}>
+            <label htmlFor="round-search">Find a round</label>
+            <input
+              id="round-search"
+              type="text"
+              placeholder="Search by name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="field" style={{ maxWidth: 180 }}>
+            <label htmlFor="round-status-filter">Status</label>
+            <select id="round-status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All</option>
+              <option value="DRAFT">Draft</option>
+              <option value="OPEN">Open</option>
+              <option value="CLOSED">Closed</option>
+              <option value="FINALISED">Finalised</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card table-scroll">
         <table>
           <caption className="visually-hidden">Scoring rounds</caption>
@@ -119,7 +150,7 @@ export function RoundsPage({ member }: { member: Member }) {
             </tr>
           </thead>
           <tbody>
-            {rounds.map((round) => (
+            {filteredRounds.map((round) => (
               <tr key={round.id}>
                 <th scope="row" style={{ background: 'transparent', textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', color: 'inherit' }}>
                   <Link to={`/rounds/${round.id}`}>{round.weekLabel}</Link>
@@ -149,6 +180,10 @@ export function RoundsPage({ member }: { member: Member }) {
             {!rounds.length ? (
               <tr>
                 <td colSpan={8}>No rounds yet.</td>
+              </tr>
+            ) : !filteredRounds.length ? (
+              <tr>
+                <td colSpan={8}>No rounds match your search.</td>
               </tr>
             ) : null}
           </tbody>

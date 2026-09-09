@@ -42,6 +42,7 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [csv, setCsv] = useState('');
   const [jql, setJql] = useState('');
+  const [ticketFilter, setTicketFilter] = useState('');
   const [integrations, setIntegrations] = useState<{ jiraConfigured: boolean; graphSendEnabled: boolean } | null>(null);
   /** From Settings, so the spread numbers on screen can say what they are measured against. */
   const [discussionThreshold, setDiscussionThreshold] = useState(16);
@@ -756,7 +757,26 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
         />
       ) : null}
 
-      {tickets.map((ticket) => {
+      {tickets.length > 6 ? (
+        <div className="field" style={{ maxWidth: 340 }}>
+          <label htmlFor="ticket-filter">Find a ticket</label>
+          <input
+            id="ticket-filter"
+            type="text"
+            placeholder="Search by key or title"
+            value={ticketFilter}
+            onChange={(e) => setTicketFilter(e.target.value)}
+          />
+        </div>
+      ) : null}
+
+      {tickets
+        .filter((ticket) => {
+          const query = ticketFilter.trim().toLowerCase();
+          if (!query) return true;
+          return ticket.jiraId.toLowerCase().includes(query) || ticket.title.toLowerCase().includes(query);
+        })
+        .map((ticket) => {
         const result = results.find((r) => r.ticket.id === ticket.id)?.aggregate;
         /*
           The card is all a committee member gets, and once the round runs

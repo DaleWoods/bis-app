@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, canScore, isCoordinator, type Member, type PendingDiscussion, type StuckAutomationStep } from './api';
 import { Link, matchRoute, useRouter } from './router';
 import { LoginPage } from './pages/LoginPage';
+import { WelcomePage } from './pages/WelcomePage';
 import { ScorePage } from './pages/ScorePage';
 import { RoundsPage } from './pages/RoundsPage';
 import { QueuePage } from './pages/QueuePage';
@@ -17,6 +18,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [stuckSteps, setStuckSteps] = useState<StuckAutomationStep[]>([]);
   const [pendingDiscussions, setPendingDiscussions] = useState<PendingDiscussion[]>([]);
+  const [welcomed, setWelcomed] = useState(false);
 
   useEffect(() => {
     api
@@ -44,6 +46,13 @@ export function App() {
   if (!member) return <LoginPage onSignedIn={setMember} />;
 
   const scorer = canScore(member.role);
+
+  // lastLoginAt is only ever null on the response to someone's very first
+  // sign-in - the server stamps it before replying. By their next visit it
+  // is never null again, so there is nothing to reset and nothing to store.
+  if (scorer && member.lastLoginAt === null && !welcomed) {
+    return <WelcomePage member={member} onContinue={() => setWelcomed(true)} />;
+  }
 
   return (
     <>
