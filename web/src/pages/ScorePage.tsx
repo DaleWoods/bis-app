@@ -44,6 +44,53 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
+/** Rounds finished in a row worth calling out specially, on top of the plain streak text. */
+const STREAK_MILESTONES = [5, 10, 25, 50, 100];
+/** Career tickets scored worth calling out - a coarser scale, since it only ever moves once a round finalises. */
+const CAREER_MILESTONES = [10, 25, 50, 100, 250, 500];
+
+/**
+ * A number that used to only ever appear inside a sentence, given something
+ * to actually look like. `count < 2` stays text-only - a "streak" of one
+ * round is just having scored, not a run worth a badge for.
+ */
+function StreakBadge({ count }: { count: number }) {
+  if (count < 2) return null;
+  return (
+    <span className="streak-badge" title={`${count} rounds in a row`}>
+      <span aria-hidden="true">🔥</span> {count}
+    </span>
+  );
+}
+
+function milestoneKey(email: string): string {
+  return `bis-career-milestone-${email.toLowerCase()}`;
+}
+
+/**
+ * The highest career-tickets-scored milestone already shown to this member,
+ * on this device - client-only, the same as everything else here that
+ * remembers "have I seen this already" (the finalised-round feedback
+ * banner, a mid-ticket draft). `record` only moves once a round finalises,
+ * so without this a milestone crossed between visits would either never be
+ * announced or be announced on every visit forever.
+ */
+function readMilestoneSeen(email: string): number {
+  try {
+    return Number(localStorage.getItem(milestoneKey(email)) ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+function writeMilestoneSeen(email: string, value: number): void {
+  try {
+    localStorage.setItem(milestoneKey(email), String(value));
+  } catch {
+    // Private browsing or a full quota - the milestone just shows again next visit.
+  }
+}
+
 /**
  * The committee's progress as a bar rather than a sentence. Still a count and
  * never who - but a round that is visibly half done is harder to leave than
@@ -135,7 +182,19 @@ export function ScorePage({ member, roundId }: Props) {
   const [justFinished, setJustFinished] = useState(false);
   /** What this member's scoring has moved, across every finalised round. */
   const [record, setRecord] = useState<MemberRecord | null>(null);
+  /** A career milestone newly crossed since this member last saw one, if any. */
+  const [careerMilestone, setCareerMilestone] = useState<number | null>(null);
   const progressRailRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!record || !record.ticketsScored) return;
+    const seen = readMilestoneSeen(member.email);
+    const crossed = [...CAREER_MILESTONES].reverse().find((m) => record.ticketsScored >= m && seen < m);
+    if (crossed) {
+      setCareerMilestone(crossed);
+      writeMilestoneSeen(member.email, crossed);
+    }
+  }, [record, member.email]);
 
   /*
     The progress rail is `position: sticky; top: 0`, so once you have scrolled
@@ -328,6 +387,21 @@ export function ScorePage({ member, roundId }: Props) {
     <>
       <h1>{round.weekLabel}</h1>
       {feedbackBanner}
+      {careerMilestone ? (
+        <div
+          className="notice milestone"
+          role="status"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
+        >
+          <span>
+            <span aria-hidden="true">🎉</span> You have now scored <strong>{careerMilestone}</strong> tickets across
+            your time on the committee.
+          </span>
+          <button type="button" className="secondary" onClick={() => setCareerMilestone(null)} aria-label="Dismiss">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <p className="lede">
         Score each ticket {scaleMin}–{scaleMax} across the {categories.length} categories. Cut-off{' '}
         <strong>{formatDateTime(round.cutOffAt)}</strong> <Countdown target={round.cutOffAt} /> — take your time before
@@ -345,7 +419,10 @@ export function ScorePage({ member, roundId }: Props) {
         */
         <div className={`round-done${justFinished ? ' celebrate' : ''}`} role="status">
           {justFinished ? <Confetti /> : null}
-          <h2>That is {round.weekLabel} done.</h2>
+          <h2>
+            That is {round.weekLabel} done.{' '}
+            {participation ? <StreakBadge count={participation.streak + 1} /> : null}
+          </h2>
           <p>
             {tickets.length === 1 ? 'The ticket is scored' : `All ${tickets.length} tickets scored`}
             {participation?.yourPosition ? (
@@ -358,6 +435,9 @@ export function ScorePage({ member, roundId }: Props) {
             {participation && participation.streak > 0 ? (
               <>
                 That is <strong>{participation.streak + 1} rounds in a row</strong>, counting this one.
+                {STREAK_MILESTONES.includes(participation.streak + 1) ? (
+                  <strong> That&rsquo;s a milestone.</strong>
+                ) : null}
               </>
             ) : null}
           </p>
@@ -376,7 +456,8 @@ export function ScorePage({ member, roundId }: Props) {
           {participation ? <CommitteeBar completed={participation.completed} total={participation.total} /> : null}
           {participation && participation.streak >= 2 ? (
             <p className="streak">
-              You have finished the last <strong>{participation.streak}</strong> rounds in a row.
+              <StreakBadge count={participation.streak} /> You have finished the last{' '}
+              <strong>{participation.streak}</strong> rounds in a row.
             </p>
           ) : null}
         </div>

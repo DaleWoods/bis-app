@@ -1,5 +1,6 @@
 import { Db } from '../db/index.js';
 import { mean } from '../domain/scoring.js';
+import { listMembers } from './memberService.js';
 import { listRounds, type Round } from './roundService.js';
 import { roundResults, type TicketResult } from './resultService.js';
 
@@ -97,23 +98,39 @@ function accumulateCategoryDrivers(results: TicketResult[], byId: Map<string, Ca
   }
 }
 
+interface FinalisedRound {
+  round: Round;
+  results: TicketResult[];
+  scorers: number;
+}
+
+/** The last `limit` finalised rounds, oldest first, with their frozen results already read. */
+async function finalisedRoundsWithResults(db: Db, limit: number): Promise<FinalisedRound[]> {
+  const finalised = (await listRounds(db))
+    .filter((r) => r.status === 'FINALISED' && r.finalisedAt)
+    .sort((a, b) => (a.finalisedAt ?? '').localeCompare(b.finalisedAt ?? ''))
+    .slice(-limit);
+
+  const out: FinalisedRound[] = [];
+  for (const round of finalised) {
+    const [results, scorers] = await Promise.all([roundResults(db, round), scorerCount(db, round.id)]);
+    out.push({ round, results, scorers });
+  }
+  return out;
+}
+
 /**
  * The last `limit` finalised rounds, oldest first (a trend reads left to
  * right as time moving forward), plus which categories most often drove a
  * ticket's score up or down across all of them.
  */
 export async function buildAnalytics(db: Db, limit = 26): Promise<AnalyticsSummary> {
-  const finalised = (await listRounds(db))
-    .filter((r) => r.status === 'FINALISED' && r.finalisedAt)
-    .sort((a, b) => (a.finalisedAt ?? '').localeCompare(b.finalisedAt ?? ''))
-    .slice(-limit);
+  const finalised = await finalisedRoundsWithResults(db, limit);
 
   const rounds: RoundTrendPoint[] = [];
   const driverTotals = new Map<string, CategoryDriver & { total: number }>();
 
-  for (const round of finalised) {
-    const results = await roundResults(db, round);
-    const scorers = await scorerCount(db, round.id);
+  for (const { round, results, scorers } of finalised) {
     rounds.push(roundTrend(round, results, scorers));
     accumulateCategoryDrivers(results, driverTotals);
   }
@@ -123,4 +140,51 @@ export async function buildAnalytics(db: Db, limit = 26): Promise<AnalyticsSumma
     .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0));
 
   return { rounds, categoryDrivers };
+}
+
+const CONTEXT_ROUND_LIMIT = 26;
+/** Keeps the prompt bounded on a long history - the most recent tickets are what a question is almost always about. */
+const CONTEXT_TICKET_LIMIT = 600;
+
+/**
+ * Every finalised ticket, flattened into one line each, for the "ask the
+ * data" assistant to read as its whole world - nothing it can say goes
+ * beyond what a coordinator could work out themselves from the Trends page
+ * and the Feedback view, just faster.
+ */
+export async function buildAnalyticsContext(db: Db): Promise<string> {
+  const finalised = await finalisedRoundsWithResults(db, CONTEXT_ROUND_LIMIT);
+  const members = await listMembers(db, true);
+  const teamByEmail = new Map(members.map((m) => [m.email.toLowerCase(), m.team]));
+
+  const rows: string[] = [];
+  for (const { round, results } of finalised) {
+    for (const { ticket, aggregate } of results) {
+      const team = ticket.originalRequestor ? teamByEmail.get(ticket.originalRequestor.toLowerCase()) : undefined;
+      const categories = aggregate.categoryAverages.map((c) => `${c.name}=${c.average.toFixed(1)}`).join(', ');
+      rows.push(
+        [
+          `round="${round.weekLabel}"`,
+          `finalised=${round.finalisedAt?.slice(0, 10) ?? ''}`,
+          `ticket=${ticket.jiraId}`,
+          `title="${ticket.title}"`,
+          `requestorTeam=${team ?? 'unknown'}`,
+          `businessScore=${aggregate.businessScore ?? 'n/a'}`,
+          `priorityBand=${aggregate.priorityBand ?? 'n/a'}`,
+          `responses=${aggregate.responsesCount}`,
+          `sentForEstimation=${aggregate.sendForEstimation}`,
+          `toClose=${aggregate.toClose}`,
+          `discussionRequired=${aggregate.discussionRequired}`,
+          `categories={${categories}}`,
+        ].join(' '),
+      );
+    }
+  }
+
+  // Most recent first, then capped - a long history trimmed from the back
+  // loses the oldest rounds rather than the ones a question is likely about.
+  const capped = rows.slice(-CONTEXT_TICKET_LIMIT);
+  return capped.length
+    ? capped.join('\n')
+    : 'No finalised rounds yet - there is nothing to answer questions about.';
 }

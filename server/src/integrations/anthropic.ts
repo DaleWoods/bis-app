@@ -441,3 +441,50 @@ export async function draftCardWithAi(source: DraftSource): Promise<CardDraft> {
     return toDraft(drafted, source);
   }
 }
+
+const ANALYTICS_SYSTEM = [
+  "You answer a coordinator's questions about their team's Business Impact Scoring history, using only the",
+  'data given to you below - one line per finalised ticket, across every finalised round on record (or the',
+  'most recent window of it, on a long history).',
+  '',
+  'Rules:',
+  '1. Answer only from the data provided. If it does not contain what is needed - a field is "unknown",',
+  '   or the question is about something not tracked at all - say so plainly rather than guessing or',
+  '   inferring from partial information.',
+  '2. Be direct and specific: name the actual rounds, tickets or teams involved rather than describing them',
+  '   in the abstract. A number with nothing behind it is not an answer.',
+  '3. Short prose, not a report. A sentence or two for a simple question; a short list only when the',
+  '   question genuinely asks for several things.',
+  '4. Never invent a ticket, round, team or score that is not in the data.',
+].join('\n');
+
+/**
+ * "Ask the data" on the Trends page: a coordinator's own question, answered
+ * from the same frozen per-round history the charts are drawn from - nothing
+ * it can say goes beyond what a coordinator could already work out by hand
+ * from the Trends and Feedback pages, just faster. Text in, text out: this
+ * is a question-answering job, not a drafting one, so there is no schema to
+ * hold it to.
+ */
+export async function answerAnalyticsQuestion(question: string, context: string): Promise<string> {
+  const stream = getClient().messages.stream({
+    model: env.ai.model,
+    max_tokens: 1500,
+    system: ANALYTICS_SYSTEM,
+    thinking: { type: 'adaptive' },
+    messages: [
+      { role: 'user', content: `--- Scoring history ---\n${context}\n\n--- Question ---\n${question}` },
+    ],
+  });
+
+  const response = await stream.finalMessage();
+  if (response.stop_reason === 'refusal') throw new Error('The model declined to answer that question');
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+
+  if (!text.trim()) throw new Error('The model returned no answer');
+  return text.trim();
+}

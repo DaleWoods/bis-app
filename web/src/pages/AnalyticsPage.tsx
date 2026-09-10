@@ -59,6 +59,102 @@ function roundHeadCell(weekLabel: string) {
   );
 }
 
+interface AskEntry {
+  question: string;
+  answer?: string;
+  error?: string;
+  pending?: boolean;
+}
+
+const EXAMPLE_QUESTIONS = [
+  'Which categories have been scoring lowest lately?',
+  'How many tickets were sent for estimation last round?',
+  'Which team has raised the most tickets that needed a discussion?',
+];
+
+/**
+ * A coordinator's own question, answered by Claude reading the same frozen
+ * per-round history the charts below are drawn from — nothing it can say
+ * goes beyond what is already on this page, just faster to get to. One
+ * question at a time: there is no server-side memory of earlier answers, so
+ * the transcript here is a convenience for scrolling back, not a
+ * conversation the model itself remembers.
+ */
+function AskTheData() {
+  const [question, setQuestion] = useState('');
+  const [entries, setEntries] = useState<AskEntry[]>([]);
+  const [asking, setAsking] = useState(false);
+
+  async function ask(text: string) {
+    const q = text.trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setQuestion('');
+    setEntries((prev) => [...prev, { question: q, pending: true }]);
+    try {
+      const { answer } = await api.askAnalytics(q);
+      setEntries((prev) => prev.map((e) => (e.question === q && e.pending ? { question: q, answer } : e)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not get an answer';
+      setEntries((prev) => prev.map((e) => (e.question === q && e.pending ? { question: q, error: message } : e)));
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Ask the data</h2>
+      <p className="hint" style={{ marginTop: 0 }}>
+        A question in plain English, answered from the same finalised round history as the charts below — nothing it
+        says goes beyond what is already on this page.
+      </p>
+
+      {entries.length ? (
+        <ul style={{ listStyle: 'none', margin: '0 0 0.75rem', padding: 0 }}>
+          {entries.map((entry, i) => (
+            <li key={i} style={{ marginBottom: '0.75rem' }}>
+              <p style={{ margin: '0 0 0.2rem', fontWeight: 600 }}>{entry.question}</p>
+              {entry.pending ? <p className="hint">Thinking…</p> : null}
+              {entry.answer ? <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{entry.answer}</p> : null}
+              {entry.error ? <p className="status error" style={{ margin: 0 }}>{entry.error}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="row" style={{ gap: '0.4rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          {EXAMPLE_QUESTIONS.map((q) => (
+            <button key={q} type="button" className="secondary" onClick={() => ask(q)} disabled={asking}>
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          ask(question);
+        }}
+      >
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask a question about past rounds…"
+          aria-label="Ask a question about past rounds"
+          className="grow"
+          disabled={asking}
+        />
+        <button type="submit" disabled={asking || !question.trim()}>
+          {asking ? 'Asking…' : 'Ask'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 /**
  * Cross-round trends, read live from what each round already froze at
  * finalisation (§14) — nothing is stored separately here, so it can never
@@ -85,9 +181,10 @@ export function AnalyticsPage() {
       <>
         <h1>Trends</h1>
         <p className="lede">How scoring moves across rounds — business score, category drivers, and participation.</p>
+        <AskTheData />
         <div className="notice">
-          Not enough finalised rounds yet to show a trend. This fills in on its own as rounds finalise — check back
-          after a couple more.
+          Not enough finalised rounds yet to show a chart. This fills in on its own as rounds finalise — check back
+          after a couple more. Ask the data above still works with what has finalised so far.
         </div>
       </>
     );
@@ -104,6 +201,8 @@ export function AnalyticsPage() {
         Across the last {rounds.length} finalised rounds — read live from what each round already froze when it
         finalised, so this can never disagree with what actually went to JIRA.
       </p>
+
+      <AskTheData />
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Business score over time</h2>

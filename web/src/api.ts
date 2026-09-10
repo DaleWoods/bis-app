@@ -667,6 +667,9 @@ export const api = {
 
   analytics: (limit?: number) =>
     request<AnalyticsSummary>(`/api/analytics${limit ? `?limit=${limit}` : ''}`),
+
+  askAnalytics: (question: string) =>
+    request<{ answer: string }>('/api/analytics/ask', { method: 'POST', body: JSON.stringify({ question }) }),
 };
 
 export function isCoordinator(role: Role | undefined): boolean {

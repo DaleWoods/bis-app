@@ -181,6 +181,11 @@ export function GuidePage({ member }: { member: Member }) {
             You are also told what your scoring has added up to — how many tickets you have scored, and how many of
             them went on to be estimated for building. Between rounds that is the whole of this page.
           </li>
+          <li>
+            A run of five rounds or more in a row gets a small flame badge next to it, and certain totals — 10, 25, 50
+            tickets and up — get a one-off message the first time you cross them. Both read from the same numbers
+            already described above; neither is tracked anywhere new.
+          </li>
         </ul>
         <p className="hint">
           If a ticket makes no sense to you, do not guess — answer “Unsure”. A guess moves the score; an “Unsure” asks
@@ -511,6 +516,14 @@ export function GuidePage({ member }: { member: Member }) {
               The <strong>Trends</strong> tab reads nothing new — it is the same frozen numbers every finalised round
               already keeps, just laid out across rounds instead of within one. It needs at least two finalised
               rounds before there is a trend to draw.
+            </p>
+            <p>
+              <strong>Ask the data</strong>, at the top of the tab, answers a plain-English question about that same
+              history — "which categories have been scoring lowest lately?", "which team has raised the most tickets
+              that needed a discussion?" — without you having to work it out from the charts yourself. It only ever
+              reads from what is already finalised, so it cannot say anything the rest of this tab could not also
+              show you; it is just faster to ask than to look. Needs an Anthropic API key configured, same as card
+              drafting.
             </p>
             <ul>
               <li>

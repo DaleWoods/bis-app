@@ -7,7 +7,7 @@ import { addTicketToRound, createRound, setRoundStatus, type Round } from './rou
 import { saveMember, type Member } from './memberService.js';
 import { saveSubmission } from './submissionService.js';
 import { upsertTicket } from './ticketService.js';
-import { buildAnalytics } from './analyticsService.js';
+import { buildAnalytics, buildAnalyticsContext } from './analyticsService.js';
 
 let db: Db;
 let members: Member[];
@@ -130,5 +130,52 @@ describe('buildAnalytics', () => {
     expect(rounds).toHaveLength(1);
     expect(rounds[0].avgBusinessScore).toBeNull();
     expect(categoryDrivers).toEqual([]);
+  });
+});
+
+describe('buildAnalyticsContext', () => {
+  it('says plainly there is nothing yet, with no finalised rounds', async () => {
+    const context = await buildAnalyticsContext(db);
+    expect(context).toContain('No finalised rounds yet');
+  });
+
+  it('includes the round, ticket and score for something the assistant might be asked about', async () => {
+    const categories = await listCategories(db);
+    const flat = Object.fromEntries(categories.map((c) => [c.id, 5]));
+    await finalisedRound('Week 1', '2099-01-01T00:00:00.000Z', [flat, flat, flat]);
+
+    const context = await buildAnalyticsContext(db);
+    expect(context).toContain('round="Week 1"');
+    expect(context).toContain(`businessScore=${5 * categories.length}`);
+  });
+
+  it("resolves a ticket's requestor to their team when the requestor is a known member", async () => {
+    let round = await createRound(db, { weekLabel: 'Week 1', cutOffAt: '2099-01-01T00:00:00.000Z' });
+    round = await setRoundStatus(db, round.id, 'OPEN');
+    const ticket = await upsertTicket(db, {
+      jiraId: 'ECOM-9001',
+      title: 'Raised by Trading',
+      originalRequestor: members[0].email.toUpperCase(), // case shouldn't matter
+    });
+    await addTicketToRound(db, round.id, ticket.id);
+    await finalise(round);
+
+    const context = await buildAnalyticsContext(db);
+    expect(context).toContain('requestorTeam=Trading');
+  });
+
+  it('says "unknown" rather than guessing when the requestor is not on the committee', async () => {
+    let round = await createRound(db, { weekLabel: 'Week 1', cutOffAt: '2099-01-01T00:00:00.000Z' });
+    round = await setRoundStatus(db, round.id, 'OPEN');
+    const ticket = await upsertTicket(db, {
+      jiraId: 'ECOM-9002',
+      title: 'Raised by nobody on the committee',
+      originalRequestor: 'someone-external@example.com',
+    });
+    await addTicketToRound(db, round.id, ticket.id);
+    await finalise(round);
+
+    const context = await buildAnalyticsContext(db);
+    expect(context).toContain('requestorTeam=unknown');
   });
 });

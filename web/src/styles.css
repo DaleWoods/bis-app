@@ -803,6 +803,23 @@ legend {
   color: var(--gold-text);
   font-weight: 600;
 }
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #fbf1dc;
+  color: var(--gold-text);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.notice.milestone {
+  border-color: var(--gold);
+  background: #fbf1dc;
+}
 
 /* Finishing the round. Deliberately not a .notice - it is the one thing on
    this page that is an achievement rather than an instruction. */
