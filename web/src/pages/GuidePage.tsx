@@ -595,6 +595,14 @@ export function GuidePage({ member }: { member: Member }) {
               or whatever transition you named under Settings → JIRA.
             </p>
             <p>
+              The first time a ticket's score actually writes, two more things happen alongside it, both set under
+              Settings → JIRA and both optional — leave either blank to switch it off: a <strong>component</strong> is
+              added to the ticket (skipped if it is already there), and a <strong>comment</strong> is posted recording
+              the score, with <code>{'{score}'}</code> and <code>{'{round}'}</code> filled in. Neither happens again on
+              a later retry that only moves the ticket on — they are tied to the write itself, not to every time the
+              write-back runs.
+            </p>
+            <p>
               Only tickets that cleared every gate are moved: enough responses, nobody asking to close it, and no
               discussion still outstanding. The two steps are separate, so if the score writes but the workflow refuses
               the move, you are told exactly that rather than the whole ticket being reported as failed — and running
@@ -633,7 +641,9 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
             <p className="hint">
               A failure shows the message JIRA gave. “Field is not on the screen” is the common one and is fixed in
-              JIRA, not here.
+              JIRA, not here. If the component or the comment is the thing that fails — a component that does not
+              exist on the project, a permissions issue — the ticket still shows SUCCESS, because the score itself
+              landed; the row says which of the two didn't, same as a failed move.
             </p>
           </Section>
 

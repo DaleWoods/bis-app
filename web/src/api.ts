@@ -345,6 +345,8 @@ export interface AppConfig {
     ticketPhaseFieldId: string;
     transitionOnFinalise: boolean;
     transitionName: string;
+    componentName: string;
+    commentTemplate: string;
   };
 }
 

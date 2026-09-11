@@ -195,6 +195,10 @@ export interface JiraConfig {
   /** Foundation default: write the score only (§13.2). */
   transitionOnFinalise: boolean;
   transitionName: string;
+  /** Added to the ticket alongside the score, once. Blank turns this off. */
+  componentName: string;
+  /** Posted as a comment alongside the score, once. `{score}` and `{round}` are substituted. Blank turns this off. */
+  commentTemplate: string;
 }
 
 /**
@@ -301,6 +305,11 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   // Either the transition's name or the status it leads to will do; Settings →
   // JIRA can list what a real ticket currently offers.
   transitionName: '[RA] Rdy Estimation',
+  // The manual process tagged every scored ticket with this component as a
+  // completion marker - kept as the default so switching to the app changes
+  // nothing anyone downstream is filtering or reporting on by.
+  componentName: 'BIS_added',
+  commentTemplate: 'Business Impact Score: {score}, recorded by the Business Impact Scoring committee ({round}).',
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {

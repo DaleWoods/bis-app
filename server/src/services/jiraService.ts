@@ -143,6 +143,11 @@ export interface WriteBackEntry {
   overridable?: 'MIN_SUBMISSIONS' | 'ALREADY_WRITTEN';
 }
 
+/** `{score}` and `{round}` are the only tokens - kept to the two things every write-back actually has to hand. */
+export function renderCommentTemplate(template: string, score: number, roundLabel: string): string {
+  return template.replace(/\{score\}/g, String(score)).replace(/\{round\}/g, roundLabel);
+}
+
 /**
  * Write the computed business score back to JIRA (§12.1).
  *
@@ -337,13 +342,13 @@ export async function writeBackRound(
     }
 
     /*
-      Moving the ticket on is a second, separate step.
-
-      It used to share the score's try block, so a workflow that would not
-      accept the transition - a missing permission, a name that no longer
-      matches - reported the whole ticket as FAILED even though the score was
-      sitting in JIRA. Re-running then wrote the same score again chasing an
-      error that had nothing to do with it.
+      Moving the ticket on, tagging it, and commenting on it are each their
+      own separate step, all sharing this reasoning: a workflow that will not
+      accept the transition, a component that does not exist on the project,
+      or a comment permission issue must not report the whole ticket as
+      FAILED when the score itself is already sitting in JIRA - and must not
+      make a later retry write that score again chasing an error that has
+      nothing to do with it.
     */
     let transitionedTo = existing?.transitioned_to ?? '';
     let transitionError = '';
@@ -355,9 +360,31 @@ export async function writeBackRound(
       }
     }
 
+    let componentError = '';
+    let commentError = '';
+    if (!alreadyWritten) {
+      const componentName = config.jira.componentName.trim();
+      if (componentName) {
+        try {
+          await jira.addComponent(ticket.jiraId, componentName);
+        } catch (err) {
+          componentError = err instanceof Error ? err.message : String(err);
+        }
+      }
+      const commentTemplate = config.jira.commentTemplate.trim();
+      if (commentTemplate) {
+        try {
+          await jira.addComment(ticket.jiraId, renderCommentTemplate(commentTemplate, businessScore, round.weekLabel));
+        } catch (err) {
+          commentError = err instanceof Error ? err.message : String(err);
+        }
+      }
+    }
+
+    const combinedError = [transitionError, componentError, commentError].filter(Boolean).join(' | ');
     await db.run('UPDATE jira_writebacks SET status = ?, error = ?, transitioned_to = ?, updated_at = ? WHERE id = ?', [
       'SUCCESS',
-      transitionError,
+      combinedError,
       transitionedTo,
       nowIso(),
       id,
@@ -368,21 +395,29 @@ export async function writeBackRound(
       agreedAtDiscussion: agreed !== null,
       transitionedTo,
       transitionError,
+      componentError,
+      commentError,
     });
+
+    // One note per thing worth mentioning, rather than one message that can
+    // only ever describe a single outcome - a component failure and a
+    // transition failure can both be true of the same write.
+    const notes: string[] = [];
+    if (transitionError) notes.push(`the move failed: ${transitionError}`);
+    else if (!config.jira.transitionOnFinalise) notes.push('moving the ticket on is switched off in Settings → JIRA');
+    else if (!readyForEstimation) notes.push('not moved on — it has not cleared every gate yet');
+    else if (alreadyWritten) notes.push('the ticket has been moved on now');
+    if (componentError) notes.push(`the component didn't update: ${componentError}`);
+    if (commentError) notes.push(`the comment didn't post: ${commentError}`);
+
     entries.push({
       jiraId: ticket.jiraId,
       businessScore,
       status: 'SUCCESS',
       transitionedTo,
-      reason: transitionError
-        ? `${alreadyWritten ? 'Score was already in JIRA' : 'Score written'}, but the move failed: ${transitionError}`
-        : !config.jira.transitionOnFinalise
-          ? 'Score written. Moving the ticket on is switched off in Settings → JIRA.'
-          : !readyForEstimation
-            ? 'Score written. Not moved on — it has not cleared every gate yet.'
-            : alreadyWritten
-              ? 'Score was already in JIRA; the ticket has been moved on now.'
-              : undefined,
+      reason: notes.length
+        ? `${alreadyWritten ? 'Score was already in JIRA' : 'Score written'}; ${notes.join('; ')}.`
+        : undefined,
     });
   }
 

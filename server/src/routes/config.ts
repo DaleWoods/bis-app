@@ -159,6 +159,8 @@ const jiraSchema = z.object({
   ticketPhaseFieldId: z.string().optional(),
   transitionOnFinalise: z.boolean().optional(),
   transitionName: z.string().optional(),
+  componentName: z.string().optional(),
+  commentTemplate: z.string().optional(),
 });
 
 const automationSchema = z.object({

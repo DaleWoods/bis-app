@@ -605,6 +605,8 @@ export function SettingsPage({ member }: { member: Member }) {
                 businessScoreFieldId: String(form.get('businessScoreFieldId')),
                 transitionOnFinalise: form.get('transitionOnFinalise') === 'on',
                 transitionName: String(form.get('transitionName')),
+                componentName: String(form.get('componentName')),
+                commentTemplate: String(form.get('commentTemplate')),
               },
               'JIRA configuration',
             );
@@ -678,6 +680,27 @@ export function SettingsPage({ member }: { member: Member }) {
                 Only tickets that cleared every gate are moved — enough responses, nobody asking to close it, no
                 discussion still outstanding. If the score writes but the move fails, the write-back says so rather
                 than calling the whole thing failed.
+              </p>
+            </div>
+          </div>
+          <div className="row">
+            <div className="grow field">
+              <label htmlFor="componentName">Component to add alongside the score</label>
+              <input
+                id="componentName"
+                name="componentName"
+                type="text"
+                defaultValue={config.jira.componentName}
+                placeholder="BIS_added"
+              />
+              <p className="hint">Added once, the first time the score writes. Leave blank to skip this.</p>
+            </div>
+            <div className="grow field">
+              <label htmlFor="commentTemplate">Comment to post alongside the score</label>
+              <textarea id="commentTemplate" name="commentTemplate" defaultValue={config.jira.commentTemplate} rows={3} />
+              <p className="hint">
+                <code>{'{score}'}</code> and <code>{'{round}'}</code> are replaced before it posts. Leave blank to skip
+                this.
               </p>
             </div>
           </div>

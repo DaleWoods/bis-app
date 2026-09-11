@@ -338,6 +338,41 @@ export async function writeBusinessScore(key: string, fieldId: string, score: nu
   });
 }
 
+/**
+ * Tags a ticket with the given component, matching the manual process's
+ * completion marker. Checked first and skipped if already present - JIRA's
+ * `add` operation does not itself guard against a component already on the
+ * ticket from a previous write or a retry, and re-adding one it already has
+ * would show up as a no-op edit on the ticket's history every time.
+ */
+export async function addComponent(key: string, componentName: string): Promise<void> {
+  const issue = await jiraFetch<{ fields: { components?: Array<{ name: string }> } }>(
+    `/rest/api/3/issue/${encodeURIComponent(key)}?fields=components`,
+  );
+  const already = (issue.fields?.components ?? []).some(
+    (c) => (c.name ?? '').toLowerCase() === componentName.toLowerCase(),
+  );
+  if (already) return;
+  await jiraFetch(`/rest/api/3/issue/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ update: { components: [{ add: { name: componentName } }] } }),
+  });
+}
+
+/** A plain-text comment, wrapped in the minimal ADF a v3 comment body requires. */
+export async function addComment(key: string, body: string): Promise<void> {
+  await jiraFetch(`/rest/api/3/issue/${encodeURIComponent(key)}/comment`, {
+    method: 'POST',
+    body: JSON.stringify({
+      body: {
+        type: 'doc',
+        version: 1,
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: body }] }],
+      },
+    }),
+  });
+}
+
 /** Optional status transition on finalisation (§12.1, §13.2 - off by default). */
 interface JiraTransition {
   id: string;

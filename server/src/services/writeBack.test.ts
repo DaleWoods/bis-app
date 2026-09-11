@@ -10,10 +10,14 @@ import { migrate } from '../db/migrate.js';
 
 const writeBusinessScore = vi.fn();
 const transitionIssue = vi.fn();
+const addComponent = vi.fn();
+const addComment = vi.fn();
 
 vi.mock('../integrations/jira.js', () => ({
   writeBusinessScore,
   transitionIssue,
+  addComponent,
+  addComment,
   JiraNotConfiguredError: class extends Error {},
 }));
 
@@ -90,6 +94,8 @@ async function scoreEach(perCategory: number[]) {
 beforeEach(async () => {
   writeBusinessScore.mockReset().mockResolvedValue(undefined);
   transitionIssue.mockReset().mockResolvedValue('Ready for Estimation');
+  addComponent.mockReset().mockResolvedValue(undefined);
+  addComment.mockReset().mockResolvedValue(undefined);
 
   db = await createDb({ driver: 'sqlite', sqliteFile: ':memory:' });
   await migrate(db);
@@ -302,6 +308,83 @@ describe('writeBackRound', () => {
     expect(entry.status).toBe('SUCCESS');
     expect(entry.transitionedTo).toBe('');
     expect(entry.reason).toContain('Transition is not valid');
+  });
+
+  describe('the completion component and comment', () => {
+    it('tags the ticket and posts a comment alongside a genuine write', async () => {
+      await saveConfigSection(
+        db,
+        'jira',
+        { businessScoreFieldId: 'customfield_101', componentName: 'BIS_added', commentTemplate: 'Score: {score} ({round})' },
+        'test',
+      );
+      await scoreIt(5);
+      const round = (await getRound(db, roundId))!;
+
+      const [entry] = await writeBackRound(db, ACTOR, round);
+      expect(entry.status).toBe('SUCCESS');
+      expect(addComponent).toHaveBeenCalledWith('ECOM-2463', 'BIS_added');
+      expect(addComment).toHaveBeenCalledWith('ECOM-2463', `Score: ${entry.businessScore} (Week 1)`);
+    });
+
+    it('does not tag or comment again on a later move-only retry', async () => {
+      await saveConfigSection(
+        db,
+        'jira',
+        { businessScoreFieldId: 'customfield_101', transitionOnFinalise: false, componentName: 'BIS_added', commentTemplate: 'Score: {score}' },
+        'test',
+      );
+      await scoreIt(5);
+      const round = (await getRound(db, roundId))!;
+
+      await writeBackRound(db, ACTOR, round);
+      expect(addComponent).toHaveBeenCalledTimes(1);
+      expect(addComment).toHaveBeenCalledTimes(1);
+
+      await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_101', transitionOnFinalise: true }, 'test');
+      const [second] = await writeBackRound(db, ACTOR, round);
+      expect(second.status).toBe('SUCCESS');
+      expect(second.transitionedTo).toBe('Ready for Estimation');
+      // The score was already there, so re-tagging and re-commenting would
+      // just be noise on the ticket's history.
+      expect(addComponent).toHaveBeenCalledTimes(1);
+      expect(addComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('is skipped entirely when left blank in config', async () => {
+      await saveConfigSection(
+        db,
+        'jira',
+        { businessScoreFieldId: 'customfield_101', componentName: '', commentTemplate: '' },
+        'test',
+      );
+      await scoreIt(5);
+
+      const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
+      expect(entry.status).toBe('SUCCESS');
+      expect(addComponent).not.toHaveBeenCalled();
+      expect(addComment).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed component or comment without failing the write', async () => {
+      await saveConfigSection(
+        db,
+        'jira',
+        { businessScoreFieldId: 'customfield_101', componentName: 'BIS_added', commentTemplate: 'Score: {score}' },
+        'test',
+      );
+      await scoreIt(5);
+      addComponent.mockRejectedValue(new Error('No such component on this project'));
+      addComment.mockRejectedValue(new Error('403 comment permission'));
+
+      const [entry] = await writeBackRound(db, ACTOR, (await getRound(db, roundId))!);
+      // The score is what matters most, and it landed - a component or
+      // comment problem is worth surfacing, not worth losing the write over.
+      expect(entry.status).toBe('SUCCESS');
+      expect(entry.reason).toContain("component didn't update: No such component on this project");
+      expect(entry.reason).toContain("comment didn't post: 403 comment permission");
+      expect(writeBusinessScore).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
