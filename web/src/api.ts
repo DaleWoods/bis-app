@@ -321,7 +321,6 @@ export interface LeagueSummary {
   latestRound: { weekLabel: string; firstFinisher: string | null } | null;
   rules: LeagueRules;
   rows: LeagueRow[];
-  teams: Array<{ team: string; members: number; completionRate: number | null; averagePoints: number }>;
   coverage: {
     committeeSize: number;
     avgResponsesPerTicket: number | null;

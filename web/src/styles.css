@@ -1653,22 +1653,6 @@ button.linkish:disabled {
   font-weight: 600;
 }
 
-.league-teams {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.league-teams li {
-  display: grid;
-  grid-template-columns: minmax(0, 12rem) 1fr 3rem;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-.league-team-pct {
-  text-align: right;
-  font-weight: 700;
-}
 .league-coverage {
   display: block;
   height: 0.8rem;
@@ -1692,12 +1676,15 @@ button.linkish:disabled {
   .place-1 .podium-medal {
     font-size: 2.1rem;
   }
-  .league-teams li {
-    grid-template-columns: minmax(0, 8rem) 1fr 3rem;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .podium-step {
     animation: none;
   }
+}
+.guide-example {
+  background: var(--panel-alt);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 0.6rem 0.8rem;
 }

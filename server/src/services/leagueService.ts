@@ -44,13 +44,6 @@ export interface LeagueRow {
   badges: LeagueBadge[];
 }
 
-export interface LeagueTeam {
-  team: string;
-  members: number;
-  completionRate: number | null;
-  averagePoints: number;
-}
-
 export interface LeagueCoverage {
   committeeSize: number;
   /** Average number of real answers each ticket got this season. */
@@ -69,7 +62,6 @@ export interface LeagueSummary {
   latestRound: { weekLabel: string; firstFinisher: string | null } | null;
   rules: Pick<LeagueConfig, 'seasonRounds' | 'pointsPerTicket' | 'fullRoundBonus' | 'earlyFinisherBonus' | 'earlyFinisherPlaces'>;
   rows: LeagueRow[];
-  teams: LeagueTeam[];
   coverage: LeagueCoverage;
 }
 
@@ -291,7 +283,6 @@ export async function buildLeague(db: Db, scorers: Member[], rules: LeagueConfig
       latestRound: null,
       rules: ruleView,
       rows: [],
-      teams: [],
       coverage: await loadCoverage(db, [], scorers.length),
     };
   }
@@ -357,26 +348,6 @@ export async function buildLeague(db: Db, scorers: Member[], rules: LeagueConfig
   }
   rows.sort((a, b) => a.rank - b.rank || a.memberName.localeCompare(b.memberName));
 
-  const byTeam = new Map<string, MemberStanding[]>();
-  for (const s of now) {
-    const team = s.member.team.trim() || 'No team';
-    if (!byTeam.has(team)) byTeam.set(team, []);
-    byTeam.get(team)!.push(s);
-  }
-  const teams: LeagueTeam[] = [...byTeam.entries()]
-    .map(([team, members]) => {
-      const eligible = members.reduce((n, s) => n + s.roundsEligible, 0);
-      const completed = members.reduce((n, s) => n + s.roundsCompleted, 0);
-      return {
-        team,
-        members: members.length,
-        completionRate: eligible ? completed / eligible : null,
-        // Per head, so a big team does not win just by being big.
-        averagePoints: Math.round(members.reduce((n, s) => n + s.points, 0) / members.length),
-      };
-    })
-    .sort((a, b) => (b.completionRate ?? -1) - (a.completionRate ?? -1) || b.averagePoints - a.averagePoints);
-
   const lastAt = (s: MemberStanding) => answers.get(s.member.id)!.get(latest!.id)!.lastAt;
   const firstFinisher = latest
     ? now.filter((s) => s.completedRoundIds.has(latest.id)).sort((a, b) => lastAt(a).localeCompare(lastAt(b)))[0]?.member
@@ -389,7 +360,6 @@ export async function buildLeague(db: Db, scorers: Member[], rules: LeagueConfig
     latestRound: latest ? { weekLabel: latest.weekLabel, firstFinisher } : null,
     rules: ruleView,
     rows,
-    teams,
     coverage: await loadCoverage(db, current.map((r) => r.id), scorers.length),
   };
 }

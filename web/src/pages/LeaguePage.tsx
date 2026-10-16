@@ -26,9 +26,6 @@ function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }
 
-function pct(rate: number | null): string {
-  return rate === null ? '—' : `${Math.round(rate * 100)}%`;
-}
 
 function Movement({ value }: { value: number | null }) {
   if (value === null) return <span className="league-move new">New</span>;
@@ -173,7 +170,7 @@ export function LeaguePage({ member }: { member: Member }) {
     );
   }
 
-  const { rows, rules, teams, latestRound } = league;
+  const { rows, rules, latestRound } = league;
   const me = canScore(member.role) ? rows.find((r) => r.memberId === member.id) : undefined;
   const anyPoints = rows.some((r) => r.points > 0);
 
@@ -266,28 +263,6 @@ export function LeaguePage({ member }: { member: Member }) {
             </table>
           </div>
 
-          {teams.length > 1 ? (
-            <div className="card">
-              <h2 style={{ marginTop: 0 }}>Team standings</h2>
-              <p className="hint" style={{ marginTop: 0 }}>
-                Share of rounds finished, across everybody in the team — so a small team can top it.
-              </p>
-              <ol className="league-teams">
-                {teams.map((t, i) => (
-                  <li key={t.team}>
-                    <span className="league-team-name">
-                      {i < 3 ? <span aria-hidden="true">{MEDALS[i]} </span> : null}
-                      {t.team} <span className="hint">({t.members})</span>
-                    </span>
-                    <span className="bar" aria-hidden="true">
-                      <span style={{ width: `${Math.round((t.completionRate ?? 0) * 100)}%` }} />
-                    </span>
-                    <span className="league-team-pct">{pct(t.completionRate)}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ) : null}
         </>
       )}
 

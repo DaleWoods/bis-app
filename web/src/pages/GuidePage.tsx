@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api, isCoordinator, type Member, type ScoringModel } from '../api';
+import { api, isCoordinator, type LeagueBadge, type Member, type ScoringModel } from '../api';
 import { Link } from '../router';
 import { CARD_KINDS, KIND_HINTS, labelsFor } from '../card';
+import { BADGES } from './LeaguePage';
 
 /**
  * The user guide, in the app rather than in a document nobody can find.
@@ -336,37 +337,95 @@ export function GuidePage({ member }: { member: Member }) {
           <p className="hint">The league table is switched off at the moment, so the tab shows nothing.</p>
         ) : null}
         <p>
-          The <Link to="/league">League table</Link> tab shows who has been taking part over the last
-          {league ? ` ${league.seasonRounds}` : ''} finished rounds. It is there because the more of us score a ticket,
-          the more its average can be trusted — an average of four people's scores can swing a long way on one opinion,
-          an average of ten much less. The page shows how many people scored the typical ticket and roughly how much
-          steadier the average would be if everyone did.
+          The <Link to="/league">League table</Link> tab ranks the committee on taking part. It is there because the more
+          of us score a ticket, the more its average can be trusted — an average of four people's scores can swing a
+          long way on one opinion, an average of ten much less.
         </p>
-        <p>Points are for turning up, and only for that:</p>
+
+        <h3>How you earn points</h3>
         <ul>
           <li>
-            {league ? <strong>{league.pointsPerTicket}</strong> : 'Points'} for every ticket you answer — any of the
-            four answers counts, including “not relevant”.
+            <strong>{league ? league.pointsPerTicket : 'Points'}</strong> for every ticket you answer. Any of the four
+            answers counts, including “not relevant” — a considered answer is taking part.
           </li>
-          <li>{league ? <strong>+{league.fullRoundBonus}</strong> : 'A bonus'} for answering every ticket in a round.</li>
+          <li>
+            <strong>+{league ? league.fullRoundBonus : '…'}</strong> for <strong>finishing</strong> a round: answering
+            every ticket in it. A ticket that was held back and never sent to the committee is not counted, so it
+            cannot stop you finishing.
+          </li>
           {!league || league.earlyFinisherPlaces > 0 ? (
             <li>
-              {league ? <strong>+{league.earlyFinisherBonus}</strong> : 'A bonus'} for being one of the first
-              {league ? ` ${league.earlyFinisherPlaces}` : ''} to finish a round.
+              <strong>+{league ? league.earlyFinisherBonus : '…'}</strong> for being one of the first
+              {league ? ` ${league.earlyFinisherPlaces}` : ''} to finish. The order is decided by when your last answer
+              went in, so it only counts once you have finished.
             </li>
           ) : null}
         </ul>
+        {league ? (
+          <p className="guide-example">
+            <strong>Example:</strong> a round has 5 tickets. Answer all 5 and be the second to finish:{' '}
+            5 × {league.pointsPerTicket} + {league.fullRoundBonus}
+            {league.earlyFinisherPlaces >= 2 ? ` + ${league.earlyFinisherBonus}` : ''} ={' '}
+            <strong>
+              {5 * league.pointsPerTicket + league.fullRoundBonus + (league.earlyFinisherPlaces >= 2 ? league.earlyFinisherBonus : 0)}{' '}
+              points
+            </strong>
+            . Answer 3 of the 5 and you get 3 × {league.pointsPerTicket} = <strong>{3 * league.pointsPerTicket} points</strong>{' '}
+            — no bonus, because the round is not finished.
+          </p>
+        ) : null}
         <p>
           <strong>Nothing in the table looks at the scores you gave.</strong> High, low or out on your own, a ticket
           answered is worth the same. Scoring to fit in would make the spread meaningless, so the table is built never
           to reward it.
         </p>
+
+        <h3>How the table is put together</h3>
+        <ul>
+          <li>
+            <strong>Season</strong> — your points are added up over the last{' '}
+            {league ? league.seasonRounds : 'few'} finished rounds. As a new round finishes, the oldest drops off, so a
+            missed week does not follow you around for ever, and somebody new can climb it.
+          </li>
+          <li>
+            <strong>Order</strong> — most points first. On equal points, whoever finished a bigger share of their rounds
+            goes higher. Still level, and you share the place: two people on equal points and the same share are both
+            third, and the next person is fifth.
+          </li>
+          <li>
+            <strong>Rounds finished</strong> — shown as, say, 5/8. Only rounds since you joined count, so a round that
+            closed before you were on the committee is not one you missed.
+          </li>
+          <li>
+            <strong>Arrows</strong> — how many places you have moved since the latest round was added. “New” means you
+            were not on the table before it.
+          </li>
+          <li>
+            <strong>Streak</strong> — rounds finished in a row, counting back from the latest. The same number as on
+            the Score page. Missing a round, or leaving one unfinished, starts it again.
+          </li>
+          <li>
+            <strong>Only finished rounds count.</strong> Who has and hasn't answered a round that is still open stays
+            private until it closes, the same as always.
+          </li>
+        </ul>
+
+        <h3>Badges</h3>
+        <ul>
+          {(Object.keys(BADGES) as LeagueBadge[]).map((b) => (
+            <li key={b}>
+              <span aria-hidden="true">{BADGES[b].icon}</span> <strong>{BADGES[b].name}</strong> — {BADGES[b].meaning}.
+            </li>
+          ))}
+        </ul>
+        <p className="hint">Badges are earned over the season, so they come and go as rounds drop off the table.</p>
+
+        <h3>“Why every score counts”</h3>
         <p>
-          It only counts rounds that have finished. Who has and hasn't answered an open round stays private until it
-          closes, the same as always. Rounds that closed before you joined do not count against you, and because the
-          table covers recent rounds only, a missed week drops off in time. Arrows show who has moved since the latest
-          round, and badges mark things like finishing every round, finishing first, or a run of rounds in a row —
-          hover over one to see what it is for.
+          The bottom of the page shows how many of the committee scored the typical ticket this season, and roughly how
+          far that ticket's average could be from where the whole committee would have put it. The more people score,
+          the smaller that gap gets — and a steadier score is what decides whether a ticket gets built sooner or waits.
+          It is a rough guide, worked out from how far apart scores usually land; nothing is decided on it.
         </p>
       </Section>
 
