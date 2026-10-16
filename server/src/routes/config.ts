@@ -33,6 +33,16 @@ router.get(
         priorityHigh: config.scoring.priorityHigh,
         priorityMedium: config.scoring.priorityMedium,
       },
+      // How the league table awards points - read by the Guide, so the
+      // numbers it explains are always the ones in force.
+      league: {
+        enabled: config.league.enabled,
+        seasonRounds: config.league.seasonRounds,
+        pointsPerTicket: config.league.pointsPerTicket,
+        fullRoundBonus: config.league.fullRoundBonus,
+        earlyFinisherBonus: config.league.earlyFinisherBonus,
+        earlyFinisherPlaces: config.league.earlyFinisherPlaces,
+      },
     });
   }),
 );
@@ -183,12 +193,22 @@ const queueSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+const leagueSchema = z.object({
+  enabled: z.boolean().optional(),
+  seasonRounds: z.number().int().min(1).max(52).optional(),
+  pointsPerTicket: z.number().int().min(0).max(1000).optional(),
+  fullRoundBonus: z.number().int().min(0).max(1000).optional(),
+  earlyFinisherBonus: z.number().int().min(0).max(1000).optional(),
+  earlyFinisherPlaces: z.number().int().min(0).max(20).optional(),
+});
+
 const sectionSchemas = {
   scoring: scoringSchema,
   cadence: cadenceSchema,
   automation: automationSchema,
   jira: jiraSchema,
   queue: queueSchema,
+  league: leagueSchema,
 } as const;
 
 router.put(

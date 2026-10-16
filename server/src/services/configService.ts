@@ -8,6 +8,7 @@ import {
   DEFAULT_AUTOMATION_CONFIG,
   DEFAULT_CADENCE_CONFIG,
   DEFAULT_JIRA_CONFIG,
+  DEFAULT_LEAGUE_CONFIG,
   DEFAULT_QUEUE_CONFIG,
   DEFAULT_SCORING_CONFIG,
   ScoringConfig,
@@ -95,6 +96,7 @@ export async function getAppConfig(db: Db): Promise<AppConfig> {
     automation: merge(DEFAULT_AUTOMATION_CONFIG, stored.get('automation')),
     jira: merge(DEFAULT_JIRA_CONFIG, stored.get('jira')),
     queue: merge(DEFAULT_QUEUE_CONFIG, stored.get('queue')),
+    league: merge(DEFAULT_LEAGUE_CONFIG, stored.get('league')),
   };
 }
 

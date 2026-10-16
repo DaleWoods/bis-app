@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { AuditPage } from './pages/AuditPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { GuidePage } from './pages/GuidePage';
+import { LeaguePage } from './pages/LeaguePage';
 
 export function App() {
   const { path, navigate } = useRouter();
@@ -70,6 +71,7 @@ export function App() {
           {scorer ? <Link to="/">Score</Link> : null}
           <Link to="/rounds">Rounds</Link>
           <Link to="/queue">Queue</Link>
+          <Link to="/league">League table</Link>
           {coordinator ? <Link to="/trends">Trends</Link> : null}
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
@@ -154,6 +156,7 @@ function Routes({
 
   if (path === '/rounds') return <RoundsPage member={member} />;
   if (path === '/queue') return <QueuePage />;
+  if (path === '/league') return <LeaguePage member={member} />;
 
   const round = matchRoute('/rounds/:id', path);
   if (round) {

@@ -287,6 +287,50 @@ export interface QueuePreviewIssue {
   backendEffort: number;
 }
 
+export interface LeagueRules {
+  seasonRounds: number;
+  pointsPerTicket: number;
+  fullRoundBonus: number;
+  earlyFinisherBonus: number;
+  earlyFinisherPlaces: number;
+}
+
+export type LeagueBadge = 'ever-present' | 'early-bird' | 'on-fire' | 'comeback' | 'climber';
+
+export interface LeagueRow {
+  memberId: string;
+  memberName: string;
+  team: string;
+  rank: number;
+  previousRank: number | null;
+  movement: number | null;
+  points: number;
+  ticketsAnswered: number;
+  roundsCompleted: number;
+  roundsEligible: number;
+  completionRate: number | null;
+  earlyFinishes: number;
+  firstPlaces: number;
+  streak: number;
+  badges: LeagueBadge[];
+}
+
+export interface LeagueSummary {
+  enabled: boolean;
+  roundsInSeason: number;
+  latestRound: { weekLabel: string; firstFinisher: string | null } | null;
+  rules: LeagueRules;
+  rows: LeagueRow[];
+  teams: Array<{ team: string; members: number; completionRate: number | null; averagePoints: number }>;
+  coverage: {
+    committeeSize: number;
+    avgResponsesPerTicket: number | null;
+    typicalStdDev: number | null;
+    marginNow: number | null;
+    marginIfEveryone: number | null;
+  };
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -297,6 +341,7 @@ export interface ScoringModel {
     priorityHigh: number;
     priorityMedium: number;
   };
+  league: LeagueRules & { enabled: boolean };
 }
 
 export interface AppConfig {
@@ -337,6 +382,7 @@ export interface AppConfig {
     hopperJql: string;
     enabled: boolean;
   };
+  league: LeagueRules & { enabled: boolean };
   jira: {
     queueJql: string;
     businessScoreFieldId: string;
@@ -669,6 +715,8 @@ export const api = {
 
   analytics: (limit?: number) =>
     request<AnalyticsSummary>(`/api/analytics${limit ? `?limit=${limit}` : ''}`),
+
+  league: () => request<LeagueSummary>('/api/league'),
 
   askAnalytics: (question: string) =>
     request<{ answer: string }>('/api/analytics/ask', { method: 'POST', body: JSON.stringify({ question }) }),

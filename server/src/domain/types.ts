@@ -217,12 +217,32 @@ export interface QueueConfig {
   enabled: boolean;
 }
 
+/**
+ * The committee league table. Points are for taking part - never for what
+ * anybody scored - because the problem is turnout: an average of four scores
+ * swings far more than an average of ten.
+ */
+export interface LeagueConfig {
+  /** Shows the League tab to everyone. */
+  enabled: boolean;
+  /** How many of the most recent finalised rounds make up the table. */
+  seasonRounds: number;
+  /** For every ticket answered. */
+  pointsPerTicket: number;
+  /** On top, for answering every ticket in a round. */
+  fullRoundBonus: number;
+  /** On top, for being among the first `earlyFinisherPlaces` to finish a round. */
+  earlyFinisherBonus: number;
+  earlyFinisherPlaces: number;
+}
+
 export interface AppConfig {
   scoring: ScoringConfig;
   cadence: CadenceConfig;
   automation: AutomationConfig;
   jira: JiraConfig;
   queue: QueueConfig;
+  league: LeagueConfig;
 }
 
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
@@ -312,12 +332,24 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   commentTemplate: 'Business Impact Score: {score}, recorded by the Business Impact Scoring committee ({round}).',
 };
 
+export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
+  enabled: true,
+  // Roughly two months of weekly rounds: long enough that one missed week does
+  // not sink anybody, short enough that a newcomer can climb it.
+  seasonRounds: 8,
+  pointsPerTicket: 10,
+  fullRoundBonus: 25,
+  earlyFinisherBonus: 15,
+  earlyFinisherPlaces: 3,
+};
+
 export const DEFAULT_APP_CONFIG: AppConfig = {
   scoring: DEFAULT_SCORING_CONFIG,
   cadence: DEFAULT_CADENCE_CONFIG,
   automation: DEFAULT_AUTOMATION_CONFIG,
   jira: DEFAULT_JIRA_CONFIG,
   queue: DEFAULT_QUEUE_CONFIG,
+  league: DEFAULT_LEAGUE_CONFIG,
 };
 
 /** The seven categories of §6. Seeded as data, editable thereafter. */

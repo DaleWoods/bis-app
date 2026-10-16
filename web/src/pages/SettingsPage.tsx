@@ -588,6 +588,68 @@ export function SettingsPage({ member }: { member: Member }) {
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>The league table</h2>
+        <p className="hint">
+          The League table tab shows everyone who has been taking part over recent finished rounds. Points are for
+          answering tickets, finishing the round and finishing early — never for the scores anybody gave.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            saveSection(
+              'league',
+              {
+                enabled: form.get('leagueEnabled') === 'on',
+                seasonRounds: Number(form.get('seasonRounds')),
+                pointsPerTicket: Number(form.get('pointsPerTicket')),
+                fullRoundBonus: Number(form.get('fullRoundBonus')),
+                earlyFinisherBonus: Number(form.get('earlyFinisherBonus')),
+                earlyFinisherPlaces: Number(form.get('earlyFinisherPlaces')),
+              },
+              'League table',
+            );
+          }}
+        >
+          <div className="row">
+            <div className="field grow">
+              <label htmlFor="seasonRounds">Rounds in the table</label>
+              <input id="seasonRounds" name="seasonRounds" type="number" min={1} max={52} defaultValue={config.league.seasonRounds} required />
+            </div>
+            <div className="field grow">
+              <label htmlFor="pointsPerTicket">Points per ticket answered</label>
+              <input id="pointsPerTicket" name="pointsPerTicket" type="number" min={0} max={1000} defaultValue={config.league.pointsPerTicket} required />
+            </div>
+            <div className="field grow">
+              <label htmlFor="fullRoundBonus">Bonus for finishing a round</label>
+              <input id="fullRoundBonus" name="fullRoundBonus" type="number" min={0} max={1000} defaultValue={config.league.fullRoundBonus} required />
+            </div>
+          </div>
+          <div className="row">
+            <div className="field grow">
+              <label htmlFor="earlyFinisherBonus">Bonus for finishing early</label>
+              <input id="earlyFinisherBonus" name="earlyFinisherBonus" type="number" min={0} max={1000} defaultValue={config.league.earlyFinisherBonus} required />
+            </div>
+            <div className="field grow">
+              <label htmlFor="earlyFinisherPlaces">How many early finishers get it</label>
+              <input id="earlyFinisherPlaces" name="earlyFinisherPlaces" type="number" min={0} max={20} defaultValue={config.league.earlyFinisherPlaces} required />
+            </div>
+          </div>
+          <label htmlFor="leagueEnabled" style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input id="leagueEnabled" name="leagueEnabled" type="checkbox" defaultChecked={config.league.enabled} />
+            Show the league table to everyone
+          </label>
+          <p className="hint">
+            Changing the points recalculates the whole table straight away — nothing is stored, it is worked out from
+            finished rounds every time the page opens.
+          </p>
+          <div className="row" style={{ marginTop: '0.6rem' }}>
+            <button type="submit">Save the league settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>JIRA</h2>
         <p className="hint">
           {integrations?.jiraConfigured

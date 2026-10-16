@@ -1488,3 +1488,216 @@ button.linkish:disabled {
     transition: none;
   }
 }
+
+/* ---------- League table ---------- */
+.league-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.2rem;
+  background: var(--header-bg);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+.league-hero-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #d9c9a8;
+}
+
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin: 0.5rem 0 1.25rem;
+}
+.podium-step {
+  flex: 1 1 0;
+  max-width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+  animation: podium-rise 0.6s ease-out both;
+}
+.podium-step.place-1 {
+  animation-delay: 0.15s;
+}
+.podium-step.place-3 {
+  animation-delay: 0.3s;
+}
+.podium-medal {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+.place-1 .podium-medal {
+  font-size: 2.8rem;
+}
+.podium-name {
+  margin-top: 0.3rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.podium-team {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.podium-points {
+  font-weight: 700;
+  color: var(--gold-text);
+  margin-bottom: 0.3rem;
+}
+.podium-block {
+  width: 100%;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  padding-top: 0.5rem;
+}
+.place-1 .podium-block {
+  height: 110px;
+  background: var(--gold);
+}
+.place-2 .podium-block {
+  height: 80px;
+}
+.place-3 .podium-block {
+  height: 60px;
+  background: var(--brand-dark);
+}
+@keyframes podium-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.league-you {
+  border-left: 4px solid var(--gold);
+  background: #fffaf0;
+}
+.league-you-label {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.league-you-rank {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.league-you-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+}
+
+.league-table .league-rank {
+  font-size: 1.1rem;
+  width: 2.5rem;
+}
+.league-table tr.league-me {
+  background: #fbf1dc;
+}
+.league-team {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.league-badges {
+  display: inline-flex;
+  gap: 0.15rem;
+  vertical-align: middle;
+}
+.league-badge {
+  cursor: help;
+}
+.league-completion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.league-move {
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.league-move.up {
+  color: var(--high);
+}
+.league-move.down {
+  color: var(--danger);
+}
+.league-move.same {
+  color: var(--muted);
+}
+.league-move.new {
+  color: var(--gold-text);
+  font-weight: 600;
+}
+
+.league-teams {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.league-teams li {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) 1fr 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.league-team-pct {
+  text-align: right;
+  font-weight: 700;
+}
+.league-coverage {
+  display: block;
+  height: 0.8rem;
+}
+.league-coverage > span {
+  background: var(--gold);
+}
+.league-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.league-legend li {
+  margin-bottom: 0.3rem;
+}
+
+@media (max-width: 720px) {
+  .podium-medal {
+    font-size: 1.7rem;
+  }
+  .place-1 .podium-medal {
+    font-size: 2.1rem;
+  }
+  .league-teams li {
+    grid-template-columns: minmax(0, 8rem) 1fr 3rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .podium-step {
+    animation: none;
+  }
+}

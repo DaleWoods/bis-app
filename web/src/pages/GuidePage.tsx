@@ -75,11 +75,13 @@ export function GuidePage({ member }: { member: Member }) {
   const maxTotal = model?.categories.reduce((sum, c) => sum + c.scaleMax, 0) ?? 70;
   const minSubmissions = model?.thresholds.minSubmissions;
   const spread = model?.thresholds.stdDevDiscussionThreshold;
+  const league = model?.league;
 
   const contents: Array<[string, string]> = [
     ['scoring', 'Scoring a ticket'],
     ['answers', 'The four answers'],
     ['what-happens', 'What happens to your scores'],
+    ['league', 'The league table'],
     ...(coordinator
       ? ([
           ['week', 'Running the week'],
@@ -329,9 +331,48 @@ export function GuidePage({ member }: { member: Member }) {
         </p>
       </Section>
 
+      <Section id="league" title="The league table" index={4}>
+        {league && !league.enabled ? (
+          <p className="hint">The league table is switched off at the moment, so the tab shows nothing.</p>
+        ) : null}
+        <p>
+          The <Link to="/league">League table</Link> tab shows who has been taking part over the last
+          {league ? ` ${league.seasonRounds}` : ''} finished rounds. It is there because the more of us score a ticket,
+          the more its average can be trusted — an average of four people's scores can swing a long way on one opinion,
+          an average of ten much less. The page shows how many people scored the typical ticket and roughly how much
+          steadier the average would be if everyone did.
+        </p>
+        <p>Points are for turning up, and only for that:</p>
+        <ul>
+          <li>
+            {league ? <strong>{league.pointsPerTicket}</strong> : 'Points'} for every ticket you answer — any of the
+            four answers counts, including “not relevant”.
+          </li>
+          <li>{league ? <strong>+{league.fullRoundBonus}</strong> : 'A bonus'} for answering every ticket in a round.</li>
+          {!league || league.earlyFinisherPlaces > 0 ? (
+            <li>
+              {league ? <strong>+{league.earlyFinisherBonus}</strong> : 'A bonus'} for being one of the first
+              {league ? ` ${league.earlyFinisherPlaces}` : ''} to finish a round.
+            </li>
+          ) : null}
+        </ul>
+        <p>
+          <strong>Nothing in the table looks at the scores you gave.</strong> High, low or out on your own, a ticket
+          answered is worth the same. Scoring to fit in would make the spread meaningless, so the table is built never
+          to reward it.
+        </p>
+        <p>
+          It only counts rounds that have finished. Who has and hasn't answered an open round stays private until it
+          closes, the same as always. Rounds that closed before you joined do not count against you, and because the
+          table covers recent rounds only, a missed week drops off in time. Arrows show who has moved since the latest
+          round, and badges mark things like finishing every round, finishing first, or a run of rounds in a row —
+          hover over one to see what it is for.
+        </p>
+      </Section>
+
       {coordinator ? (
         <>
-          <Section id="week" title="Running the week" index={4}>
+          <Section id="week" title="Running the week" index={5}>
             <ol>
               <li>
                 <strong>Create the round</strong> on the Rounds page, or let the app create it (see Letting it run
@@ -382,7 +423,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="cards" title="Writing a good card" index={5}>
+          <Section id="cards" title="Writing a good card" index={6}>
             <p>
               The card is all a committee member gets. A card written out of a thin JIRA title produces a guess, not a
               score. Press <strong>Edit card</strong> on any ticket — the editor opens directly underneath it.
@@ -468,7 +509,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="results" title="Reading the results" index={6}>
+          <Section id="results" title="Reading the results" index={7}>
             <p>Each ticket on the round page carries its own numbers. The ones worth understanding:</p>
             <ul>
               <li>
@@ -511,7 +552,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="trends" title="Seeing it across rounds" index={7}>
+          <Section id="trends" title="Seeing it across rounds" index={8}>
             <p>
               The <strong>Trends</strong> tab reads nothing new — it is the same frozen numbers every finalised round
               already keeps, just laid out across rounds instead of within one. It needs at least two finalised
@@ -544,7 +585,7 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="discussions" title="Tickets the committee split on" index={8}>
+          <Section id="discussions" title="Tickets the committee split on" index={9}>
             <p>
               When the committee's totals for a ticket are further apart than the spread threshold, averaging them
               produces a number nobody in the room agreed with. Those tickets collect on the{' '}
@@ -588,7 +629,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="jira" title="Getting scores into JIRA" index={9}>
+          <Section id="jira" title="Getting scores into JIRA" index={10}>
             <p>
               <strong>Write scores to JIRA</strong> appears once a round is finalised. It writes each ticket's business
               score to the configured field and then moves the ticket on — to <em>Ready for Estimation</em> by default,
@@ -647,7 +688,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="automation" title="Letting it run itself" index={10}>
+          <Section id="automation" title="Letting it run itself" index={11}>
             <p>
               <strong>Settings → Run the round automatically.</strong> Off until you switch it on. Every step is its own
               switch, so you can let the app create and chase a round long before you let it write to JIRA.
@@ -719,7 +760,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="settings" title="Settings worth knowing about" index={11}>
+          <Section id="settings" title="Settings worth knowing about" index={12}>
             <ul>
               <li>
                 <strong>Minimum responses</strong> — below this a ticket rolls over instead of being scored.
@@ -772,6 +813,11 @@ export function GuidePage({ member }: { member: Member }) {
                 tab on — use it whenever a workflow status changes.
               </li>
               <li>
+                <strong>The league table</strong> — on or off for everyone, how many recent rounds it covers, and the
+                points for a ticket, a finished round and an early finish. It is worked out fresh each time the tab
+                opens, so a change to the points applies to the whole table straight away.
+              </li>
+              <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
                 or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
                 more than one round. One confirmation, naming the round. Anything already written to JIRA stays in
@@ -784,7 +830,7 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="problems" title="When something looks wrong" index={12}>
+          <Section id="problems" title="When something looks wrong" index={13}>
             <div className="table-scroll">
               <table>
                 <caption className="visually-hidden">Common problems and what they mean</caption>
