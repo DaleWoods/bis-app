@@ -13,6 +13,7 @@ import { AuditPage } from './pages/AuditPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { GuidePage } from './pages/GuidePage';
 import { LeaguePage } from './pages/LeaguePage';
+import { MatrixPage } from './pages/MatrixPage';
 
 export function App() {
   const { path, navigate } = useRouter();
@@ -72,6 +73,7 @@ export function App() {
           <Link to="/rounds">Rounds</Link>
           <Link to="/queue">Queue</Link>
           <Link to="/league">League table</Link>
+          {coordinator ? <Link to="/matrix">Value matrix</Link> : null}
           {coordinator ? <Link to="/trends">Trends</Link> : null}
           {coordinator ? <Link to="/settings">Settings</Link> : null}
           {coordinator ? <Link to="/audit">Audit</Link> : null}
@@ -176,6 +178,7 @@ function Routes({
   if (path === '/settings') return coordinator ? <SettingsPage member={member} /> : <Forbidden />;
   if (path === '/audit') return coordinator ? <AuditPage /> : <Forbidden />;
   if (path === '/trends') return coordinator ? <AnalyticsPage /> : <Forbidden />;
+  if (path === '/matrix') return coordinator ? <MatrixPage /> : <Forbidden />;
 
   return (
     <>

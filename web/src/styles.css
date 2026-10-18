@@ -1688,3 +1688,510 @@ button.linkish:disabled {
   border-radius: 0 var(--radius) var(--radius) 0;
   padding: 0.6rem 0.8rem;
 }
+
+/* ---------- Value matrix ---------- */
+.matrix-page h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+}
+.matrix-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.6rem 1.8rem;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(42, 120, 214, 0.45), transparent 42%),
+    radial-gradient(circle at 70% 110%, rgba(227, 73, 72, 0.35), transparent 45%),
+    radial-gradient(circle at 5% 100%, rgba(27, 175, 122, 0.35), transparent 40%),
+    linear-gradient(135deg, #1a1a1a 0%, #2b211a 60%, #3a2b20 100%);
+}
+.matrix-hero h1 {
+  margin: 0.1rem 0 0.4rem;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: #fff;
+}
+.matrix-hero p {
+  margin: 0;
+  color: #e7ded3;
+}
+.matrix-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  color: #d9c9a8 !important;
+}
+.matrix-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.matrix-kpi {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(4px);
+  min-width: 0;
+}
+.matrix-kpi-value {
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.matrix-kpi-label {
+  margin-top: 0.3rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.matrix-kpi-sub {
+  font-size: 0.78rem;
+  color: #c9bdae;
+}
+
+.matrix-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.matrix-toolbar .field {
+  margin: 0;
+}
+.matrix-toolbar input[type='number'] {
+  width: 7rem;
+}
+.matrix-toolbar #matrix-find {
+  width: 14rem;
+}
+.matrix-save {
+  display: flex;
+  gap: 0.5rem;
+}
+.matrix-drag-hint {
+  margin: 0 0 0.45rem;
+}
+
+.matrix-main {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.matrix-chart-card {
+  padding: 0.75rem;
+}
+.matrix-chart {
+  position: relative;
+}
+.matrix-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  user-select: none;
+}
+.matrix-zone {
+  pointer-events: none;
+  fill-opacity: 0.09;
+  transition: fill-opacity 0.25s;
+}
+.matrix-zone.is-dim {
+  fill-opacity: 0.025;
+}
+.matrix-zone-label {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--ink);
+  letter-spacing: 0.02em;
+  transition: opacity 0.25s;
+}
+.matrix-zone-label.is-dim {
+  opacity: 0.25;
+}
+.matrix-grid {
+  stroke: #ece7e1;
+  stroke-width: 1;
+}
+.matrix-tick {
+  font-size: 11px;
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.matrix-axis-title {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--muted);
+}
+.matrix-band line {
+  stroke: #9b928a;
+  stroke-width: 1.25;
+  stroke-dasharray: 5 5;
+}
+.matrix-band text {
+  font-size: 10.5px;
+  fill: var(--muted);
+}
+.matrix-split line {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-opacity: 0.55;
+}
+.matrix-split .matrix-split-hit {
+  stroke: transparent;
+  stroke-width: 18;
+}
+.matrix-split-hit.vertical {
+  cursor: ew-resize;
+}
+.matrix-split-hit.horizontal {
+  cursor: ns-resize;
+}
+.is-dragging,
+.is-dragging * {
+  cursor: grabbing !important;
+}
+.matrix-handle {
+  pointer-events: none;
+}
+.matrix-handle rect {
+  fill: var(--ink);
+}
+.matrix-handle text {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.matrix-dot {
+  cursor: pointer;
+  outline: none;
+  animation: matrix-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.25s;
+}
+.matrix-dot.is-dim {
+  opacity: 0.15;
+}
+.matrix-dot-mark {
+  stroke: #fff;
+  stroke-width: 2;
+  transition: r 0.15s;
+}
+.matrix-dot:hover .matrix-dot-mark,
+.matrix-dot:focus-visible .matrix-dot-mark {
+  stroke: var(--ink);
+}
+.matrix-dot-count {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #fff;
+  pointer-events: none;
+}
+.matrix-dot-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+.matrix-match-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 3;
+}
+@keyframes matrix-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.matrix-tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, calc(-100% - 12px));
+  width: max-content;
+  max-width: min(340px, 90vw);
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.matrix-tip a {
+  color: #f3d58a;
+}
+.matrix-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #d9c9a8;
+  margin-bottom: 0.3rem;
+}
+.matrix-tip-row + .matrix-tip-row {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.matrix-tip-summary {
+  color: #e7ded3;
+}
+.matrix-tip-stats {
+  display: block;
+  color: #c9bdae;
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+.matrix-tip-stats b {
+  color: #fff;
+}
+.matrix-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+  vertical-align: baseline;
+  flex: none;
+}
+
+.matrix-quads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.matrix-quad {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--quad);
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+  min-width: 0;
+}
+.matrix-quad:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+.matrix-quad:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.matrix-quad.is-active {
+  box-shadow: 0 0 0 2px var(--quad);
+  background: color-mix(in srgb, var(--quad) 7%, var(--panel));
+}
+.matrix-quad-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.matrix-quad-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--quad);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.matrix-quad-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.matrix-quad-count {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.matrix-quad-tag {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.matrix-quad-stats {
+  font-size: 0.8rem;
+}
+.matrix-quad-advice {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+
+.matrix-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+.matrix-review h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.matrix-row-summary {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.matrix-side .card + .card {
+  margin-top: 1rem;
+}
+.matrix-insight {
+  margin: 0 0 0.8rem;
+}
+.matrix-share-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.matrix-share-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.matrix-share-bar {
+  display: flex;
+  gap: 2px;
+  height: 1.6rem;
+}
+.matrix-share-bar span {
+  display: grid;
+  place-items: center;
+  min-width: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  border-radius: 4px;
+  transition: flex-grow 0.4s;
+}
+.matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+}
+.matrix-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.matrix-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.matrix-chip {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.matrix-chip:hover {
+  border-color: var(--ink);
+}
+.matrix-chip:focus-visible {
+  outline: 3px solid var(--focus);
+}
+.matrix-chip.is-static {
+  cursor: default;
+}
+.matrix-table {
+  margin-top: 1rem;
+}
+.matrix-table summary {
+  cursor: pointer;
+}
+
+@media (max-width: 980px) {
+  .matrix-hero,
+  .matrix-main,
+  .matrix-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .matrix-quads {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  /* Shrunk to phone width the labels are unreadable; scroll it instead. */
+  .matrix-chart-scroll {
+    overflow-x: auto;
+  }
+  .matrix-chart {
+    min-width: 600px;
+  }
+  .matrix-hero {
+    padding: 1.2rem;
+  }
+  .matrix-hero h1 {
+    font-size: 1.6rem;
+  }
+  .matrix-kpis,
+  .matrix-quads {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .matrix-kpi-value {
+    font-size: 1.7rem;
+  }
+  .matrix-toolbar #matrix-find {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .matrix-dot {
+    animation: none;
+  }
+  .matrix-quad,
+  .matrix-zone,
+  .matrix-share-bar span {
+    transition: none;
+  }
+}
+td.num .matrix-row-summary {
+  white-space: nowrap;
+}

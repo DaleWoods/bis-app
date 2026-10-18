@@ -167,6 +167,10 @@ export interface HopperIssue {
   businessScore: number | null;
   frontendEffort: number;
   backendEffort: number;
+  /** Testing effort, when a field for it is configured; 0 otherwise. */
+  testingEffort: number;
+  /** JIRA's own grouping of the status - To Do, In Progress or Done. */
+  statusCategory: string;
 }
 
 /** Generous for a hopper, and still bounded if the JQL is pointed at everything. */
@@ -184,7 +188,7 @@ const HOPPER_MAX_PAGES = 20;
  */
 export async function searchHopper(
   jql: string,
-  fieldIds: { businessScoreFieldId: string; backendFieldId: string; frontendFieldId: string },
+  fieldIds: { businessScoreFieldId: string; backendFieldId: string; frontendFieldId: string; testingFieldId?: string },
 ): Promise<HopperIssue[]> {
   const fields = [
     'summary',
@@ -192,6 +196,7 @@ export async function searchHopper(
     fieldIds.businessScoreFieldId,
     fieldIds.backendFieldId,
     fieldIds.frontendFieldId,
+    fieldIds.testingFieldId ?? '',
   ].filter(Boolean);
 
   const issues: JiraIssue[] = [];
@@ -225,6 +230,8 @@ export async function searchHopper(
     businessScore: numericField(issue.fields?.[fieldIds.businessScoreFieldId]),
     frontendEffort: numericField(issue.fields?.[fieldIds.frontendFieldId]) ?? 0,
     backendEffort: numericField(issue.fields?.[fieldIds.backendFieldId]) ?? 0,
+    testingEffort: fieldIds.testingFieldId ? (numericField(issue.fields?.[fieldIds.testingFieldId]) ?? 0) : 0,
+    statusCategory: String(issue.fields?.status?.statusCategory?.name ?? ''),
   }));
 }
 

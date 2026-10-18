@@ -588,6 +588,56 @@ export function SettingsPage({ member }: { member: Member }) {
       </section>
 
       <section className="card">
+        <h2 style={{ marginTop: 0 }}>The value matrix</h2>
+        <p className="hint">
+          The Value matrix tab plots every open scored ticket by business score against effort, read live from JIRA,
+          so the ones costing a lot for little can be questioned. Coordinators only.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            saveSection(
+              'matrix',
+              {
+                jql: String(form.get('matrixJql')),
+                valueSplit: Number(form.get('matrixValueSplit')),
+                effortSplit: Number(form.get('matrixEffortSplit')),
+                testingFieldId: String(form.get('matrixTestingFieldId')).trim(),
+              },
+              'Value matrix',
+            );
+          }}
+        >
+          <div className="field">
+            <label htmlFor="matrixJql">Which tickets to plot (JQL)</label>
+            <input id="matrixJql" name="matrixJql" type="text" defaultValue={config.matrix.jql} required />
+          </div>
+          <div className="row">
+            <div className="field grow">
+              <label htmlFor="matrixValueSplit">High value from (business score)</label>
+              <input id="matrixValueSplit" name="matrixValueSplit" type="number" min={0} defaultValue={config.matrix.valueSplit} required />
+            </div>
+            <div className="field grow">
+              <label htmlFor="matrixEffortSplit">High effort from</label>
+              <input id="matrixEffortSplit" name="matrixEffortSplit" type="number" min={0} defaultValue={config.matrix.effortSplit} required />
+            </div>
+            <div className="field grow">
+              <label htmlFor="matrixTestingFieldId">Testing effort field id (optional)</label>
+              <input id="matrixTestingFieldId" name="matrixTestingFieldId" type="text" placeholder="customfield_…" defaultValue={config.matrix.testingFieldId} />
+            </div>
+          </div>
+          <p className="hint">
+            Effort is the backend and frontend poker fields from the scoring section, plus the testing field if one is
+            set here. The two lines can also be dragged on the tab itself and saved from there.
+          </p>
+          <div className="row" style={{ marginTop: '0.6rem' }}>
+            <button type="submit">Save the matrix settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="card">
         <h2 style={{ marginTop: 0 }}>The league table</h2>
         <p className="hint">
           The League table tab shows everyone who has been taking part over recent finished rounds. Points are for

@@ -21,6 +21,7 @@ import memberRoutes from './routes/members.js';
 import roundRoutes from './routes/rounds.js';
 import queueRoutes from './routes/queue.js';
 import leagueRoutes from './routes/league.js';
+import matrixRoutes from './routes/matrix.js';
 import scoringRoutes from './routes/scoring.js';
 import ticketRoutes from './routes/tickets.js';
 import { errorHandler } from './routes/helpers.js';
@@ -91,6 +92,7 @@ export async function createApp() {
   app.use('/api', scoringRoutes);
   app.use('/api', queueRoutes);
   app.use('/api', leagueRoutes);
+  app.use('/api', matrixRoutes);
   app.use('/api', auditRoutes);
   app.use('/api', backupRoutes);
   app.use('/api', analyticsRoutes);

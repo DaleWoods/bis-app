@@ -330,6 +330,26 @@ export interface LeagueSummary {
   };
 }
 
+export interface MatrixPoint {
+  key: string;
+  summary: string;
+  status: string;
+  businessScore: number;
+  effort: { backend: number; frontend: number; testing: number; manual: number | null; total: number };
+}
+
+export interface MatrixView {
+  source: 'jira' | 'app';
+  sourceNote: string;
+  points: MatrixPoint[];
+  unestimated: Array<{ key: string; summary: string; status: string; businessScore: number }>;
+  splits: { value: number; effort: number };
+  priorityBands: { high: number; medium: number };
+  jiraBrowseUrl: string;
+  testingIncluded: boolean;
+  fetchedAt: string;
+}
+
 export interface ScoringModel {
   categories: Category[];
   relevanceOptions: Array<{ value: Relevance; label: string }>;
@@ -382,6 +402,7 @@ export interface AppConfig {
     enabled: boolean;
   };
   league: LeagueRules & { enabled: boolean };
+  matrix: { jql: string; valueSplit: number; effortSplit: number; testingFieldId: string };
   jira: {
     queueJql: string;
     businessScoreFieldId: string;
@@ -716,6 +737,8 @@ export const api = {
     request<AnalyticsSummary>(`/api/analytics${limit ? `?limit=${limit}` : ''}`),
 
   league: () => request<LeagueSummary>('/api/league'),
+
+  matrix: () => request<MatrixView>('/api/matrix'),
 
   askAnalytics: (question: string) =>
     request<{ answer: string }>('/api/analytics/ask', { method: 'POST', body: JSON.stringify({ question }) }),

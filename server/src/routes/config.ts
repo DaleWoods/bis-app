@@ -202,6 +202,13 @@ const leagueSchema = z.object({
   earlyFinisherPlaces: z.number().int().min(0).max(20).optional(),
 });
 
+const matrixSchema = z.object({
+  jql: z.string().min(1).optional(),
+  valueSplit: z.number().min(0).max(1000).optional(),
+  effortSplit: z.number().min(0).max(1000).optional(),
+  testingFieldId: z.string().optional(),
+});
+
 const sectionSchemas = {
   scoring: scoringSchema,
   cadence: cadenceSchema,
@@ -209,6 +216,7 @@ const sectionSchemas = {
   jira: jiraSchema,
   queue: queueSchema,
   league: leagueSchema,
+  matrix: matrixSchema,
 } as const;
 
 router.put(

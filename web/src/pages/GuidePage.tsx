@@ -88,6 +88,8 @@ export function GuidePage({ member }: { member: Member }) {
           ['week', 'Running the week'],
           ['cards', 'Writing a good card'],
           ['results', 'Reading the results'],
+          ['trends', 'Seeing it across rounds'],
+          ['matrix', 'Is it worth the effort?'],
           ['discussions', 'Tickets the committee split on'],
           ['jira', 'Getting scores into JIRA'],
           ['automation', 'Letting it run itself'],
@@ -644,7 +646,56 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="discussions" title="Tickets the committee split on" index={9}>
+          <Section id="matrix" title="Is it worth the effort?" index={9}>
+            <p>
+              The <Link to="/matrix">Value matrix</Link> tab plots every open scored ticket by{' '}
+              <strong>business score</strong> (up) against <strong>effort</strong> (across), and splits them into
+              four boxes:
+            </p>
+            <ul>
+              <li>
+                <strong>1 · Quick wins</strong> — high value, low effort. Do these first.
+              </li>
+              <li>
+                <strong>2 · Fill-ins</strong> — low value, low effort. Slot in when there is room.
+              </li>
+              <li>
+                <strong>3 · Thankless tasks</strong> — low value, high effort. The box that matters: these go on the
+                “Needs a conversation” list, worst value-for-effort first. Ask the person who raised it for more
+                justification; if there is none, it is a candidate to close. “Copy as JQL” gives you the list as a
+                JIRA filter.
+              </li>
+              <li>
+                <strong>4 · Projects</strong> — high value, high effort. Worth doing, but plan them properly.
+              </li>
+            </ul>
+            <p>
+              The scores and effort are read live from JIRA every time the tab opens, using the JQL in Settings — so
+              they include the weekly priority acceleration and any re-estimate. Effort is the backend and frontend
+              poker estimates, plus testing effort if a field for it is set. If JIRA is not connected, the tab shows
+              the committee scores recorded in the app instead and says so at the top. A ticket scored but not yet
+              estimated cannot be placed; it is listed under “Waiting for effort” rather than left out.
+            </p>
+            <p>
+              <strong>The two lines are a judgement call, so you can move them.</strong> Drag either line on the
+              chart, or type a number, and every count, box and list updates as you go. Nothing changes for anyone
+              else until you press “Save these lines”; “Reset” puts them back. The dashed diagonal lines are the
+              priority ratio bands from Settings — a ticket above a line is better value for its effort than that
+              band.
+            </p>
+            <p>
+              Also on the tab: <strong>Where the effort goes</strong> compares each box's share of the total effort
+              with its share of the total value; <strong>Close to a line</strong> picks out tickets a small
+              re-estimate or a week's acceleration could move into a different box; and every ticket is in a table
+              at the bottom. Hover over a dot, or tab to it, to see the ticket. Tickets on exactly the same spot share
+              one dot with a count in it. “Find a ticket” highlights one; clicking a box picks out just those tickets.
+            </p>
+            <p className="hint">
+              It is a prompt for a conversation, not a decision. Nothing on this tab changes a ticket.
+            </p>
+          </Section>
+
+          <Section id="discussions" title="Tickets the committee split on" index={10}>
             <p>
               When the committee's totals for a ticket are further apart than the spread threshold, averaging them
               produces a number nobody in the room agreed with. Those tickets collect on the{' '}
@@ -688,7 +739,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="jira" title="Getting scores into JIRA" index={10}>
+          <Section id="jira" title="Getting scores into JIRA" index={11}>
             <p>
               <strong>Write scores to JIRA</strong> appears once a round is finalised. It writes each ticket's business
               score to the configured field and then moves the ticket on — to <em>Ready for Estimation</em> by default,
@@ -747,7 +798,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="automation" title="Letting it run itself" index={11}>
+          <Section id="automation" title="Letting it run itself" index={12}>
             <p>
               <strong>Settings → Run the round automatically.</strong> Off until you switch it on. Every step is its own
               switch, so you can let the app create and chase a round long before you let it write to JIRA.
@@ -819,7 +870,7 @@ export function GuidePage({ member }: { member: Member }) {
             </p>
           </Section>
 
-          <Section id="settings" title="Settings worth knowing about" index={12}>
+          <Section id="settings" title="Settings worth knowing about" index={13}>
             <ul>
               <li>
                 <strong>Minimum responses</strong> — below this a ticket rolls over instead of being scored.
@@ -872,6 +923,10 @@ export function GuidePage({ member }: { member: Member }) {
                 tab on — use it whenever a workflow status changes.
               </li>
               <li>
+                <strong>The value matrix</strong> — which tickets the Value matrix tab plots (JQL), where its two
+                lines sit, and an optional testing-effort field to add to the poker estimates.
+              </li>
+              <li>
                 <strong>The league table</strong> — on or off for everyone, how many recent rounds it covers, and the
                 points for a ticket, a finished round and an early finish. It is worked out fresh each time the tab
                 opens, so a change to the points applies to the whole table straight away.
@@ -889,7 +944,7 @@ export function GuidePage({ member }: { member: Member }) {
             </ul>
           </Section>
 
-          <Section id="problems" title="When something looks wrong" index={13}>
+          <Section id="problems" title="When something looks wrong" index={14}>
             <div className="table-scroll">
               <table>
                 <caption className="visually-hidden">Common problems and what they mean</caption>

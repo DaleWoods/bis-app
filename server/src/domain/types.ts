@@ -236,6 +236,23 @@ export interface LeagueConfig {
   earlyFinisherPlaces: number;
 }
 
+/**
+ * The value matrix: business score against effort, split into four boxes.
+ * The splits are judgement calls, not facts, so they are settings - and the
+ * Value matrix tab lets a coordinator drag them and see the boxes change
+ * before saving.
+ */
+export interface MatrixConfig {
+  /** Which tickets to plot. Read live from JIRA each time the tab opens. */
+  jql: string;
+  /** Business score at or above this is "high value". */
+  valueSplit: number;
+  /** Effort at or above this is "high effort". */
+  effortSplit: number;
+  /** JIRA field id for testing effort, added to the poker estimates. Blank leaves it out. */
+  testingFieldId: string;
+}
+
 export interface AppConfig {
   scoring: ScoringConfig;
   cadence: CadenceConfig;
@@ -243,6 +260,7 @@ export interface AppConfig {
   jira: JiraConfig;
   queue: QueueConfig;
   league: LeagueConfig;
+  matrix: MatrixConfig;
 }
 
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
@@ -343,6 +361,16 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
   earlyFinisherPlaces: 3,
 };
 
+export const DEFAULT_MATRIX_CONFIG: MatrixConfig = {
+  // Every open ticket that has been scored - not just the ones waiting to be
+  // built, because the point is to question a ticket before effort goes in.
+  jql: 'project = "ECOM" AND "Business Score" is not EMPTY AND statusCategory != Done ORDER BY "Business Score" DESC',
+  // The lines the manual Effort vs Business Score chart used.
+  valueSplit: 50,
+  effortSplit: 20,
+  testingFieldId: '',
+};
+
 export const DEFAULT_APP_CONFIG: AppConfig = {
   scoring: DEFAULT_SCORING_CONFIG,
   cadence: DEFAULT_CADENCE_CONFIG,
@@ -350,6 +378,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   jira: DEFAULT_JIRA_CONFIG,
   queue: DEFAULT_QUEUE_CONFIG,
   league: DEFAULT_LEAGUE_CONFIG,
+  matrix: DEFAULT_MATRIX_CONFIG,
 };
 
 /** The seven categories of §6. Seeded as data, editable thereafter. */
