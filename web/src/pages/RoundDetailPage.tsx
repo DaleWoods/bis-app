@@ -180,6 +180,13 @@ export function RoundDetailPage({ member, roundId }: { member: Member; roundId: 
 
   return (
     <>
+      {round.imported ? (
+        <div className="notice" style={{ marginBottom: '1rem' }}>
+          <strong>Imported from the manual spreadsheet.</strong> This round is history: its tickets were decided and
+          written to JIRA by hand at the time. It counts in Trends, the league table and streaks, but nothing here can
+          change it, write it to JIRA or email anyone about it.
+        </div>
+      ) : null}
       <div className="row between">
         <div>
           <h1>{round.weekLabel}</h1>

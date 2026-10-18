@@ -64,7 +64,8 @@ export interface WeeklyDigest {
  */
 export async function buildWeeklyDigest(db: Db, since: string): Promise<WeeklyDigest> {
   const openRound = await getActiveRound(db);
-  const finalisedSince = (await listRounds(db)).filter((r) => r.status === 'FINALISED' && r.finalisedAt && r.finalisedAt > since);
+  const finalisedSince = (await listRounds(db)).filter((r) => r.status === 'FINALISED' && !r.imported && r.finalisedAt && r.finalisedAt > since,
+  );
   finalisedSince.sort((a, b) => (a.finalisedAt ?? '').localeCompare(b.finalisedAt ?? ''));
   const finalisedSummaries = await Promise.all(finalisedSince.map((round) => summariseFinalisedRound(db, round)));
 

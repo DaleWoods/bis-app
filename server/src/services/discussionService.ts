@@ -137,7 +137,8 @@ export interface PendingDiscussion {
  * against it, drops off on its own with nothing to clear.
  */
 export async function listPendingDiscussions(db: Db): Promise<PendingDiscussion[]> {
-  const rounds = (await listRounds(db)).filter((r) => r.status !== 'DRAFT');
+  // Imported rounds' splits were talked through by hand at the time.
+  const rounds = (await listRounds(db)).filter((r) => r.status !== 'DRAFT' && !r.imported);
   const pending: PendingDiscussion[] = [];
   for (const round of rounds) {
     const [results, discussions] = await Promise.all([roundResults(db, round), listDiscussions(db, round.id)]);

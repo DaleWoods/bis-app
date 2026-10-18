@@ -183,3 +183,13 @@ describe('cadence times are shown in the configured timezone', () => {
     expect(weekLabelFor(mondayEarly, 'Europe/London')).toBe('Week commencing 07 Jul 2026');
   });
 });
+
+describe('timezoneOffsetMinutes', () => {
+  it('gives a whole-hour offset whatever the seconds on the instant', async () => {
+    const { timezoneOffsetMinutes } = await import('./automationService.js');
+    for (const s of [0, 1, 29, 30, 31, 59]) {
+      const at = new Date(Date.UTC(2025, 9, 3, 9, 15, s, 500));
+      expect(timezoneOffsetMinutes('Europe/London', at)).toBe(60);
+    }
+  });
+});

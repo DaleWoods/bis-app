@@ -260,6 +260,10 @@ export function nextOccurrence(
 
 /** Minutes to add to UTC for the configured timezone, as of `at`. */
 export function timezoneOffsetMinutes(timezone: string, at: Date = new Date()): number {
+  // Whole minutes only. The wall-clock reading below has no seconds, so
+  // comparing it with an instant that has some made the offset round to 59
+  // instead of 60 about half the time - and a cut-off land at 17:01.
+  at = new Date(Math.floor(at.getTime() / 60_000) * 60_000);
   try {
     // Intl is the only timezone database available without a dependency, and it
     // is enough to ask "what does the wall clock say there right now".
@@ -332,7 +336,7 @@ export async function runDueAutomation(db: Db, now: Date = new Date()): Promise<
   // pushed to JIRA. The claim row stops it running twice, so revisiting a
   // settled round costs one indexed lookup.
   for (const round of created ? [created, ...rounds] : rounds) {
-    if (round.automationPaused) continue;
+    if (round.automationPaused || round.imported) continue;
     await runRound(db, round, config, now, steps);
   }
 
@@ -406,7 +410,8 @@ async function maybeCreateNextRound(
  * until now was a phrase in a status label rather than something the app did.
  */
 async function rollOverUnscored(db: Db, rounds: Round[], target: Round, config: AppConfig): Promise<number> {
-  const previous = rounds.filter((r) => r.status === 'FINALISED').sort((a, b) => b.cutOffAt.localeCompare(a.cutOffAt))[0];
+  // An imported round's short tickets were dealt with by hand at the time.
+  const previous = rounds.filter((r) => r.status === 'FINALISED' && !r.imported).sort((a, b) => b.cutOffAt.localeCompare(a.cutOffAt))[0];
   if (!previous) return 0;
 
   const results = await roundResults(db, previous, { config: config.scoring });

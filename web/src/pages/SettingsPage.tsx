@@ -11,6 +11,7 @@ import {
   type Role,
   type Round,
 } from '../api';
+import { HistoryImport } from '../components/HistoryImport';
 import { formatDuration, nextRoundWindow } from '../cadence';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -444,6 +445,8 @@ export function SettingsPage({ member }: { member: Member }) {
           {exporting ? 'Exporting…' : 'Export a backup now'}
         </button>
       </section>
+
+      <HistoryImport />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Card drafting</h2>

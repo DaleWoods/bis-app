@@ -980,6 +980,20 @@ export function GuidePage({ member }: { member: Member }) {
                 opens, so a change to the points applies to the whole table straight away.
               </li>
               <li>
+                <strong>Import the manual history</strong> — brings in everything the committee scored before the app,
+                from the manual scoring workbook's Forms “Responses” sheet, so Trends, the league table and streaks
+                reach back to the start. Choose the workbook and you get a preview first: how many rounds, tickets and
+                responses, any ticket IDs that were typed without a project and had to be guessed, rows that will be
+                left out and why, and anyone not yet in the app — tick the ones still on the committee; the rest are
+                added inactive, so their scores count but they are never emailed. Nothing is written until you press
+                Import. Each ticket goes into the week it was first scored, with all its responses, so its average
+                matches the spreadsheet's; where someone answered twice the later answer is used, and “Archived Scores”
+                rows are kept but never counted. Imported rounds are marked “Imported” and are history only: never
+                written to JIRA, never emailed about, never rolled over, never raised as a discussion, and they cannot
+                be reopened. Importing again replaces the previous import, so an updated workbook can be brought in
+                later; rounds run in the app are never touched.
+              </li>
+              <li>
                 <strong>Delete a round</strong> — removes one round and everything scored against it, for a test round
                 or one created twice. The tickets are kept, because a ticket comes from JIRA and usually appears in
                 more than one round. One confirmation, naming the round. Anything already written to JIRA stays in

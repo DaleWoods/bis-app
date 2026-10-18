@@ -159,6 +159,14 @@ export function RoundsPage({ member }: { member: Member }) {
                   <span className={`badge ${round.status === 'OPEN' ? 'open' : round.status === 'CLOSED' ? 'closed' : ''}`}>
                     {round.status}
                   </span>
+                  {round.imported ? (
+                    <>
+                      {' '}
+                      <span className="badge" title="Brought in from the manual spreadsheet">
+                        Imported
+                      </span>
+                    </>
+                  ) : null}
                 </td>
                 <td>
                   {round.status === 'DRAFT'

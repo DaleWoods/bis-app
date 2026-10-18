@@ -101,6 +101,8 @@ export interface Round {
   /** Start of the scoring window. Null = the round waits for a person. */
   opensAt: string | null;
   automationPaused: boolean;
+  /** Brought in from the manual spreadsheet: history only. */
+  imported: boolean;
   ticketCount: number;
 }
 
@@ -373,6 +375,27 @@ export interface MatrixView {
   canClose: boolean;
   closeTransition: string;
   fetchedAt: string;
+}
+
+export interface HistoryImportPreview {
+  responses: { total: number; used: number; archived: number; duplicates: number; skipped: Array<{ row: number; reason: string }> };
+  rounds: Array<{ label: string; stream: string; cutOffAt: string; tickets: number; responses: number }>;
+  tickets: number;
+  guessedKeys: Array<{ typed: string; key: string; rows: number }>;
+  existingMembers: Array<{ name: string; email: string; role: string }>;
+  newMembers: Array<{ name: string; email: string; lastResponse: string; suggestedActive: boolean }>;
+  categoryColumns: Array<{ column: string; category: string }>;
+  previouslyImportedRounds: number;
+  from: string;
+  to: string;
+}
+
+export interface HistoryImportResult {
+  rounds: number;
+  tickets: number;
+  submissions: number;
+  membersCreated: number;
+  replacedRounds: number;
 }
 
 export interface ScoringModel {
@@ -764,6 +787,19 @@ export const api = {
   league: () => request<LeagueSummary>('/api/league'),
 
   matrix: () => request<MatrixView>('/api/matrix'),
+
+  // The workbook goes up as the raw body - see routes/historyImport.ts.
+  previewHistoryImport: (file: File) =>
+    request<{ preview: HistoryImportPreview }>('/api/admin/import/preview', {
+      method: 'POST',
+      body: file,
+      headers: { 'content-type': 'application/octet-stream' },
+    }),
+  commitHistoryImport: (file: File, activeEmails: string[]) =>
+    request<{ result: HistoryImportResult }>(
+      `/api/admin/import/commit?active=${encodeURIComponent(activeEmails.join(','))}`,
+      { method: 'POST', body: file, headers: { 'content-type': 'application/octet-stream' } },
+    ),
 
   matrixReview: (input: { key: string; outcome: Exclude<MatrixOutcome, 'CLOSED'>; note: string; businessScore: number; effort: number }) =>
     request<{ ok: true }>('/api/matrix/reviews', { method: 'POST', body: JSON.stringify(input) }),

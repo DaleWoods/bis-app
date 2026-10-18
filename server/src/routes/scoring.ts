@@ -86,7 +86,7 @@ router.get(
     */
     const lastFinalised =
       (await listRounds(db))
-        .filter((r) => r.status === 'FINALISED')
+        .filter((r) => r.status === 'FINALISED' && !r.imported)
         .sort((a, b) => (b.finalisedAt ?? b.cutOffAt).localeCompare(a.finalisedAt ?? a.cutOffAt))[0] ?? null;
     /*
       "Includes you" has to mean the same thing the feedback page means by it -

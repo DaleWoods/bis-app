@@ -16,6 +16,8 @@ export interface Round {
   opensAt: string | null;
   /** Automation leaves this round alone while true. */
   automationPaused: boolean;
+  /** Brought in from the manual spreadsheet: history only, never acted on. */
+  imported: boolean;
   openedAt: string | null;
   closedAt: string | null;
   finalisedAt: string | null;
@@ -34,6 +36,7 @@ interface RoundRow {
   distribution_sent_at: string | null;
   opens_at: string | null;
   automation_paused: number | null;
+  imported?: number | null;
   opened_at: string | null;
   closed_at: string | null;
   finalised_at: string | null;
@@ -53,6 +56,7 @@ function map(row: RoundRow): Round {
     distributionSentAt: row.distribution_sent_at,
     opensAt: row.opens_at ?? null,
     automationPaused: Number(row.automation_paused ?? 0) === 1,
+    imported: Number(row.imported ?? 0) === 1,
     openedAt: row.opened_at,
     closedAt: row.closed_at,
     finalisedAt: row.finalised_at,
@@ -99,6 +103,7 @@ export async function updateRound(
   id: string,
   input: { weekLabel?: string; cutOffAt?: string; opensAt?: string | null; notes?: string; stream?: Stream; automationPaused?: boolean },
 ): Promise<Round | undefined> {
+  if ((await getRound(db, id))?.imported) throw new HttpishError(409, 'This round was imported from the manual spreadsheet. It is history only and cannot be changed.');
   const sets: string[] = [];
   const params: Array<string | number | null> = [];
   if (input.weekLabel !== undefined) {
@@ -158,6 +163,7 @@ export function canTransition(from: RoundStatus, to: RoundStatus): boolean {
 export async function setRoundStatus(db: Db, id: string, status: RoundStatus): Promise<Round> {
   const round = await getRound(db, id);
   if (!round) throw new HttpishError(404, 'Round not found');
+  if (round.imported) throw new HttpishError(409, 'This round was imported from the manual spreadsheet. It is history only and cannot be changed.');
   if (round.status === status) return round;
   if (!canTransition(round.status, status)) {
     throw new HttpishError(409, `Cannot move a ${round.status} round to ${status}`);

@@ -161,6 +161,9 @@ export async function writeBackRound(
   round: Round,
   options: { force?: boolean; ignoreMinSubmissions?: boolean } = {},
 ): Promise<WriteBackEntry[]> {
+  // Scored and written to JIRA by hand, long before the app - writing it again
+  // could overwrite a score that has since been accelerated or overridden.
+  if (round.imported) throw new HttpishError(409, 'Imported rounds are never written to JIRA.');
   const config = await getAppConfig(db);
   if (!env.jira.configured) throw new jira.JiraNotConfiguredError();
   if (!config.jira.businessScoreFieldId) {
