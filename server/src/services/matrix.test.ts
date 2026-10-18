@@ -102,7 +102,7 @@ describe('getMatrixView with JIRA', () => {
     vi.mocked(searchHopper).mockReset();
   });
 
-  it("reads the Queue tab's tickets, adding testing hours as days and skipping the -1 placeholder", async () => {
+  it("reads the Queue tab's tickets, adding testing hours as points and skipping the -1 placeholder", async () => {
     Object.assign(env.jira, { baseUrl: 'https://example.atlassian.net', email: 'a@b.c', apiToken: 't' });
     await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_score' }, 'test');
     await saveConfigSection(db, 'scoring', { effort: { mode: 'BACKEND_PLUS_FRONTEND', backendFieldId: 'cf_be', frontendFieldId: 'cf_fe' } }, 'test');
@@ -119,9 +119,11 @@ describe('getMatrixView with JIRA', () => {
     expect(vi.mocked(searchHopper).mock.calls[0][0]).toBe('status = "Rdy FE Dev"');
     expect(vi.mocked(searchHopper).mock.calls[0][1]).toMatchObject({ testingFieldId: 'cf_test' });
     expect(view.source).toBe('jira');
-    // 3 hours of testing is 0.4 of a 7.5-hour day, not 3 days.
-    expect(view.points.map((p) => [p.key, p.effort.total])).toEqual([['ECOM-1', 21.4]]);
-    expect(view.points[0].effort).toMatchObject({ testing: 0.4, testingHours: 3 });
+    // A point is 6 h × 7.5 days ÷ 13 ≈ 3.46 testing hours, so 3 hours is
+    // about 0.9 of a point - not 3 points.
+    expect(view.points.map((p) => [p.key, p.effort.total])).toEqual([['ECOM-1', 21.9]]);
+    expect(view.points[0].effort).toMatchObject({ testing: 0.9, testingHours: 3 });
+    expect(view.testingHoursPerPoint).toBeCloseTo(3.46, 2);
     expect(view.unestimated.map((u) => u.key)).toEqual(['ECOM-3']);
     expect(view.jiraBrowseUrl).toBe('https://example.atlassian.net/browse/');
   });

@@ -605,6 +605,8 @@ export function SettingsPage({ member }: { member: Member }) {
                 effortSplit: Number(form.get('matrixEffortSplit')),
                 testingFieldId: String(form.get('matrixTestingFieldId')).trim(),
                 testingHoursPerDay: Number(form.get('matrixTestingHoursPerDay')),
+                referencePoints: Number(form.get('matrixReferencePoints')),
+                referenceDays: Number(form.get('matrixReferenceDays')),
               },
               'Value matrix',
             );
@@ -628,9 +630,45 @@ export function SettingsPage({ member }: { member: Member }) {
               <input id="matrixTestingHoursPerDay" name="matrixTestingHoursPerDay" type="number" min={0.5} max={24} step={0.5} defaultValue={config.matrix.testingHoursPerDay} required />
             </div>
           </div>
+          <p className="hint" style={{ marginBottom: '0.3rem' }}>
+            Poker scores are points, a relative size, while testing is in hours — so to add them the app needs a rough
+            sense of what a point takes:
+          </p>
+          <div className="row" style={{ alignItems: 'center', gap: '0.5rem' }}>
+            <span>A poker score of</span>
+            <input
+              id="matrixReferencePoints"
+              name="matrixReferencePoints"
+              aria-label="Reference poker score"
+              type="number"
+              min={0.5}
+              step={0.5}
+              style={{ width: '5rem' }}
+              defaultValue={config.matrix.referencePoints}
+              required
+            />
+            <span>takes about</span>
+            <input
+              id="matrixReferenceDays"
+              name="matrixReferenceDays"
+              aria-label="Working days for that score"
+              type="number"
+              min={0.5}
+              step={0.5}
+              style={{ width: '5rem' }}
+              defaultValue={config.matrix.referenceDays}
+              required
+            />
+            <span>working days.</span>
+          </div>
           <p className="hint">
-            Effort is in days: the backend and frontend poker fields from the scoring section, plus the testing field if
-            one is set here. Testing is recorded in hours, so it is divided by the hours in a day before it is added. The two lines can also be dragged on the tab itself and saved from there.
+            With the figures saved now, one point is about{' '}
+            <strong>
+              {((config.matrix.testingHoursPerDay * config.matrix.referenceDays) / config.matrix.referencePoints).toFixed(1)}
+            </strong>{' '}
+            testing hours — so that many hours of testing adds one point to a ticket's effort. Effort is the backend and
+            frontend poker fields from the scoring section, plus testing when a field is set here. The two lines can
+            also be dragged on the tab itself and saved from there.
           </p>
           <div className="row" style={{ marginTop: '0.6rem' }}>
             <button type="submit">Save the matrix settings</button>

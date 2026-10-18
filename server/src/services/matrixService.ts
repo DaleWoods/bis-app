@@ -26,8 +26,9 @@ export interface MatrixPoint {
   status: string;
   businessScore: number;
   /**
-   * In days throughout. `testing` is the converted figure; `testingHours` is
-   * what JIRA holds, kept so the page can show where the number came from.
+   * In poker points throughout. `testing` is the converted figure;
+   * `testingHours` is what JIRA holds, kept so the page can show where the
+   * number came from.
    */
   effort: { backend: number; frontend: number; testing: number; testingHours: number; manual: number | null; total: number };
 }
@@ -45,7 +46,8 @@ export interface MatrixView {
   /** For linking a ticket key to JIRA; blank when JIRA is not configured. */
   jiraBrowseUrl: string;
   testingIncluded: boolean;
-  testingHoursPerDay: number;
+  /** How many testing hours count as one poker point, worked out from Settings. */
+  testingHoursPerPoint: number;
   fetchedAt: string;
 }
 
@@ -103,7 +105,7 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
     splits: { value: config.matrix.valueSplit, effort: config.matrix.effortSplit },
     priorityBands: { high: config.scoring.priorityHigh, medium: config.scoring.priorityMedium },
     jiraBrowseUrl: env.jira.baseUrl ? `${env.jira.baseUrl}/browse/` : '',
-    testingHoursPerDay: config.matrix.testingHoursPerDay,
+    testingHoursPerPoint: testingHoursPerPoint(config.matrix),
     fetchedAt: new Date().toISOString(),
   };
 
@@ -131,10 +133,9 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
   for (const issue of issues) {
     // -1 is the "not scored yet" placeholder on this site, not a score.
     if (issue.businessScore === null || issue.businessScore < 0) continue;
-    // Testing is in hours and the poker estimates in days - convert before adding.
-    const hoursPerDay = config.matrix.testingHoursPerDay > 0 ? config.matrix.testingHoursPerDay : 7.5;
-    const testingDays = round1(issue.testingEffort / hoursPerDay);
-    const total = round1(issue.backendEffort + issue.frontendEffort + testingDays);
+    // Testing is in hours and the poker estimates in points - convert before adding.
+    const testingPoints = round1(issue.testingEffort / base.testingHoursPerPoint);
+    const total = round1(issue.backendEffort + issue.frontendEffort + testingPoints);
     const entry = { key: issue.key, summary: issue.summary, status: issue.status, businessScore: issue.businessScore };
     if (!total) {
       unestimated.push(entry);
@@ -145,7 +146,7 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
       effort: {
         backend: issue.backendEffort,
         frontend: issue.frontendEffort,
-        testing: testingDays,
+        testing: testingPoints,
         testingHours: issue.testingEffort,
         manual: null,
         total,
@@ -153,6 +154,18 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
     });
   }
   return { ...base, points, unestimated, source: 'jira', sourceNote: '', testingIncluded: Boolean(fieldIds.testingFieldId) };
+}
+
+/**
+ * Hours of testing worth one poker point: a tester's day in hours, times the
+ * days one point takes. With "a 13 is 7.5 days" and a 6-hour testing day,
+ * a point is about 3.5 hours.
+ */
+export function testingHoursPerPoint(m: { testingHoursPerDay: number; referencePoints: number; referenceDays: number }): number {
+  const hours = m.testingHoursPerDay > 0 ? m.testingHoursPerDay : 6;
+  const points = m.referencePoints > 0 ? m.referencePoints : 13;
+  const days = m.referenceDays > 0 ? m.referenceDays : 7.5;
+  return (hours * days) / points;
 }
 
 function round1(n: number): number {

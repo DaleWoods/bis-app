@@ -250,11 +250,17 @@ export interface MatrixConfig {
   /** JIRA field id for testing effort, added to the poker estimates. Blank leaves it out. */
   testingFieldId: string;
   /**
-   * Testing effort is recorded in hours; the poker estimates are in days.
-   * Adding the two raw would count three hours of testing as three days, so
-   * testing is divided by this before it is added.
+   * Testing effort is recorded in hours, but the poker estimates are in
+   * points - a relative size, not a time. Adding the two raw would count
+   * three hours of testing as three points, so testing is converted first:
+   * hours to tester days, then days to points using the team's own rough
+   * sense of what a reference poker score takes ("a 13 is one to two weeks").
    */
   testingHoursPerDay: number;
+  /** A poker score the team has a feel for... */
+  referencePoints: number;
+  /** ...and roughly how many working days a ticket of that score takes. */
+  referenceDays: number;
 }
 
 export interface AppConfig {
@@ -370,8 +376,10 @@ export const DEFAULT_MATRIX_CONFIG: MatrixConfig = {
   valueSplit: 50,
   effortSplit: 20,
   testingFieldId: '',
-  // A standard UK office day. Change it in Settings if the testers' day differs.
-  testingHoursPerDay: 7.5,
+  testingHoursPerDay: 6,
+  // "A 13 is around one to two weeks" - the middle of that, in working days.
+  referencePoints: 13,
+  referenceDays: 7.5,
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
