@@ -203,7 +203,6 @@ const leagueSchema = z.object({
 });
 
 const matrixSchema = z.object({
-  jql: z.string().min(1).optional(),
   valueSplit: z.number().min(0).max(1000).optional(),
   effortSplit: z.number().min(0).max(1000).optional(),
   testingFieldId: z.string().optional(),

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type Db } from '../db/index.js';
 import { migrate } from '../db/migrate.js';
 import { ensureDefaultConfig, ensureSeedCategories, getAppConfig, listCategories } from './configService.js';
@@ -9,6 +9,11 @@ import { saveSubmission } from './submissionService.js';
 import { snapshotRoundResults } from './resultService.js';
 import { getMatrixView } from './matrixService.js';
 import { DEFAULT_MATRIX_CONFIG } from '../domain/types.js';
+import { env } from '../config/env.js';
+import { searchHopper } from '../integrations/jira.js';
+import { saveConfigSection } from './configService.js';
+
+vi.mock('../integrations/jira.js', () => ({ searchHopper: vi.fn() }));
 
 let db: Db;
 let scorers: Member[];
@@ -87,5 +92,35 @@ describe('getMatrixView without JIRA', () => {
     const view = await getMatrixView(db);
     expect(view.splits).toEqual({ value: DEFAULT_MATRIX_CONFIG.valueSplit, effort: DEFAULT_MATRIX_CONFIG.effortSplit });
     expect(view.priorityBands.high).toBeGreaterThan(view.priorityBands.medium);
+  });
+});
+
+describe('getMatrixView with JIRA', () => {
+  const saved = { baseUrl: env.jira.baseUrl, email: env.jira.email, apiToken: env.jira.apiToken };
+  afterEach(() => {
+    Object.assign(env.jira, saved);
+    vi.mocked(searchHopper).mockReset();
+  });
+
+  it("reads the Queue tab's tickets, adding testing effort and skipping the -1 placeholder", async () => {
+    Object.assign(env.jira, { baseUrl: 'https://example.atlassian.net', email: 'a@b.c', apiToken: 't' });
+    await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_score' }, 'test');
+    await saveConfigSection(db, 'scoring', { effort: { mode: 'BACKEND_PLUS_FRONTEND', backendFieldId: 'cf_be', frontendFieldId: 'cf_fe' } }, 'test');
+    await saveConfigSection(db, 'queue', { hopperJql: 'status = "Rdy FE Dev"' }, 'test');
+    await saveConfigSection(db, 'matrix', { testingFieldId: 'cf_test' }, 'test');
+    const issue = { summary: 's', status: 'Rdy FE Dev', statusCategory: 'To Do' };
+    vi.mocked(searchHopper).mockResolvedValue([
+      { ...issue, key: 'ECOM-1', businessScore: 30, backendEffort: 13, frontendEffort: 8, testingEffort: 3 },
+      { ...issue, key: 'ECOM-2', businessScore: -1, backendEffort: 5, frontendEffort: 0, testingEffort: 0 },
+      { ...issue, key: 'ECOM-3', businessScore: 40, backendEffort: 0, frontendEffort: 0, testingEffort: 0 },
+    ]);
+
+    const view = await getMatrixView(db);
+    expect(vi.mocked(searchHopper).mock.calls[0][0]).toBe('status = "Rdy FE Dev"');
+    expect(vi.mocked(searchHopper).mock.calls[0][1]).toMatchObject({ testingFieldId: 'cf_test' });
+    expect(view.source).toBe('jira');
+    expect(view.points.map((p) => [p.key, p.effort.total])).toEqual([['ECOM-1', 24]]);
+    expect(view.unestimated.map((u) => u.key)).toEqual(['ECOM-3']);
+    expect(view.jiraBrowseUrl).toBe('https://example.atlassian.net/browse/');
   });
 });

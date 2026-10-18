@@ -243,8 +243,6 @@ export interface LeagueConfig {
  * before saving.
  */
 export interface MatrixConfig {
-  /** Which tickets to plot. Read live from JIRA each time the tab opens. */
-  jql: string;
   /** Business score at or above this is "high value". */
   valueSplit: number;
   /** Effort at or above this is "high effort". */
@@ -362,9 +360,6 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
 };
 
 export const DEFAULT_MATRIX_CONFIG: MatrixConfig = {
-  // Every open ticket that has been scored - not just the ones waiting to be
-  // built, because the point is to question a ticket before effort goes in.
-  jql: 'project = "ECOM" AND "Business Score" is not EMPTY AND statusCategory != Done ORDER BY "Business Score" DESC',
   // The lines the manual Effort vs Business Score chart used.
   valueSplit: 50,
   effortSplit: 20,

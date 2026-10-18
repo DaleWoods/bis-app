@@ -4,8 +4,8 @@ import { searchHopper } from '../integrations/jira.js';
 import { getAppConfig } from './configService.js';
 
 /**
- * The value matrix: every open scored ticket, placed by business score
- * against effort, so the ones costing a lot for little can be questioned
+ * The value matrix: every scored ticket waiting to be built, placed by
+ * business score against effort, so the ones costing a lot for little can be questioned
  * before the effort goes in.
  *
  * Read live, never stored - the same reasoning as the queue. Both numbers
@@ -115,7 +115,11 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
     };
   }
 
-  const issues = await searchHopper(config.matrix.jql, fieldIds);
+  // The Queue tab's query, deliberately: the tickets waiting to be built are
+  // the ones with estimates, and the ones where effort is about to go in -
+  // which is exactly when "is it worth it?" is worth asking. One query also
+  // means the two tabs can never disagree about which tickets are in play.
+  const issues = await searchHopper(config.queue.hopperJql, fieldIds);
   const points: MatrixPoint[] = [];
   const unestimated: MatrixView['unestimated'] = [];
   for (const issue of issues) {

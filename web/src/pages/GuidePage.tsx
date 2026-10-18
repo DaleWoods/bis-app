@@ -648,36 +648,36 @@ export function GuidePage({ member }: { member: Member }) {
 
           <Section id="matrix" title="Is it worth the effort?" index={9}>
             <p>
-              The <Link to="/matrix">Value matrix</Link> tab plots every open scored ticket by{' '}
-              <strong>business score</strong> (up) against <strong>effort</strong> (across), and splits them into
-              four boxes:
+              The <Link to="/matrix">Value matrix</Link> tab plots the scored tickets waiting to be built by{' '}
+              <strong>business score</strong> (up) against <strong>effort</strong> (across), and sorts them into four
+              boxes by what to do about them:
             </p>
             <ul>
               <li>
-                <strong>1 · Quick wins</strong> — high value, low effort. Do these first.
+                <strong>Do next</strong> — high value, low effort. The best return; line these up first.
               </li>
               <li>
-                <strong>2 · Fill-ins</strong> — low value, low effort. Slot in when there is room.
+                <strong>Plan for</strong> — high value, high effort. Worth it, but big: plan it properly, or split it.
               </li>
               <li>
-                <strong>3 · Thankless tasks</strong> — low value, high effort. The box that matters: these go on the
-                “Needs a conversation” list, worst value-for-effort first. Ask the person who raised it for more
-                justification; if there is none, it is a candidate to close. “Copy as JQL” gives you the list as a
-                JIRA filter.
+                <strong>Fit in</strong> — low value, low effort. Cheap; pick up when there is space.
               </li>
               <li>
-                <strong>4 · Projects</strong> — high value, high effort. Worth doing, but plan them properly.
+                <strong>Question it</strong> — low value, high effort. The box that matters: these go on the “Needs a
+                conversation” list, worst value-for-effort first. Ask the person who raised it for more justification;
+                if there is none, it is a candidate to close. “Copy as JQL” gives you the list as a JIRA filter.
               </li>
             </ul>
             <p>
-              The scores and effort are read live from JIRA every time the tab opens, using the JQL in Settings — so
-              they include the weekly priority acceleration and any re-estimate. Effort is the backend and frontend
-              poker estimates, plus testing effort if a field for it is set. If JIRA is not connected, the tab shows
-              the committee scores recorded in the app instead and says so at the top. A ticket scored but not yet
-              estimated cannot be placed; it is listed under “Waiting for effort” rather than left out.
+              It reads the <strong>same tickets as the Queue tab</strong>, live from JIRA every time it opens, using the
+              JQL under “The queue” in Settings. So the two tabs always agree, and the scores include the weekly
+              priority acceleration and any re-estimate. Effort is the backend and frontend poker estimates, plus
+              testing effort if a field for it is set under “The value matrix”. If JIRA is not connected, the tab shows
+              the committee scores recorded in the app instead and says so at the top. A ticket with a score but no
+              estimate cannot be placed; it is listed under “Waiting for effort” rather than left out.
             </p>
             <p>
-              <strong>The two lines are a judgement call, so you can move them.</strong> Drag either line on the
+              <strong>Where the lines sit is a judgement call, so you can move them.</strong> Drag either line on the
               chart, or type a number, and every count, box and list updates as you go. Nothing changes for anyone
               else until you press “Save these lines”; “Reset” puts them back. The dashed diagonal lines are the
               priority ratio bands from Settings — a ticket above a line is better value for its effort than that
@@ -923,8 +923,9 @@ export function GuidePage({ member }: { member: Member }) {
                 tab on — use it whenever a workflow status changes.
               </li>
               <li>
-                <strong>The value matrix</strong> — which tickets the Value matrix tab plots (JQL), where its two
-                lines sit, and an optional testing-effort field to add to the poker estimates.
+                <strong>The value matrix</strong> — where its two lines sit, and an optional testing-effort field to
+                add to the poker estimates. Which tickets it shows comes from the queue's JQL, not a setting of its
+                own.
               </li>
               <li>
                 <strong>The league table</strong> — on or off for everyone, how many recent rounds it covers, and the

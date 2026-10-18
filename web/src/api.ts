@@ -402,7 +402,7 @@ export interface AppConfig {
     enabled: boolean;
   };
   league: LeagueRules & { enabled: boolean };
-  matrix: { jql: string; valueSplit: number; effortSplit: number; testingFieldId: string };
+  matrix: { valueSplit: number; effortSplit: number; testingFieldId: string };
   jira: {
     queueJql: string;
     businessScoreFieldId: string;

@@ -590,8 +590,9 @@ export function SettingsPage({ member }: { member: Member }) {
       <section className="card">
         <h2 style={{ marginTop: 0 }}>The value matrix</h2>
         <p className="hint">
-          The Value matrix tab plots every open scored ticket by business score against effort, read live from JIRA,
-          so the ones costing a lot for little can be questioned. Coordinators only.
+          The Value matrix tab plots the scored tickets waiting to be built by business score against effort, so the
+          ones costing a lot for little can be questioned. Coordinators only. It reads the same tickets as the Queue
+          tab — the JQL under “The queue” above — so there is nothing separate to keep in step.
         </p>
         <form
           onSubmit={(event) => {
@@ -600,7 +601,6 @@ export function SettingsPage({ member }: { member: Member }) {
             saveSection(
               'matrix',
               {
-                jql: String(form.get('matrixJql')),
                 valueSplit: Number(form.get('matrixValueSplit')),
                 effortSplit: Number(form.get('matrixEffortSplit')),
                 testingFieldId: String(form.get('matrixTestingFieldId')).trim(),
@@ -609,10 +609,6 @@ export function SettingsPage({ member }: { member: Member }) {
             );
           }}
         >
-          <div className="field">
-            <label htmlFor="matrixJql">Which tickets to plot (JQL)</label>
-            <input id="matrixJql" name="matrixJql" type="text" defaultValue={config.matrix.jql} required />
-          </div>
           <div className="row">
             <div className="field grow">
               <label htmlFor="matrixValueSplit">High value from (business score)</label>
