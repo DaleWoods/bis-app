@@ -206,6 +206,7 @@ const matrixSchema = z.object({
   valueSplit: z.number().min(0).max(1000).optional(),
   effortSplit: z.number().min(0).max(1000).optional(),
   testingFieldId: z.string().optional(),
+  testingHoursPerDay: z.number().min(0.5).max(24).optional(),
 });
 
 const sectionSchemas = {

@@ -95,7 +95,7 @@ function effortBreakdown(p: MatrixPoint): string {
   const parts = [
     p.effort.backend ? `BE ${p.effort.backend}` : '',
     p.effort.frontend ? `FE ${p.effort.frontend}` : '',
-    p.effort.testing ? `Test ${p.effort.testing}` : '',
+    p.effort.testingHours ? `Test ${p.effort.testingHours}h = ${p.effort.testing}d` : '',
   ].filter(Boolean);
   return parts.length > 1 ? `${p.effort.total} (${parts.join(' + ')})` : String(p.effort.total);
 }
@@ -292,7 +292,7 @@ function MatrixChart({ points, valueSplit, effortSplit, onSplits, bands, focus, 
           </g>
         ))}
         <text x={PAD.left + plotW / 2} y={H - 6} textAnchor="middle" className="matrix-axis-title">
-          Effort (poker estimate) →
+          Effort (days) →
         </text>
         <text
           transform={`translate(14 ${PAD.top + plotH / 2}) rotate(-90)`}
@@ -702,7 +702,10 @@ export function MatrixPage() {
                 />
               </div>
               <p className="hint" style={{ margin: '0.4rem 0 0' }}>
-                Effort is {view.testingIncluded ? 'the poker estimates plus testing effort' : 'the poker estimates'}.
+                Effort is in days:{' '}
+                {view.testingIncluded
+                  ? `the poker estimates plus testing, converted from hours at ${view.testingHoursPerDay} hours a day.`
+                  : 'the poker estimates.'}
                 Dashed lines are the priority ratio bands from Settings — above a line is better value for the effort.
                 Numbers in a dot are tickets on the same spot.
               </p>

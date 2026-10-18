@@ -671,8 +671,10 @@ export function GuidePage({ member }: { member: Member }) {
             <p>
               It reads the <strong>same tickets as the Queue tab</strong>, live from JIRA every time it opens, using the
               JQL under “The queue” in Settings. So the two tabs always agree, and the scores include the weekly
-              priority acceleration and any re-estimate. Effort is the backend and frontend poker estimates, plus
-              testing effort if a field for it is set under “The value matrix”. If JIRA is not connected, the tab shows
+              priority acceleration and any re-estimate. Effort is in days: the backend and frontend poker
+              estimates, plus testing effort if a field for it is set under “The value matrix”. Testing is recorded in
+              hours, so it is converted to days first, using the hours in a day set in Settings — adding the
+              hours straight on would count three hours of testing as three days. If JIRA is not connected, the tab shows
               the committee scores recorded in the app instead and says so at the top. A ticket with a score but no
               estimate cannot be placed; it is listed under “Waiting for effort” rather than left out.
             </p>
@@ -923,7 +925,7 @@ export function GuidePage({ member }: { member: Member }) {
                 tab on — use it whenever a workflow status changes.
               </li>
               <li>
-                <strong>The value matrix</strong> — where its two lines sit, and an optional testing-effort field to
+                <strong>The value matrix</strong> — where its two lines sit, how many hours make a day of testing, and an optional testing-effort field to
                 add to the poker estimates (the JIRA section's field-detect button fills it in when the site has a
                 “WOSG Testing Effort” field). Which tickets it shows comes from the queue's JQL, not a setting of its
                 own.

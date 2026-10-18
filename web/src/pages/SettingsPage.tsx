@@ -604,6 +604,7 @@ export function SettingsPage({ member }: { member: Member }) {
                 valueSplit: Number(form.get('matrixValueSplit')),
                 effortSplit: Number(form.get('matrixEffortSplit')),
                 testingFieldId: String(form.get('matrixTestingFieldId')).trim(),
+                testingHoursPerDay: Number(form.get('matrixTestingHoursPerDay')),
               },
               'Value matrix',
             );
@@ -622,10 +623,14 @@ export function SettingsPage({ member }: { member: Member }) {
               <label htmlFor="matrixTestingFieldId">Testing effort field id (optional)</label>
               <input id="matrixTestingFieldId" name="matrixTestingFieldId" type="text" placeholder="customfield_…" defaultValue={config.matrix.testingFieldId} />
             </div>
+            <div className="field grow">
+              <label htmlFor="matrixTestingHoursPerDay">Hours in a day (testing)</label>
+              <input id="matrixTestingHoursPerDay" name="matrixTestingHoursPerDay" type="number" min={0.5} max={24} step={0.5} defaultValue={config.matrix.testingHoursPerDay} required />
+            </div>
           </div>
           <p className="hint">
-            Effort is the backend and frontend poker fields from the scoring section, plus the testing field if one is
-            set here. The two lines can also be dragged on the tab itself and saved from there.
+            Effort is in days: the backend and frontend poker fields from the scoring section, plus the testing field if
+            one is set here. Testing is recorded in hours, so it is divided by the hours in a day before it is added. The two lines can also be dragged on the tab itself and saved from there.
           </p>
           <div className="row" style={{ marginTop: '0.6rem' }}>
             <button type="submit">Save the matrix settings</button>

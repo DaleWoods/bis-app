@@ -249,6 +249,12 @@ export interface MatrixConfig {
   effortSplit: number;
   /** JIRA field id for testing effort, added to the poker estimates. Blank leaves it out. */
   testingFieldId: string;
+  /**
+   * Testing effort is recorded in hours; the poker estimates are in days.
+   * Adding the two raw would count three hours of testing as three days, so
+   * testing is divided by this before it is added.
+   */
+  testingHoursPerDay: number;
 }
 
 export interface AppConfig {
@@ -364,6 +370,8 @@ export const DEFAULT_MATRIX_CONFIG: MatrixConfig = {
   valueSplit: 50,
   effortSplit: 20,
   testingFieldId: '',
+  // A standard UK office day. Change it in Settings if the testers' day differs.
+  testingHoursPerDay: 7.5,
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {

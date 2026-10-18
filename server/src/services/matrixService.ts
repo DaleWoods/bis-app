@@ -25,7 +25,11 @@ export interface MatrixPoint {
   summary: string;
   status: string;
   businessScore: number;
-  effort: { backend: number; frontend: number; testing: number; manual: number | null; total: number };
+  /**
+   * In days throughout. `testing` is the converted figure; `testingHours` is
+   * what JIRA holds, kept so the page can show where the number came from.
+   */
+  effort: { backend: number; frontend: number; testing: number; testingHours: number; manual: number | null; total: number };
 }
 
 export interface MatrixView {
@@ -41,6 +45,7 @@ export interface MatrixView {
   /** For linking a ticket key to JIRA; blank when JIRA is not configured. */
   jiraBrowseUrl: string;
   testingIncluded: boolean;
+  testingHoursPerDay: number;
   fetchedAt: string;
 }
 
@@ -81,7 +86,7 @@ async function fromApp(db: Db): Promise<Pick<MatrixView, 'points' | 'unestimated
     const total = manual ?? backend + frontend;
     const base = { key: row.jira_id, summary: row.title, status: row.jira_status || 'Scored', businessScore: Number(row.business_score) };
     if (!total) unestimated.push(base);
-    else points.push({ ...base, effort: { backend, frontend, testing: 0, manual, total } });
+    else points.push({ ...base, effort: { backend, frontend, testing: 0, testingHours: 0, manual, total } });
   }
   return { points, unestimated };
 }
@@ -98,6 +103,7 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
     splits: { value: config.matrix.valueSplit, effort: config.matrix.effortSplit },
     priorityBands: { high: config.scoring.priorityHigh, medium: config.scoring.priorityMedium },
     jiraBrowseUrl: env.jira.baseUrl ? `${env.jira.baseUrl}/browse/` : '',
+    testingHoursPerDay: config.matrix.testingHoursPerDay,
     fetchedAt: new Date().toISOString(),
   };
 
@@ -125,7 +131,10 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
   for (const issue of issues) {
     // -1 is the "not scored yet" placeholder on this site, not a score.
     if (issue.businessScore === null || issue.businessScore < 0) continue;
-    const total = issue.backendEffort + issue.frontendEffort + issue.testingEffort;
+    // Testing is in hours and the poker estimates in days - convert before adding.
+    const hoursPerDay = config.matrix.testingHoursPerDay > 0 ? config.matrix.testingHoursPerDay : 7.5;
+    const testingDays = round1(issue.testingEffort / hoursPerDay);
+    const total = round1(issue.backendEffort + issue.frontendEffort + testingDays);
     const entry = { key: issue.key, summary: issue.summary, status: issue.status, businessScore: issue.businessScore };
     if (!total) {
       unestimated.push(entry);
@@ -136,11 +145,16 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
       effort: {
         backend: issue.backendEffort,
         frontend: issue.frontendEffort,
-        testing: issue.testingEffort,
+        testing: testingDays,
+        testingHours: issue.testingEffort,
         manual: null,
         total,
       },
     });
   }
   return { ...base, points, unestimated, source: 'jira', sourceNote: '', testingIncluded: Boolean(fieldIds.testingFieldId) };
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }

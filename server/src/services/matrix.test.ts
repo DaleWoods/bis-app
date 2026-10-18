@@ -102,7 +102,7 @@ describe('getMatrixView with JIRA', () => {
     vi.mocked(searchHopper).mockReset();
   });
 
-  it("reads the Queue tab's tickets, adding testing effort and skipping the -1 placeholder", async () => {
+  it("reads the Queue tab's tickets, adding testing hours as days and skipping the -1 placeholder", async () => {
     Object.assign(env.jira, { baseUrl: 'https://example.atlassian.net', email: 'a@b.c', apiToken: 't' });
     await saveConfigSection(db, 'jira', { businessScoreFieldId: 'customfield_score' }, 'test');
     await saveConfigSection(db, 'scoring', { effort: { mode: 'BACKEND_PLUS_FRONTEND', backendFieldId: 'cf_be', frontendFieldId: 'cf_fe' } }, 'test');
@@ -119,7 +119,9 @@ describe('getMatrixView with JIRA', () => {
     expect(vi.mocked(searchHopper).mock.calls[0][0]).toBe('status = "Rdy FE Dev"');
     expect(vi.mocked(searchHopper).mock.calls[0][1]).toMatchObject({ testingFieldId: 'cf_test' });
     expect(view.source).toBe('jira');
-    expect(view.points.map((p) => [p.key, p.effort.total])).toEqual([['ECOM-1', 24]]);
+    // 3 hours of testing is 0.4 of a 7.5-hour day, not 3 days.
+    expect(view.points.map((p) => [p.key, p.effort.total])).toEqual([['ECOM-1', 21.4]]);
+    expect(view.points[0].effort).toMatchObject({ testing: 0.4, testingHours: 3 });
     expect(view.unestimated.map((u) => u.key)).toEqual(['ECOM-3']);
     expect(view.jiraBrowseUrl).toBe('https://example.atlassian.net/browse/');
   });

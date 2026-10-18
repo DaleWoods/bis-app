@@ -335,7 +335,7 @@ export interface MatrixPoint {
   summary: string;
   status: string;
   businessScore: number;
-  effort: { backend: number; frontend: number; testing: number; manual: number | null; total: number };
+  effort: { backend: number; frontend: number; testing: number; testingHours: number; manual: number | null; total: number };
 }
 
 export interface MatrixView {
@@ -347,6 +347,7 @@ export interface MatrixView {
   priorityBands: { high: number; medium: number };
   jiraBrowseUrl: string;
   testingIncluded: boolean;
+  testingHoursPerDay: number;
   fetchedAt: string;
 }
 
@@ -402,7 +403,7 @@ export interface AppConfig {
     enabled: boolean;
   };
   league: LeagueRules & { enabled: boolean };
-  matrix: { valueSplit: number; effortSplit: number; testingFieldId: string };
+  matrix: { valueSplit: number; effortSplit: number; testingFieldId: string; testingHoursPerDay: number };
   jira: {
     queueJql: string;
     businessScoreFieldId: string;
