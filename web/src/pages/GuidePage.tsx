@@ -924,7 +924,8 @@ export function GuidePage({ member }: { member: Member }) {
               </li>
               <li>
                 <strong>The value matrix</strong> — where its two lines sit, and an optional testing-effort field to
-                add to the poker estimates. Which tickets it shows comes from the queue's JQL, not a setting of its
+                add to the poker estimates (the JIRA section's field-detect button fills it in when the site has a
+                “WOSG Testing Effort” field). Which tickets it shows comes from the queue's JQL, not a setting of its
                 own.
               </li>
               <li>

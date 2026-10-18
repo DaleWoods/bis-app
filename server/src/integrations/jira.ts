@@ -73,6 +73,8 @@ export async function suggestFieldIds(): Promise<Record<string, string>> {
     siteAffectedFieldId: find('Site Affected'),
     originalTestingEnvironmentFieldId: find('Original Testing Environment'),
     ticketPhaseFieldId: find('Ticket Phase'),
+    // Added to the poker estimates on the Value matrix, as the manual chart did.
+    testingFieldId: find('WOSG Testing Effort') || find('Testing Effort'),
   };
 }
 

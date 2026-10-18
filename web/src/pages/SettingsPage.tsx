@@ -841,6 +841,9 @@ export function SettingsPage({ member }: { member: Member }) {
                       frontendFieldId: suggestions.frontendFieldId || undefined,
                     },
                   });
+                  if (suggestions.testingFieldId) {
+                    await api.saveConfig('matrix', { testingFieldId: suggestions.testingFieldId });
+                  }
                   const missing = Object.entries(suggestions)
                     .filter(([, v]) => !v)
                     .map(([k]) => k.replace(/FieldId$/, ''));
