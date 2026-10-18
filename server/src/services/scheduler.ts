@@ -1,3 +1,4 @@
+import { runMatrixSnapshotIfDue } from './matrixService.js';
 import { getDb } from '../db/index.js';
 import { env } from '../config/env.js';
 import { alertOnStuckFailures, runDueAutomation } from './automationService.js';
@@ -69,6 +70,7 @@ export function startScheduler(): void {
           await runDailyBackupIfDue(db);
           await alertOnUnresolvedDiscussions(db);
           await runWeeklyDigestIfDue(db);
+          await runMatrixSnapshotIfDue(db);
         })
         .catch((err) => console.error('[bis] background tick failed:', err instanceof Error ? err.message : err));
     }, TICK_MS);

@@ -261,6 +261,10 @@ export interface MatrixConfig {
   referencePoints: number;
   /** ...and roughly how many working days a ticket of that score takes. */
   referenceDays: number;
+  /** The JIRA transition (or status) a ticket is closed through from the matrix. Blank hides the Close button. */
+  closeTransitionName: string;
+  /** Posted on the ticket when it is closed from the matrix. `{reason}` is substituted. */
+  closeCommentTemplate: string;
 }
 
 export interface AppConfig {
@@ -380,6 +384,10 @@ export const DEFAULT_MATRIX_CONFIG: MatrixConfig = {
   // "A 13 is around one to two weeks" - the middle of that, in working days.
   referencePoints: 13,
   referenceDays: 7.5,
+  // Blank until somebody picks the site's real "closed" transition: closing
+  // through the wrong one is worse than not offering the button.
+  closeTransitionName: '',
+  closeCommentTemplate: 'Closed after a Business Impact Scoring value review: {reason}',
 };
 
 export const DEFAULT_APP_CONFIG: AppConfig = {

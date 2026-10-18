@@ -1,6 +1,10 @@
 import type { Db } from '../db/index.js';
 import { env } from '../config/env.js';
-import { searchHopper } from '../integrations/jira.js';
+import { addComment, searchHopper, transitionIssue } from '../integrations/jira.js';
+import { MATRIX_BOXES, matrixBox, type MatrixBox, type ReviewOutcome } from '../domain/matrix.js';
+import { newId } from '../util/id.js';
+import { nowIso } from '../util/time.js';
+import { HttpishError } from './roundService.js';
 import { getAppConfig } from './configService.js';
 
 /**
@@ -31,6 +35,25 @@ export interface MatrixPoint {
    * number came from.
    */
   effort: { backend: number; frontend: number; testing: number; testingHours: number; manual: number | null; total: number };
+  /** Who raised it - who to ask for justification. */
+  reporterName: string;
+  reporterEmail: string;
+}
+
+/** The most recent decision about a ticket, as it stood when it was made. */
+export interface MatrixReview {
+  outcome: ReviewOutcome;
+  note: string;
+  businessScore: number | null;
+  effort: number | null;
+  by: string;
+  at: string;
+}
+
+/** One day's count of tickets per box, for the "over time" chart. */
+export interface MatrixSnapshot {
+  day: string;
+  counts: Record<MatrixBox | 'unestimated', number>;
 }
 
 export interface MatrixView {
@@ -48,6 +71,14 @@ export interface MatrixView {
   testingIncluded: boolean;
   /** How many testing hours count as one poker point, worked out from Settings. */
   testingHoursPerPoint: number;
+  /** Latest decision per ticket key, for every key that has one. */
+  reviews: Record<string, MatrixReview>;
+  /** Daily box counts, oldest first. */
+  history: MatrixSnapshot[];
+  /** Whether closing from the matrix is set up - JIRA connected and a close transition chosen. */
+  canClose: boolean;
+  /** The transition a close goes through, so the page can say so before anyone presses it. */
+  closeTransition: string;
   fetchedAt: string;
 }
 
@@ -62,12 +93,14 @@ async function fromApp(db: Db): Promise<Pick<MatrixView, 'points' | 'unestimated
     jira_id: string;
     title: string;
     jira_status: string;
+    stakeholder: string;
+    original_requestor: string;
     business_score: number | null;
     backend_poker_score: number | null;
     frontend_poker_score: number | null;
     manual_effort: number | null;
   }>(
-    `SELECT t.jira_id, t.title, t.jira_status, tr.business_score, t.backend_poker_score, t.frontend_poker_score, t.manual_effort
+    `SELECT t.jira_id, t.title, t.jira_status, t.stakeholder, t.original_requestor, tr.business_score, t.backend_poker_score, t.frontend_poker_score, t.manual_effort
      FROM ticket_results tr
      JOIN rounds r ON r.id = tr.round_id AND r.status = 'FINALISED'
      JOIN tickets t ON t.id = tr.ticket_id
@@ -88,7 +121,13 @@ async function fromApp(db: Db): Promise<Pick<MatrixView, 'points' | 'unestimated
     const total = manual ?? backend + frontend;
     const base = { key: row.jira_id, summary: row.title, status: row.jira_status || 'Scored', businessScore: Number(row.business_score) };
     if (!total) unestimated.push(base);
-    else points.push({ ...base, effort: { backend, frontend, testing: 0, testingHours: 0, manual, total } });
+    else
+      points.push({
+        ...base,
+        effort: { backend, frontend, testing: 0, testingHours: 0, manual, total },
+        reporterName: row.stakeholder ?? '',
+        reporterEmail: row.original_requestor ?? '',
+      });
   }
   return { points, unestimated };
 }
@@ -106,6 +145,10 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
     priorityBands: { high: config.scoring.priorityHigh, medium: config.scoring.priorityMedium },
     jiraBrowseUrl: env.jira.baseUrl ? `${env.jira.baseUrl}/browse/` : '',
     testingHoursPerPoint: testingHoursPerPoint(config.matrix),
+    reviews: await latestReviews(db),
+    history: await listSnapshots(db),
+    canClose: env.jira.configured && Boolean(config.matrix.closeTransitionName.trim()),
+    closeTransition: config.matrix.closeTransitionName.trim(),
     fetchedAt: new Date().toISOString(),
   };
 
@@ -151,6 +194,8 @@ export async function getMatrixView(db: Db): Promise<MatrixView> {
         manual: null,
         total,
       },
+      reporterName: issue.reporterName,
+      reporterEmail: issue.reporterEmail,
     });
   }
   return { ...base, points, unestimated, source: 'jira', sourceNote: '', testingIncluded: Boolean(fieldIds.testingFieldId) };
@@ -170,4 +215,137 @@ export function testingHoursPerPoint(m: { testingHoursPerDay: number; referenceP
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+async function latestReviews(db: Db): Promise<Record<string, MatrixReview>> {
+  const rows = await db.all<{
+    ticket_key: string;
+    outcome: ReviewOutcome;
+    note: string;
+    business_score: number | null;
+    effort: number | null;
+    actor_email: string;
+    created_at: string;
+  }>('SELECT ticket_key, outcome, note, business_score, effort, actor_email, created_at FROM matrix_reviews ORDER BY created_at ASC');
+  const out: Record<string, MatrixReview> = {};
+  // Oldest first, so each later row overwrites - what is left is the latest.
+  for (const r of rows) {
+    out[r.ticket_key] = {
+      outcome: r.outcome,
+      note: r.note,
+      businessScore: r.business_score === null ? null : Number(r.business_score),
+      effort: r.effort === null ? null : Number(r.effort),
+      by: r.actor_email,
+      at: r.created_at,
+    };
+  }
+  return out;
+}
+
+export async function recordReview(
+  db: Db,
+  input: { key: string; outcome: ReviewOutcome; note: string; businessScore: number | null; effort: number | null; actorEmail: string },
+): Promise<void> {
+  await db.run(
+    `INSERT INTO matrix_reviews (id, ticket_key, outcome, note, business_score, effort, actor_email, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId(), input.key, input.outcome, input.note, input.businessScore, input.effort, input.actorEmail, nowIso()],
+  );
+}
+
+/**
+ * Close a ticket from the matrix: move it through the chosen transition, say
+ * why on the ticket, and log it. Only ever one ticket, only ever on a
+ * coordinator's say-so - nothing closes on its own.
+ *
+ * The transition goes first. If JIRA refuses it, nothing is commented or
+ * logged, so the ticket is not left saying it was closed when it was not.
+ */
+export async function closeFromMatrix(
+  db: Db,
+  input: { key: string; reason: string; businessScore: number | null; effort: number | null; actorEmail: string },
+): Promise<{ movedTo: string; commentError: string }> {
+  const config = await getAppConfig(db);
+  if (!env.jira.configured) throw new HttpishError(503, 'JIRA is not connected, so nothing can be closed from here.');
+  const transition = config.matrix.closeTransitionName.trim();
+  if (!transition) {
+    throw new HttpishError(400, 'Choose the close transition in Settings → The value matrix first.');
+  }
+  const movedTo = await transitionIssue(input.key, transition);
+  let commentError = '';
+  const template = config.matrix.closeCommentTemplate.trim();
+  if (template) {
+    try {
+      await addComment(input.key, template.split('{reason}').join(input.reason.trim() || 'no reason given'));
+    } catch (err) {
+      // The ticket is closed either way; a missing comment is worth saying,
+      // not worth pretending the close did not happen.
+      commentError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  await recordReview(db, {
+    key: input.key,
+    outcome: 'CLOSED',
+    note: input.reason,
+    businessScore: input.businessScore,
+    effort: input.effort,
+    actorEmail: input.actorEmail,
+  });
+  return { movedTo, commentError };
+}
+
+export async function listSnapshots(db: Db, limit = 400): Promise<MatrixSnapshot[]> {
+  const rows = await db.all<{ day: string; counts: string }>(
+    'SELECT day, counts FROM matrix_snapshots ORDER BY day DESC LIMIT ?',
+    [limit],
+  );
+  return rows
+    .reverse()
+    .map((r) => {
+      let counts: Record<string, number> = {};
+      try {
+        counts = JSON.parse(r.counts);
+      } catch {
+        // A damaged row reads as empty rather than breaking the chart.
+      }
+      return {
+        day: r.day,
+        counts: {
+          doNext: Number(counts.doNext ?? 0),
+          plan: Number(counts.plan ?? 0),
+          fitIn: Number(counts.fitIn ?? 0),
+          question: Number(counts.question ?? 0),
+          unestimated: Number(counts.unestimated ?? 0),
+        },
+      };
+    });
+}
+
+/**
+ * Once a day, remember how many tickets sat in each box - using the saved
+ * lines, not whatever somebody is dragging. Run from the always-on background
+ * tick; a day with JIRA unreachable is simply a gap, retried on the next tick.
+ */
+export async function runMatrixSnapshotIfDue(db: Db, now = new Date()): Promise<boolean> {
+  const day = now.toISOString().slice(0, 10);
+  const existing = await db.get<{ day: string }>('SELECT day FROM matrix_snapshots WHERE day = ?', [day]);
+  if (existing) return false;
+  const view = await getMatrixView(db);
+  // Nothing to remember yet - and an all-zero row would draw a false "empty backlog" dip.
+  if (!view.points.length && !view.unestimated.length) return false;
+  const counts: Record<MatrixBox | 'unestimated', number> = { doNext: 0, plan: 0, fitIn: 0, question: 0, unestimated: view.unestimated.length };
+  const effort: Record<MatrixBox, number> = { doNext: 0, plan: 0, fitIn: 0, question: 0 };
+  for (const p of view.points) {
+    const box = matrixBox(p.businessScore, p.effort.total, view.splits.value, view.splits.effort);
+    counts[box] += 1;
+    effort[box] += p.effort.total;
+  }
+  const totalEffort = MATRIX_BOXES.reduce((n, b) => n + effort[b], 0) || 1;
+  const share = Object.fromEntries(MATRIX_BOXES.map((b) => [b, Math.round((effort[b] / totalEffort) * 1000) / 1000]));
+  await db.run(
+    `INSERT INTO matrix_snapshots (day, source, value_split, effort_split, counts, effort_share, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [day, view.source, view.splits.value, view.splits.effort, JSON.stringify(counts), JSON.stringify(share), nowIso()],
+  );
+  return true;
 }

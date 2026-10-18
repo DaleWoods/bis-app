@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, type MatrixPoint, type MatrixView } from '../api';
+import {
+  api,
+  type MatrixOutcome,
+  type MatrixPoint,
+  type MatrixReview,
+  type MatrixSnapshot,
+  type MatrixView,
+} from '../api';
 
 /**
  * The value matrix: is a ticket worth its effort?
@@ -512,6 +519,491 @@ function ShareBars({ points, quadrantFor }: { points: MatrixPoint[]; quadrantFor
   );
 }
 
+// ---------- Needs a conversation ----------
+
+/**
+ * Whether a ticket still needs somebody to decide about it. A decision holds
+ * only while the ticket is the same ticket it was decided on: if the score or
+ * the effort has moved since, the old answer was about a different trade-off
+ * and it comes back. Asking for justification is not a decision - it is
+ * waiting on one.
+ */
+function needsDecision(p: MatrixPoint, review: MatrixReview | undefined): boolean {
+  if (!review || review.outcome === 'REQUESTED') return true;
+  return changedSince(p, review);
+}
+
+function changedSince(p: MatrixPoint, review: MatrixReview): boolean {
+  return review.businessScore !== p.businessScore || review.effort !== p.effort.total;
+}
+
+const OUTCOME_LABEL: Record<MatrixOutcome, string> = {
+  REQUESTED: 'Justification requested',
+  KEPT: 'Kept',
+  RESCORE: 'Sent back for re-scoring',
+  CLOSED: 'Closed in JIRA',
+};
+
+function ago(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function draftEmail(p: MatrixPoint, browse: string): { subject: string; body: string } {
+  const first = p.reporterName.split(' ')[0] || 'there';
+  const link = browse ? `${browse}${p.key}` : p.key;
+  return {
+    subject: `${p.key}: can you help us justify the effort?`,
+    body: [
+      `Hi ${first},`,
+      '',
+      `We're reviewing tickets where the estimated effort is high compared with the business value, and ${p.key} — "${p.summary}" — is one of them.`,
+      '',
+      `It has a business score of ${p.businessScore} against an effort of ${p.effort.total} points.`,
+      '',
+      'Before it goes any further, could you tell us a bit more about why it matters? For example:',
+      '• what happens if we don’t do it (cost, customer impact, risk)',
+      '• anything that has changed since it was raised',
+      '• whether a smaller version would get most of the benefit',
+      '',
+      'If it’s no longer needed, just say and we’ll close it.',
+      '',
+      link,
+      '',
+      'Thanks,',
+    ].join('\n'),
+  };
+}
+
+type Panel = { key: string; kind: 'request' | 'keep' | 'rescore' | 'close' } | null;
+
+function ConversationList({
+  tickets,
+  view,
+  copied,
+  onCopy,
+  onChanged,
+}: {
+  tickets: MatrixPoint[];
+  view: MatrixView;
+  copied: boolean;
+  onCopy: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [panel, setPanel] = useState<Panel>(null);
+  const [text, setText] = useState('');
+  const [subject, setSubject] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ key: string; message: string; error?: boolean } | null>(null);
+  const [showReviewed, setShowReviewed] = useState(false);
+
+  const open = tickets.filter((p) => needsDecision(p, view.reviews[p.key]));
+  const decided = tickets.filter((p) => !needsDecision(p, view.reviews[p.key]));
+
+  function openPanel(p: MatrixPoint, kind: NonNullable<Panel>['kind']) {
+    setFeedback(null);
+    if (panel?.key === p.key && panel.kind === kind) {
+      setPanel(null);
+      return;
+    }
+    setPanel({ key: p.key, kind });
+    if (kind === 'request') {
+      const draft = draftEmail(p, view.jiraBrowseUrl);
+      setSubject(draft.subject);
+      setText(draft.body);
+    } else {
+      setText('');
+    }
+  }
+
+  async function run(p: MatrixPoint, action: () => Promise<string>) {
+    setBusy(true);
+    try {
+      const message = await action();
+      setPanel(null);
+      setFeedback({ key: p.key, message });
+      await onChanged();
+    } catch (err) {
+      setFeedback({ key: p.key, message: err instanceof Error ? err.message : 'That did not work', error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const log = (p: MatrixPoint, outcome: Exclude<MatrixOutcome, 'CLOSED'>, note: string) =>
+    run(p, async () => {
+      await api.matrixReview({ key: p.key, outcome, note, businessScore: p.businessScore, effort: p.effort.total });
+      return `${p.key}: ${OUTCOME_LABEL[outcome].toLowerCase()} — logged.`;
+    });
+
+  function renderPanel(p: MatrixPoint) {
+    if (panel?.key !== p.key) return null;
+    if (panel.kind === 'request') {
+      const mailto = `mailto:${encodeURIComponent(p.reporterEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+      return (
+        <div className="matrix-panel">
+          <p className="hint" style={{ marginTop: 0 }}>
+            A draft to {p.reporterName || 'the reporter'}
+            {p.reporterEmail ? ` (${p.reporterEmail})` : ' — JIRA did not share an email address, so add it yourself'}.
+            Edit it, send it from your own email, then mark it as requested so the ticket shows it is waiting.
+          </p>
+          <label htmlFor={`subj-${p.key}`}>Subject</label>
+          <input id={`subj-${p.key}`} type="text" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          <label htmlFor={`body-${p.key}`}>Message</label>
+          <textarea id={`body-${p.key}`} rows={12} value={text} onChange={(e) => setText(e.target.value)} />
+          <div className="row" style={{ gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+            <a className="button secondary" href={mailto}>
+              Open in email
+            </a>
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(`${subject}\n\n${text}`);
+                  setFeedback({ key: p.key, message: 'Copied to the clipboard.' });
+                } catch {
+                  window.prompt('Copy this', text);
+                }
+              }}
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => log(p, 'REQUESTED', `Asked ${p.reporterName || 'the reporter'}`)}
+            >
+              Mark as requested
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (panel.kind === 'close') {
+      return (
+        <div className="matrix-panel is-danger">
+          <p style={{ marginTop: 0 }}>
+            This moves <strong>{p.key}</strong> through <strong>{view.closeTransition}</strong> in JIRA and adds a
+            comment with your reason. It is logged in the audit trail.
+          </p>
+          <label htmlFor={`reason-${p.key}`}>Reason (goes on the ticket)</label>
+          <textarea
+            id={`reason-${p.key}`}
+            rows={3}
+            value={text}
+            placeholder="e.g. No justification for the effort; agreed with the stakeholder."
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="row" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="danger"
+              disabled={busy || !text.trim()}
+              onClick={() =>
+                run(p, async () => {
+                  const r = await api.matrixClose({
+                    key: p.key,
+                    reason: text,
+                    businessScore: p.businessScore,
+                    effort: p.effort.total,
+                  });
+                  return `${p.key} closed (now ${r.movedTo}).${r.commentError ? ` The comment did not post: ${r.commentError}` : ''}`;
+                })
+              }
+            >
+              {busy ? 'Closing…' : `Close ${p.key} in JIRA`}
+            </button>
+            <button type="button" className="secondary" onClick={() => setPanel(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+    const outcome = panel.kind === 'keep' ? 'KEPT' : 'RESCORE';
+    return (
+      <div className="matrix-panel">
+        <label htmlFor={`note-${p.key}`}>
+          {outcome === 'KEPT' ? 'Why it is staying (the justification)' : 'What should change when it is re-scored'}
+        </label>
+        <textarea id={`note-${p.key}`} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+        <p className="hint">
+          {outcome === 'KEPT'
+            ? 'It leaves this list, and comes back only if its score or effort changes.'
+            : 'Logged here; add it to the next round from Rounds so the committee scores it again.'}
+        </p>
+        <div className="row" style={{ gap: '0.5rem' }}>
+          <button type="button" disabled={busy || !text.trim()} onClick={() => log(p, outcome, text)}>
+            Save
+          </button>
+          <button type="button" className="secondary" onClick={() => setPanel(null)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card matrix-review">
+      <div className="row between" style={{ alignItems: 'baseline', gap: '0.5rem' }}>
+        <h2>
+          <span className="matrix-swatch" style={{ background: QUADRANTS.question.color }} /> Needs a conversation
+        </h2>
+        {open.length ? (
+          <button type="button" className="secondary" onClick={onCopy}>
+            {copied ? 'Copied ✓' : 'Copy as JQL'}
+          </button>
+        ) : null}
+      </div>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Low value for high effort, worst value-for-effort first. Ask for justification, then log what was decided — a
+        decided ticket leaves the list until its score or effort changes.
+      </p>
+
+      {!tickets.length ? <p>Nothing in this box with the lines where they are. 🎉</p> : null}
+      {tickets.length && !open.length ? <p>Every ticket here has been decided. 🎉</p> : null}
+
+      <ul className="matrix-convo">
+        {open.map((p) => {
+          const review = view.reviews[p.key];
+          return (
+            <li key={p.key} className={panel?.key === p.key ? 'is-open' : undefined}>
+              <div className="matrix-convo-head">
+                <div className="matrix-convo-title">
+                  <strong>
+                    <TicketKey k={p.key} browse={view.jiraBrowseUrl} />
+                  </strong>{' '}
+                  <span className="matrix-row-summary">{p.summary}</span>
+                </div>
+                <div className="matrix-convo-stats">
+                  <span>
+                    Score <b>{p.businessScore}</b>
+                  </span>
+                  <span>
+                    Effort <b>{p.effort.total}</b>
+                  </span>
+                  <span>
+                    Ratio <b>{fmt(ratio(p))}</b>
+                  </span>
+                  <span className="hint">{p.status}</span>
+                </div>
+              </div>
+              {review ? (
+                <p className="matrix-convo-status">
+                  {review.outcome === 'REQUESTED'
+                    ? `⏳ Justification requested ${ago(review.at)}${review.by ? ` by ${review.by}` : ''}.`
+                    : `↺ ${OUTCOME_LABEL[review.outcome]} ${ago(review.at)}, but the ${
+                        review.businessScore !== p.businessScore ? 'score' : 'effort'
+                      } has changed since — worth another look.`}
+                </p>
+              ) : null}
+              <div className="matrix-convo-actions">
+                <button type="button" className="secondary" onClick={() => openPanel(p, 'request')}>
+                  {review?.outcome === 'REQUESTED' ? 'Ask again' : 'Request justification'}
+                </button>
+                <button type="button" className="secondary" onClick={() => openPanel(p, 'keep')}>
+                  Keep
+                </button>
+                <button type="button" className="secondary" onClick={() => openPanel(p, 'rescore')}>
+                  Re-score
+                </button>
+                <button
+                  type="button"
+                  className="secondary matrix-close-btn"
+                  disabled={!view.canClose}
+                  title={
+                    view.canClose
+                      ? undefined
+                      : 'Connect JIRA and choose the close transition in Settings → The value matrix'
+                  }
+                  onClick={() => openPanel(p, 'close')}
+                >
+                  Close in JIRA
+                </button>
+              </div>
+              {renderPanel(p)}
+              {feedback?.key === p.key ? (
+                <p className={`status ${feedback.error ? 'error' : ''}`} role="status">
+                  {feedback.message}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      {decided.length ? (
+        <div className="matrix-decided">
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => setShowReviewed((v) => !v)}
+            aria-expanded={showReviewed}
+          >
+            {showReviewed ? '▾' : '▸'} Already decided ({decided.length})
+          </button>
+          {showReviewed ? (
+            <ul>
+              {decided.map((p) => {
+                const r = view.reviews[p.key];
+                return (
+                  <li key={p.key}>
+                    <strong>
+                      <TicketKey k={p.key} browse={view.jiraBrowseUrl} />
+                    </strong>{' '}
+                    — {OUTCOME_LABEL[r.outcome]} {ago(r.at)}
+                    {r.by ? ` by ${r.by}` : ''}
+                    {r.note ? <span className="matrix-row-summary">“{r.note}”</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {feedback && !tickets.some((p) => p.key === feedback.key && needsDecision(p, view.reviews[p.key])) ? (
+        <p className={`status ${feedback.error ? 'error' : ''}`} role="status">
+          {feedback.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------- Over time ----------
+
+const HISTORY_BOXES: Array<[keyof MatrixSnapshot['counts'], QuadrantId]> = [
+  ['doNext', 'doNext'],
+  ['plan', 'plan'],
+  ['fitIn', 'fitIn'],
+  ['question', 'question'],
+];
+
+/**
+ * How many tickets sat in each box, one reading a day. Four lines on one
+ * axis - they are all counts of the same thing - each labelled at its end so
+ * nobody has to match colours to a legend.
+ */
+function HistoryChart({ history }: { history: MatrixSnapshot[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  if (history.length < 2) {
+    return (
+      <div className="card">
+        <h2>Over time</h2>
+        <p className="hint" style={{ margin: 0 }}>
+          The app takes one reading a day of how many tickets sit in each box. The chart appears once there are two —
+          {history.length
+            ? ' the first was taken today.'
+            : ' the first is taken within a minute or so of the tab having data.'}
+        </p>
+      </div>
+    );
+  }
+  const W2 = 760;
+  const H2 = 220;
+  const P = { top: 14, right: 90, bottom: 28, left: 34 };
+  const max = Math.max(1, ...history.flatMap((h) => HISTORY_BOXES.map(([k]) => h.counts[k])));
+  const yMax = Math.max(5, Math.ceil(max / 5) * 5);
+  const x = (i: number) => P.left + (i / (history.length - 1)) * (W2 - P.left - P.right);
+  const y = (v: number) => P.top + (1 - v / yMax) * (H2 - P.top - P.bottom);
+  const ticks = [0, yMax / 2, yMax];
+  const label = (d: string) =>
+    new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const first = history[0];
+  const last = history[history.length - 1];
+  const delta = last.counts.question - first.counts.question;
+
+  return (
+    <div className="card matrix-history">
+      <h2>Over time</h2>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Tickets in each box, one reading a day since {label(first.day)}. “Question it” has{' '}
+        {delta === 0 ? 'held steady' : delta < 0 ? `fallen by ${-delta}` : `risen by ${delta}`}.
+      </p>
+      <div className="matrix-chart" style={{ position: 'relative' }}>
+        <svg
+          viewBox={`0 0 ${W2} ${H2}`}
+          role="img"
+          aria-label={`Tickets per box over time. Latest: ${HISTORY_BOXES.map(([k, q]) => `${QUADRANTS[q].name} ${last.counts[k]}`).join(', ')}.`}
+          onPointerMove={(e) => {
+            const svg = e.currentTarget;
+            const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM()!.inverse());
+            const i = Math.round(((pt.x - P.left) / (W2 - P.left - P.right)) * (history.length - 1));
+            setHover(Math.max(0, Math.min(history.length - 1, i)));
+          }}
+          onPointerLeave={() => setHover(null)}
+        >
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={P.left} x2={W2 - P.right} y1={y(t)} y2={y(t)} className="matrix-grid" />
+              <text x={P.left - 6} y={y(t) + 4} textAnchor="end" className="matrix-tick">
+                {t}
+              </text>
+            </g>
+          ))}
+          <text x={P.left} y={H2 - 8} className="matrix-tick">
+            {label(first.day)}
+          </text>
+          <text x={W2 - P.right} y={H2 - 8} textAnchor="end" className="matrix-tick">
+            {label(last.day)}
+          </text>
+          {hover !== null ? (
+            <line x1={x(hover)} x2={x(hover)} y1={P.top} y2={H2 - P.bottom} className="matrix-crosshair" />
+          ) : null}
+          {HISTORY_BOXES.map(([k, q]) => (
+            <g key={k}>
+              <polyline
+                fill="none"
+                stroke={QUADRANTS[q].color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                points={history.map((h, i) => `${x(i)},${y(h.counts[k])}`).join(' ')}
+              />
+              <circle
+                cx={x(history.length - 1)}
+                cy={y(last.counts[k])}
+                r={4}
+                fill={QUADRANTS[q].color}
+                stroke="#fff"
+                strokeWidth={2}
+              />
+              <text x={W2 - P.right + 8} y={y(last.counts[k]) + 4} className="matrix-end-label">
+                {QUADRANTS[q].name} {last.counts[k]}
+              </text>
+              {hover !== null ? (
+                <circle
+                  cx={x(hover)}
+                  cy={y(history[hover].counts[k])}
+                  r={4}
+                  fill={QUADRANTS[q].color}
+                  stroke="#fff"
+                  strokeWidth={2}
+                />
+              ) : null}
+            </g>
+          ))}
+        </svg>
+        {hover !== null ? (
+          <div className="matrix-tip" style={{ left: `${(x(hover) / W2) * 100}%`, top: 0 }}>
+            <div className="matrix-tip-head">{label(history[hover].day)}</div>
+            {HISTORY_BOXES.map(([k, q]) => (
+              <div key={k} className="matrix-tip-line">
+                <span className="matrix-swatch" style={{ background: QUADRANTS[q].color }} /> {QUADRANTS[q].name}{' '}
+                <b>{history[hover].counts[k]}</b>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ---------- The page ----------
 
 export function MatrixPage() {
@@ -535,6 +1027,15 @@ export function MatrixPage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load the matrix'));
   }, []);
+
+  /** After a decision is logged: fresh reviews, but the lines stay wherever they were dragged. */
+  async function reload() {
+    try {
+      setView(await api.matrix());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reload the matrix');
+    }
+  }
 
   if (error) return <p className="status error">{error}</p>;
   if (!view) return <p>Loading…</p>;
@@ -585,8 +1086,8 @@ export function MatrixPage() {
           <p className="matrix-eyebrow">Value matrix</p>
           <h1>Is it worth the effort?</h1>
           <p>
-            Every scored ticket waiting to be built, business score against effort. Bottom-right is where effort goes in for little
-            back — those are the ones to question.
+            Every scored ticket waiting to be built, business score against effort. Bottom-right is where effort goes in
+            for little back — those are the ones to question.
           </p>
         </div>
         <div className="matrix-kpis">
@@ -612,7 +1113,8 @@ export function MatrixPage() {
             </span>
             <span className="matrix-kpi-label">to question</span>
             <span className="matrix-kpi-sub">
-              {totalEffort ? Math.round((questionEffort / totalEffort) * 100) : 0}% of all effort
+              {totalEffort ? Math.round((questionEffort / totalEffort) * 100) : 0}% of all effort ·{' '}
+              {toQuestion.filter((p) => needsDecision(p, view.reviews[p.key])).length} awaiting a decision
             </span>
           </div>
           <div className="matrix-kpi">
@@ -754,67 +1256,7 @@ export function MatrixPage() {
           </div>
 
           <div className="matrix-lower">
-            <div className="card matrix-review">
-              <div className="row between" style={{ alignItems: 'baseline', gap: '0.5rem' }}>
-                <h2>
-                  <span className="matrix-swatch" style={{ background: QUADRANTS.question.color }} /> Needs a
-                  conversation
-                </h2>
-                {toQuestion.length ? (
-                  <button type="button" className="secondary" onClick={copyKeys}>
-                    {copied ? 'Copied ✓' : 'Copy as JQL'}
-                  </button>
-                ) : null}
-              </div>
-              <p className="hint" style={{ marginTop: 0 }}>
-                Low value for high effort, worst value-for-effort first. Ask for more justification — and if there is
-                none, it is a candidate to close.
-              </p>
-              {toQuestion.length ? (
-                <div className="table-scroll">
-                  <table>
-                    <caption className="visually-hidden">Tickets to question</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Ticket</th>
-                        <th scope="col" className="num">
-                          Score
-                        </th>
-                        <th scope="col" className="num">
-                          Effort
-                        </th>
-                        <th scope="col" className="num">
-                          Ratio
-                        </th>
-                        <th scope="col">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {toQuestion.map((p) => (
-                        <tr key={p.key}>
-                          <td>
-                            <strong>
-                              <TicketKey k={p.key} browse={view.jiraBrowseUrl} />
-                            </strong>
-                            <span className="matrix-row-summary">{p.summary}</span>
-                          </td>
-                          <td className="num">{p.businessScore}</td>
-                          <td className="num">
-                            <EffortCell p={p} />
-                          </td>
-                          <td className="num">
-                            <strong>{fmt(ratio(p))}</strong>
-                          </td>
-                          <td>{p.status}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p>Nothing in this box with the lines where they are. 🎉</p>
-              )}
-            </div>
+            <ConversationList tickets={toQuestion} view={view} copied={copied} onCopy={copyKeys} onChanged={reload} />
 
             <div className="matrix-side">
               <ShareBars points={points} quadrantFor={quadrantFor} />
@@ -863,6 +1305,8 @@ export function MatrixPage() {
               ) : null}
             </div>
           </div>
+
+          <HistoryChart history={view.history} />
 
           <details className="card matrix-table">
             <summary>

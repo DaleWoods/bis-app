@@ -178,4 +178,19 @@ describe('buildAnalyticsContext', () => {
     const context = await buildAnalyticsContext(db);
     expect(context).toContain('requestorTeam=unknown');
   });
+
+  it('finds the category the committee splits on most', async () => {
+    const categories = await listCategories(db);
+    const [split, ...rest] = categories;
+    // Everyone agrees on every category except the first, where they are 0, 5 and 10.
+    const marks = [0, 5, 10].map((m) => ({ ...Object.fromEntries(rest.map((c) => [c.id, 4])), [split.id]: m }));
+    await finalisedRound('W1', '2099-01-06T17:00:00.000Z', marks);
+
+    const { categoryDrivers } = await buildAnalytics(db);
+    const top = categoryDrivers.find((d) => d.categoryId === split.id)!;
+    expect(top.timesMostSplit).toBe(1);
+    expect(top.avgSpread).toBeCloseTo(5, 5);
+    const calm = categoryDrivers.find((d) => d.categoryId === rest[0].id)!;
+    expect(calm).toMatchObject({ timesMostSplit: 0, avgSpread: 0 });
+  });
 });

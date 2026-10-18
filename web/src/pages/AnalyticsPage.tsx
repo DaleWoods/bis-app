@@ -307,6 +307,63 @@ export function AnalyticsPage() {
           <p className="hint">No scored tickets yet to compare categories on.</p>
         )}
       </div>
+
+      <Disagreement drivers={categoryDrivers} />
     </>
+  );
+}
+
+/**
+ * Which categories split the room. Each category's marks on a ticket have a
+ * spread; a category whose spread is consistently wide is usually one people
+ * read differently, and the fix is its wording in Settings, not anybody's
+ * scoring.
+ */
+function Disagreement({ drivers }: { drivers: AnalyticsSummary['categoryDrivers'] }) {
+  const rows = drivers
+    .filter((d) => d.avgSpread !== null)
+    .sort((a, b) => (b.avgSpread ?? 0) - (a.avgSpread ?? 0));
+  if (!rows.length) return null;
+  const max = Math.max(0.1, ...rows.map((d) => d.avgSpread ?? 0));
+  const [top, second] = rows;
+  const clearLead = second ? (top.avgSpread ?? 0) - (second.avgSpread ?? 0) >= 0.5 : true;
+
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Where the committee disagrees</h2>
+      <p style={{ marginTop: 0 }}>
+        {clearLead ? (
+          <>
+            <strong>{top.name}</strong> splits the room most — marks for it are typically{' '}
+            <strong>{(top.avgSpread ?? 0).toFixed(1)}</strong> apart on the same ticket, and it was the category people
+            disagreed on most for <strong>{top.timesMostSplit}</strong> ticket{top.timesMostSplit === 1 ? '' : 's'}.
+            A category that keeps topping this is usually worded loosely enough to be read in different ways — its
+            description in Settings is the place to tighten it.
+          </>
+        ) : (
+          <>No single category stands out — disagreement is spread fairly evenly across them.</>
+        )}
+      </p>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {rows.map((d) => (
+          <li key={d.categoryId} style={{ marginBottom: '0.6rem' }}>
+            <div className="row between" style={{ marginBottom: '0.25rem' }}>
+              <strong>{d.name}</strong>
+              <span className="hint">{(d.avgSpread ?? 0).toFixed(1)} typical spread</span>
+            </div>
+            <span className="bar" style={{ display: 'block', width: '100%' }}>
+              <span style={{ width: `${Math.round(((d.avgSpread ?? 0) / max) * 100)}%`, background: 'var(--gold)' }} />
+            </span>
+            <p className="hint" style={{ margin: '0.25rem 0 0' }}>
+              The most-split category on {d.timesMostSplit} ticket{d.timesMostSplit === 1 ? '' : 's'}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="hint" style={{ marginBottom: 0 }}>
+        Spread is the standard deviation of one category's marks across everyone who answered “Yes” on a ticket,
+        averaged over the tickets. Higher means people read that category differently.
+      </p>
+    </div>
   );
 }

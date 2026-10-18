@@ -7,13 +7,13 @@ import { getTicket, upsertTicket } from './ticketService.js';
 import { saveMember, type Member } from './memberService.js';
 import { saveSubmission } from './submissionService.js';
 import { snapshotRoundResults } from './resultService.js';
-import { getMatrixView } from './matrixService.js';
+import { closeFromMatrix, getMatrixView, recordReview, runMatrixSnapshotIfDue } from './matrixService.js';
 import { DEFAULT_MATRIX_CONFIG } from '../domain/types.js';
 import { env } from '../config/env.js';
-import { searchHopper } from '../integrations/jira.js';
+import { addComment, searchHopper, transitionIssue } from '../integrations/jira.js';
 import { saveConfigSection } from './configService.js';
 
-vi.mock('../integrations/jira.js', () => ({ searchHopper: vi.fn() }));
+vi.mock('../integrations/jira.js', () => ({ searchHopper: vi.fn(), transitionIssue: vi.fn(), addComment: vi.fn() }));
 
 let db: Db;
 let scorers: Member[];
@@ -108,7 +108,7 @@ describe('getMatrixView with JIRA', () => {
     await saveConfigSection(db, 'scoring', { effort: { mode: 'BACKEND_PLUS_FRONTEND', backendFieldId: 'cf_be', frontendFieldId: 'cf_fe' } }, 'test');
     await saveConfigSection(db, 'queue', { hopperJql: 'status = "Rdy FE Dev"' }, 'test');
     await saveConfigSection(db, 'matrix', { testingFieldId: 'cf_test' }, 'test');
-    const issue = { summary: 's', status: 'Rdy FE Dev', statusCategory: 'To Do' };
+    const issue = { summary: 's', status: 'Rdy FE Dev', statusCategory: 'To Do', reporterName: 'Ola', reporterEmail: 'ola@example.com' };
     vi.mocked(searchHopper).mockResolvedValue([
       { ...issue, key: 'ECOM-1', businessScore: 30, backendEffort: 13, frontendEffort: 8, testingEffort: 3 },
       { ...issue, key: 'ECOM-2', businessScore: -1, backendEffort: 5, frontendEffort: 0, testingEffort: 0 },
@@ -126,5 +126,71 @@ describe('getMatrixView with JIRA', () => {
     expect(view.testingHoursPerPoint).toBeCloseTo(3.46, 2);
     expect(view.unestimated.map((u) => u.key)).toEqual(['ECOM-3']);
     expect(view.jiraBrowseUrl).toBe('https://example.atlassian.net/browse/');
+  });
+});
+
+describe('matrix reviews', () => {
+  it('keeps the latest decision per ticket, with the score and effort it was made on', async () => {
+    await recordReview(db, { key: 'ECOM-9', outcome: 'REQUESTED', note: 'asked Ola', businessScore: 20, effort: 25, actorEmail: 'n@x' });
+    await recordReview(db, { key: 'ECOM-9', outcome: 'KEPT', note: 'needed for Rolex launch', businessScore: 20, effort: 25, actorEmail: 'n@x' });
+    const { reviews } = await getMatrixView(db);
+    expect(reviews['ECOM-9']).toMatchObject({ outcome: 'KEPT', note: 'needed for Rolex launch', businessScore: 20, effort: 25, by: 'n@x' });
+  });
+});
+
+describe('closeFromMatrix', () => {
+  const saved = { baseUrl: env.jira.baseUrl, email: env.jira.email, apiToken: env.jira.apiToken };
+  beforeEach(() => {
+    Object.assign(env.jira, { baseUrl: 'https://example.atlassian.net', email: 'a@b.c', apiToken: 't' });
+  });
+  afterEach(() => {
+    Object.assign(env.jira, saved);
+    vi.mocked(transitionIssue).mockReset();
+    vi.mocked(addComment).mockReset();
+  });
+
+  it('refuses until a close transition is chosen', async () => {
+    await expect(closeFromMatrix(db, { key: 'ECOM-9', reason: 'r', businessScore: 1, effort: 2, actorEmail: '' })).rejects.toThrow(
+      /close transition/,
+    );
+    expect(transitionIssue).not.toHaveBeenCalled();
+  });
+
+  it('moves the ticket, comments the reason and logs it', async () => {
+    await saveConfigSection(db, 'matrix', { closeTransitionName: "Won't Do" }, 'test');
+    vi.mocked(transitionIssue).mockResolvedValue("Won't Do");
+    const result = await closeFromMatrix(db, { key: 'ECOM-9', reason: 'no justification', businessScore: 18, effort: 31, actorEmail: 'n@x' });
+    expect(result.movedTo).toBe("Won't Do");
+    expect(transitionIssue).toHaveBeenCalledWith('ECOM-9', "Won't Do");
+    expect(vi.mocked(addComment).mock.calls[0][1]).toContain('no justification');
+    expect((await getMatrixView(db)).reviews['ECOM-9'].outcome).toBe('CLOSED');
+  });
+
+  it('logs nothing and comments nothing when JIRA refuses the move', async () => {
+    await saveConfigSection(db, 'matrix', { closeTransitionName: "Won't Do" }, 'test');
+    vi.mocked(transitionIssue).mockRejectedValue(new Error('no such transition'));
+    await expect(closeFromMatrix(db, { key: 'ECOM-9', reason: 'r', businessScore: 1, effort: 2, actorEmail: '' })).rejects.toThrow();
+    expect(addComment).not.toHaveBeenCalled();
+    expect((await getMatrixView(db)).reviews['ECOM-9']).toBeUndefined();
+  });
+});
+
+describe('runMatrixSnapshotIfDue', () => {
+  it('records the box counts once a day, using the saved lines', async () => {
+    await scoreRound('W1', '2099-01-06T17:00:00.000Z', ['ECOM-1', 'ECOM-2', 'ECOM-3'], 9);
+    await scoreRound('W2', '2099-01-13T17:00:00.000Z', ['ECOM-4'], 1);
+    // 63 points each for 1-3, 7 for 4.
+    await db.run("UPDATE tickets SET backend_poker_score = 5 WHERE jira_id IN ('ECOM-1', 'ECOM-4')");
+    await db.run("UPDATE tickets SET backend_poker_score = 30 WHERE jira_id = 'ECOM-2'");
+
+    const day = new Date('2099-02-01T09:00:00Z');
+    expect(await runMatrixSnapshotIfDue(db, day)).toBe(true);
+    expect(await runMatrixSnapshotIfDue(db, day)).toBe(false);
+    const { history } = await getMatrixView(db);
+    expect(history).toEqual([{ day: '2099-02-01', counts: { doNext: 1, plan: 1, fitIn: 1, question: 0, unestimated: 1 } }]);
+  });
+
+  it('records nothing while there is nothing to plot', async () => {
+    expect(await runMatrixSnapshotIfDue(db, new Date('2099-02-01T09:00:00Z'))).toBe(false);
   });
 });

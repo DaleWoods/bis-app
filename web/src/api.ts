@@ -205,6 +205,8 @@ export interface CategoryDriver {
   ticketsScored: number;
   timesHighest: number;
   timesLowest: number;
+  avgSpread: number | null;
+  timesMostSplit: number;
 }
 
 export interface AnalyticsSummary {
@@ -336,6 +338,24 @@ export interface MatrixPoint {
   status: string;
   businessScore: number;
   effort: { backend: number; frontend: number; testing: number; testingHours: number; manual: number | null; total: number };
+  reporterName: string;
+  reporterEmail: string;
+}
+
+export type MatrixOutcome = 'REQUESTED' | 'KEPT' | 'RESCORE' | 'CLOSED';
+
+export interface MatrixReview {
+  outcome: MatrixOutcome;
+  note: string;
+  businessScore: number | null;
+  effort: number | null;
+  by: string;
+  at: string;
+}
+
+export interface MatrixSnapshot {
+  day: string;
+  counts: { doNext: number; plan: number; fitIn: number; question: number; unestimated: number };
 }
 
 export interface MatrixView {
@@ -348,6 +368,10 @@ export interface MatrixView {
   jiraBrowseUrl: string;
   testingIncluded: boolean;
   testingHoursPerPoint: number;
+  reviews: Record<string, MatrixReview>;
+  history: MatrixSnapshot[];
+  canClose: boolean;
+  closeTransition: string;
   fetchedAt: string;
 }
 
@@ -403,7 +427,7 @@ export interface AppConfig {
     enabled: boolean;
   };
   league: LeagueRules & { enabled: boolean };
-  matrix: { valueSplit: number; effortSplit: number; testingFieldId: string; testingHoursPerDay: number; referencePoints: number; referenceDays: number };
+  matrix: { valueSplit: number; effortSplit: number; testingFieldId: string; testingHoursPerDay: number; referencePoints: number; referenceDays: number; closeTransitionName: string; closeCommentTemplate: string };
   jira: {
     queueJql: string;
     businessScoreFieldId: string;
@@ -740,6 +764,12 @@ export const api = {
   league: () => request<LeagueSummary>('/api/league'),
 
   matrix: () => request<MatrixView>('/api/matrix'),
+
+  matrixReview: (input: { key: string; outcome: Exclude<MatrixOutcome, 'CLOSED'>; note: string; businessScore: number; effort: number }) =>
+    request<{ ok: true }>('/api/matrix/reviews', { method: 'POST', body: JSON.stringify(input) }),
+
+  matrixClose: (input: { key: string; reason: string; businessScore: number; effort: number }) =>
+    request<{ movedTo: string; commentError: string }>('/api/matrix/close', { method: 'POST', body: JSON.stringify(input) }),
 
   askAnalytics: (question: string) =>
     request<{ answer: string }>('/api/analytics/ask', { method: 'POST', body: JSON.stringify({ question }) }),

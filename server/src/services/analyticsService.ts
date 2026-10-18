@@ -1,5 +1,5 @@
 import { Db } from '../db/index.js';
-import { mean } from '../domain/scoring.js';
+import { mean, sampleStdDev } from '../domain/scoring.js';
 import { listMembers } from './memberService.js';
 import { listRounds, type Round } from './roundService.js';
 import { roundResults, type TicketResult } from './resultService.js';
@@ -34,6 +34,10 @@ export interface CategoryDriver {
   timesHighest: number;
   /** Same, for the lowest. */
   timesLowest: number;
+  /** How far apart the committee's marks for this category typically are, on one ticket. */
+  avgSpread: number | null;
+  /** How often this was the category the committee split on most for a ticket - ties all count. */
+  timesMostSplit: number;
 }
 
 export interface AnalyticsSummary {
@@ -86,6 +90,8 @@ function accumulateCategoryDrivers(results: TicketResult[], byId: Map<string, Ca
         ticketsScored: 0,
         timesHighest: 0,
         timesLowest: 0,
+        avgSpread: null,
+        timesMostSplit: 0,
         total: 0,
       };
       existing.name = category.name; // the most recent name wins, in case it was reworded since
@@ -96,6 +102,59 @@ function accumulateCategoryDrivers(results: TicketResult[], byId: Map<string, Ca
       byId.set(category.categoryId, existing);
     }
   }
+}
+
+/**
+ * Which categories the committee disagrees on. For every scored ticket, the
+ * spread (standard deviation) of each category's marks across the people who
+ * answered "Yes"; then, per category, the typical spread and how often it was
+ * the one the room split on most. A category that keeps topping this is
+ * usually worded loosely enough that people read it differently - which is a
+ * wording fix, not a scoring one.
+ */
+async function categorySpreads(
+  db: Db,
+  roundIds: string[],
+): Promise<Map<string, { avgSpread: number | null; timesMostSplit: number }>> {
+  const out = new Map<string, { avgSpread: number | null; timesMostSplit: number }>();
+  if (!roundIds.length) return out;
+  const placeholders = roundIds.map(() => '?').join(',');
+  const rows = await db.all<{ round_id: string; ticket_id: string; category_id: string; score: number }>(
+    `SELECT s.round_id, s.ticket_id, ss.category_id, ss.score
+     FROM submissions s JOIN submission_scores ss ON ss.submission_id = s.id
+     WHERE s.round_id IN (${placeholders}) AND s.archived = 0 AND s.relevance = 'YES'`,
+    roundIds,
+  );
+  const byTicket = new Map<string, Map<string, number[]>>();
+  for (const r of rows) {
+    const t = `${r.round_id}|${r.ticket_id}`;
+    if (!byTicket.has(t)) byTicket.set(t, new Map());
+    const cats = byTicket.get(t)!;
+    if (!cats.has(r.category_id)) cats.set(r.category_id, []);
+    cats.get(r.category_id)!.push(Number(r.score));
+  }
+  const totals = new Map<string, { sum: number; n: number; most: number }>();
+  for (const cats of byTicket.values()) {
+    const spreads: Array<[string, number]> = [];
+    for (const [categoryId, marks] of cats) {
+      const sd = sampleStdDev(marks);
+      if (sd !== null) spreads.push([categoryId, sd]);
+    }
+    if (!spreads.length) continue;
+    const widest = Math.max(...spreads.map(([, sd]) => sd));
+    for (const [categoryId, sd] of spreads) {
+      const t = totals.get(categoryId) ?? { sum: 0, n: 0, most: 0 };
+      t.sum += sd;
+      t.n += 1;
+      // Everyone agreeing on everything is not "split most" on anything.
+      if (widest > 0 && sd === widest) t.most += 1;
+      totals.set(categoryId, t);
+    }
+  }
+  for (const [categoryId, t] of totals) {
+    out.set(categoryId, { avgSpread: t.n ? t.sum / t.n : null, timesMostSplit: t.most });
+  }
+  return out;
 }
 
 interface FinalisedRound {
@@ -135,8 +194,14 @@ export async function buildAnalytics(db: Db, limit = 26): Promise<AnalyticsSumma
     accumulateCategoryDrivers(results, driverTotals);
   }
 
+  const spreads = await categorySpreads(db, finalised.map((f) => f.round.id));
   const categoryDrivers = [...driverTotals.values()]
-    .map(({ total, ...driver }) => ({ ...driver, avgScore: driver.ticketsScored ? total / driver.ticketsScored : null }))
+    .map(({ total, ...driver }) => ({
+      ...driver,
+      avgScore: driver.ticketsScored ? total / driver.ticketsScored : null,
+      avgSpread: spreads.get(driver.categoryId)?.avgSpread ?? null,
+      timesMostSplit: spreads.get(driver.categoryId)?.timesMostSplit ?? 0,
+    }))
     .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0));
 
   return { rounds, categoryDrivers };

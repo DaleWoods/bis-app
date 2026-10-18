@@ -643,6 +643,12 @@ export function GuidePage({ member }: { member: Member }) {
                 how many of them answered the average ticket. A number sliding down here is the same drop-off shown
                 per-member on the Audit page's engagement table, seen as a trend instead of a snapshot.
               </li>
+              <li>
+                <strong>Where the committee disagrees</strong> — for each category, how far apart people's marks for
+                it typically are on the same ticket, and how often it was the one the room split on most. A category
+                that keeps coming top is usually being read in different ways; tightening its description in
+                Settings is the fix, not anybody's scoring.
+              </li>
             </ul>
           </Section>
 
@@ -686,6 +692,42 @@ export function GuidePage({ member }: { member: Member }) {
               priority ratio bands from Settings — a ticket above a line is better value for its effort than that
               band.
             </p>
+            <h3>Deciding what happens to a ticket</h3>
+            <p>
+              Each ticket on the “Needs a conversation” list has four actions. None of them happens on its own:
+            </p>
+            <ul>
+              <li>
+                <strong>Request justification</strong> — drafts an email to whoever raised the ticket (from JIRA),
+                which you can edit, open in your own email or copy. Send it yourself, then press “Mark as requested”
+                so the list shows the ticket is waiting on an answer, and since when. There is no deadline and no
+                automatic chasing.
+              </li>
+              <li>
+                <strong>Keep</strong> — record the justification. The ticket leaves the list.
+              </li>
+              <li>
+                <strong>Re-score</strong> — record what should change, then add it to the next round from Rounds so
+                the committee scores it again. The ticket leaves the list.
+              </li>
+              <li>
+                <strong>Close in JIRA</strong> — one ticket at a time, after you type a reason: it moves through the
+                close transition set in Settings and the reason is added as a comment. If JIRA refuses the move,
+                nothing is commented or recorded. Switched off until a close transition is set.
+              </li>
+            </ul>
+            <p>
+              A decision only holds while the ticket stays the same. If its score or effort changes afterwards — a
+              re-estimate, the weekly acceleration — it comes back onto the list, marked with what was decided last
+              time, because the old answer was about a different trade-off. Decided tickets are under “Already
+              decided”, with who decided, when and why. Every decision and close is in the audit log.
+            </p>
+            <h3>Over time</h3>
+            <p>
+              Once a day the app records how many tickets sit in each box, using the saved lines. The “Over time” chart
+              shows that history, so you can see whether the “Question it” pile is shrinking. It needs two days of
+              readings before it draws anything.
+            </p>
             <p>
               Also on the tab: <strong>Where the effort goes</strong> compares each box's share of the total effort
               with its share of the total value; <strong>Close to a line</strong> picks out tickets a small
@@ -694,7 +736,8 @@ export function GuidePage({ member }: { member: Member }) {
               one dot with a count in it. “Find a ticket” highlights one; clicking a box picks out just those tickets.
             </p>
             <p className="hint">
-              It is a prompt for a conversation, not a decision. Nothing on this tab changes a ticket.
+              It is a prompt for a conversation, not a decision. The only thing on this tab that changes a ticket is
+              “Close in JIRA”, and only when you confirm it.
             </p>
           </Section>
 
@@ -926,7 +969,7 @@ export function GuidePage({ member }: { member: Member }) {
                 tab on — use it whenever a workflow status changes.
               </li>
               <li>
-                <strong>The value matrix</strong> — where its two lines sit, an optional testing-effort field (the JIRA
+                <strong>The value matrix</strong> — where its two lines sit, the JIRA transition and comment used when closing a ticket from it, an optional testing-effort field (the JIRA
                 section's field-detect button fills it in when the site has a “WOSG Testing Effort” field), and how
                 testing hours convert to points: a tester's hours in a day, and roughly how long a reference poker
                 score takes. Which tickets it shows comes from the queue's JQL, not a setting of its own.

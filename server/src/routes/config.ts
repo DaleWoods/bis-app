@@ -209,6 +209,8 @@ const matrixSchema = z.object({
   testingHoursPerDay: z.number().min(0.5).max(24).optional(),
   referencePoints: z.number().min(0.5).max(1000).optional(),
   referenceDays: z.number().min(0.1).max(1000).optional(),
+  closeTransitionName: z.string().optional(),
+  closeCommentTemplate: z.string().optional(),
 });
 
 const sectionSchemas = {

@@ -173,6 +173,9 @@ export interface HopperIssue {
   testingEffort: number;
   /** JIRA's own grouping of the status - To Do, In Progress or Done. */
   statusCategory: string;
+  /** Who raised it - the person to ask for justification. Email is blank where the site hides it. */
+  reporterName: string;
+  reporterEmail: string;
 }
 
 /** Generous for a hopper, and still bounded if the JQL is pointed at everything. */
@@ -195,6 +198,7 @@ export async function searchHopper(
   const fields = [
     'summary',
     'status',
+    'reporter',
     fieldIds.businessScoreFieldId,
     fieldIds.backendFieldId,
     fieldIds.frontendFieldId,
@@ -234,6 +238,8 @@ export async function searchHopper(
     backendEffort: numericField(issue.fields?.[fieldIds.backendFieldId]) ?? 0,
     testingEffort: fieldIds.testingFieldId ? (numericField(issue.fields?.[fieldIds.testingFieldId]) ?? 0) : 0,
     statusCategory: String(issue.fields?.status?.statusCategory?.name ?? ''),
+    reporterName: String(issue.fields?.reporter?.displayName ?? ''),
+    reporterEmail: String(issue.fields?.reporter?.emailAddress ?? ''),
   }));
 }
 

@@ -2190,3 +2190,123 @@ button.linkish:disabled {
 td.num .matrix-row-summary {
   white-space: nowrap;
 }
+
+/* Value matrix - decisions and history */
+.matrix-convo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.matrix-convo > li {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+.matrix-convo > li.is-open {
+  background: linear-gradient(90deg, rgba(227, 73, 72, 0.05), transparent 60%);
+}
+.matrix-convo-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+.matrix-convo-title {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+.matrix-convo-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.matrix-convo-status {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--gold-text);
+}
+.matrix-convo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.matrix-convo-actions button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+.matrix-close-btn:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.matrix-panel {
+  margin-top: 0.6rem;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+}
+.matrix-panel.is-danger {
+  border-color: var(--danger);
+  background: #fdf3f2;
+}
+.matrix-panel input[type='text'],
+.matrix-panel textarea {
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+.matrix-decided {
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+.matrix-decided ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+.matrix-decided li {
+  margin-bottom: 0.35rem;
+}
+.link-button {
+  all: unset;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+.link-button:focus-visible {
+  outline: 3px solid var(--focus);
+}
+.matrix-history {
+  margin-top: 1rem;
+}
+.matrix-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.matrix-end-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+.matrix-tip-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+/* `all: unset` loses to the global `button:hover` (an element plus a
+   pseudo-class outranks a lone class), which paints these brand-brown. */
+.link-button:hover {
+  background: none;
+  text-decoration: underline;
+}
+.matrix-chip:hover {
+  background: var(--panel-alt);
+}
+.matrix-quad:hover {
+  background: var(--panel);
+}
+.matrix-quad.is-active:hover {
+  background: color-mix(in srgb, var(--quad) 7%, var(--panel));
+}

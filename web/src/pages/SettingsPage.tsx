@@ -607,6 +607,8 @@ export function SettingsPage({ member }: { member: Member }) {
                 testingHoursPerDay: Number(form.get('matrixTestingHoursPerDay')),
                 referencePoints: Number(form.get('matrixReferencePoints')),
                 referenceDays: Number(form.get('matrixReferenceDays')),
+                closeTransitionName: String(form.get('matrixCloseTransition')).trim(),
+                closeCommentTemplate: String(form.get('matrixCloseComment')),
               },
               'Value matrix',
             );
@@ -669,6 +671,34 @@ export function SettingsPage({ member }: { member: Member }) {
             testing hours — so that many hours of testing adds one point to a ticket's effort. Effort is the backend and
             frontend poker fields from the scoring section, plus testing when a field is set here. The two lines can
             also be dragged on the tab itself and saved from there.
+          </p>
+          <h3>Closing tickets from the matrix</h3>
+          <div className="row">
+            <div className="field grow">
+              <label htmlFor="matrixCloseTransition">Close through this JIRA transition (or status)</label>
+              <input
+                id="matrixCloseTransition"
+                name="matrixCloseTransition"
+                type="text"
+                placeholder="e.g. Won't Do"
+                defaultValue={config.matrix.closeTransitionName}
+              />
+            </div>
+            <div className="field grow">
+              <label htmlFor="matrixCloseComment">Comment added when closing</label>
+              <input
+                id="matrixCloseComment"
+                name="matrixCloseComment"
+                type="text"
+                defaultValue={config.matrix.closeCommentTemplate}
+              />
+            </div>
+          </div>
+          <p className="hint">
+            Blank leaves the “Close in JIRA” button switched off. Use the exact name your workflow uses — “List
+            transitions from JIRA” in the JIRA section shows what a ticket offers. <code>{'{reason}'}</code> in the
+            comment is replaced with the reason typed when closing. Every close is one ticket, confirmed by a
+            coordinator, and recorded in the audit log.
           </p>
           <div className="row" style={{ marginTop: '0.6rem' }}>
             <button type="submit">Save the matrix settings</button>
